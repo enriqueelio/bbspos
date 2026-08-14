@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.tsbuildinfo
+.git/
+.gitignore
+README.md
+docker-compose.yml
+openspec/

@@ -1,0 +1,16 @@
+{
+  "name": "@bubba/config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./tailwind": "./src/tailwind.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.0"
+  }
+}

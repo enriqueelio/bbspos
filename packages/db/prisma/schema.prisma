@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  createdAt DateTime @default(now())
+}
+
+model Size {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  ml        Int
+  price     Int
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Flavor {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  category  FlavorCategory
+  price     Int
+  available Boolean        @default(true)
+  createdAt DateTime       @default(now())
+}
+
+model BobaType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  kind      BobaKind
+  price     Int
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  status    OrderStatus @default(RECIBIDO)
+  total     Int
+  createdAt DateTime    @default(now())
+  items     OrderItem[]
+}
+
+model OrderItem {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sizeName       String
+  flavorName     String
+  flavorCategory FlavorCategory
+  bobaTypeName   String
+  unitPrice      Int
+  quantity       Int
+}
+
+enum FlavorCategory {
+  MILK
+  WATER
+  SPECIAL
+}
+
+enum BobaKind {
+  TAPIOCA
+  POPPING
+}
+
+enum OrderStatus {
+  RECIBIDO
+  EN_PREPARACION
+  ENTREGADO
+}

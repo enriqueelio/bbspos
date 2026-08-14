@@ -2,11 +2,27 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BobaType, CartItem, Flavor, Size } from "@bubba/types";
+import type {
+  BobaType,
+  CartItem,
+  CartTopping,
+  Flavor,
+  FlavorCategory,
+  Size,
+} from "@bubba/types";
+
+export interface AddItemInput {
+  size: Size;
+  flavor: Flavor;
+  category: FlavorCategory;
+  bobaType: BobaType;
+  unitPrice: number;
+  toppings: CartTopping[];
+}
 
 interface CartState {
   items: CartItem[];
-  addItem: (size: Size, flavor: Flavor, bobaType: BobaType) => void;
+  addItem: (input: AddItemInput) => void;
   updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
   clear: () => void;
@@ -16,28 +32,35 @@ export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
       items: [],
-      addItem: (size, flavor, bobaType) =>
+      addItem: (input) =>
         set((state) => {
-          const existing = state.items.find(
-            (i) =>
-              i.size.id === size.id &&
-              i.flavor.id === flavor.id &&
-              i.bobaType.id === bobaType.id,
-          );
+          const toppingKey = input.toppings
+            .map((t) => t.id)
+            .sort()
+            .join("+");
+          const id = [
+            input.category,
+            input.size.id,
+            input.flavor.id,
+            input.bobaType.id,
+            toppingKey,
+          ].join("-");
+          const existing = state.items.find((i) => i.id === id);
           if (existing) {
             return {
               items: state.items.map((i) =>
-                i.id === existing.id
-                  ? { ...i, quantity: i.quantity + 1 }
-                  : i,
+                i.id === id ? { ...i, quantity: i.quantity + 1 } : i,
               ),
             };
           }
           const item: CartItem = {
-            id: `${size.id}-${flavor.id}-${bobaType.id}`,
-            size,
-            flavor,
-            bobaType,
+            id,
+            size: input.size,
+            flavor: input.flavor,
+            category: input.category,
+            bobaType: input.bobaType,
+            unitPrice: input.unitPrice,
+            toppings: input.toppings,
             quantity: 1,
           };
           return { items: [...state.items, item] };
@@ -53,7 +76,7 @@ export const useCartStore = create<CartState>()(
       clear: () => set({ items: [] }),
     }),
     {
-      name: "bubba-cart",
+      name: "bubba-cart-v2",
     },
   ),
 );

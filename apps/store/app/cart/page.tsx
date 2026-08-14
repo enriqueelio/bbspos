@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ShoppingCart } from "lucide-react";
 import {
@@ -13,7 +13,9 @@ import {
 } from "@bubba/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
+import { formatPrice } from "@bubba/types";
 import { createOrder } from "@/app/actions/order";
+import { getPaymentQr } from "@/app/actions/payment";
 
 export default function CartPage() {
   const hydrated = useHasHydrated();
@@ -25,6 +27,15 @@ export default function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderTotal, setOrderTotal] = useState<number | null>(null);
+  const [paymentQr, setPaymentQr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orderId) return;
+    getPaymentQr()
+      .then((qr) => setPaymentQr(qr?.qrImage ?? null))
+      .catch(() => setPaymentQr(null));
+  }, [orderId]);
 
   if (!hydrated) {
     return <div className="text-muted-foreground">Cargando carrito...</div>;
@@ -39,6 +50,29 @@ export default function CartPage() {
           Tu pedido <span className="font-semibold">#{orderId}</span> fue
           registrado. Pasa por tu bubble drink en mostrador.
         </p>
+        {orderTotal !== null && (
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-6 py-4">
+            <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              Total a pagar
+            </p>
+            <p className="text-4xl font-extrabold text-foreground">
+              {formatPrice(orderTotal)}
+            </p>
+          </div>
+        )}
+        {paymentQr && (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Escanea este QR para realizar tu pago:
+            </p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={paymentQr}
+              alt="QR de pago"
+              className="mx-auto h-48 w-48 rounded-lg border bg-white object-contain p-2"
+            />
+          </div>
+        )}
         <div className="flex justify-center gap-2">
           <Button asChild>
             <Link href="/build">Armar otra bebida</Link>
@@ -70,8 +104,9 @@ export default function CartPage() {
     setPlacing(true);
     setError(null);
     try {
-      const { orderId: newOrderId } = await createOrder(items);
+      const { orderId: newOrderId, total } = await createOrder(items);
       setOrderId(newOrderId);
+      setOrderTotal(total);
       clear();
     } catch (e) {
       setError(
@@ -123,6 +158,9 @@ export default function CartPage() {
             onClick={handleCheckout}
           >
             {placing ? "Creando pedido..." : "Confirmar pedido"}
+          </Button>
+          <Button variant="outline" className="w-full" asChild>
+            <Link href="/build">Armar otra bebida</Link>
           </Button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import type { CartItem } from "@bubba/types";
-import { computeDrinkPrice, formatPrice } from "@bubba/types";
+import { formatPrice, sumToppings } from "@bubba/types";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card";
 
 export interface CartSummaryProps {
@@ -8,7 +8,8 @@ export interface CartSummaryProps {
 
 export function CartSummary({ items }: CartSummaryProps) {
   const total = items.reduce(
-    (acc, item) => acc + computeDrinkPrice(item.size, item.flavor, item.bobaType) * item.quantity,
+    (acc, item) =>
+      acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
     0,
   );
 
@@ -19,23 +20,25 @@ export function CartSummary({ items }: CartSummaryProps) {
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
         {items.map((item) => {
-          const unitPrice = computeDrinkPrice(
-            item.size,
-            item.flavor,
-            item.bobaType,
-          );
+          const lineTotal =
+            (item.unitPrice + sumToppings(item.toppings)) * item.quantity;
           return (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-2"
-            >
-              <span className="truncate text-muted-foreground">
-                {item.quantity}× {item.size.name} · {item.flavor.name} ·{" "}
-                {item.bobaType.name}
-              </span>
-              <span className="font-medium">
-                {formatPrice(unitPrice * item.quantity)}
-              </span>
+            <div key={item.id} className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-muted-foreground">
+                  {item.quantity}× {item.size.name} · {item.flavor.name} ·{" "}
+                  {item.bobaType.name}
+                </span>
+                <span className="font-medium">{formatPrice(lineTotal)}</span>
+              </div>
+              {item.toppings.length > 0 && (
+                <div className="pl-2 text-xs text-muted-foreground">
+                  +{" "}
+                  {item.toppings
+                    .map((t) => `${t.name} (${formatPrice(t.price)})`)
+                    .join(", ")}
+                </div>
+              )}
             </div>
           );
         })}

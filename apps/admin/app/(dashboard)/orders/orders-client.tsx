@@ -109,9 +109,27 @@ export function OrdersClient({
                       <span className="text-muted-foreground">
                         {item.quantity}× {item.sizeName} · {item.flavorName} ·{" "}
                         {item.bobaTypeName}
+                        {item.toppings.length > 0 && (
+                          <span className="block pl-2 text-xs">
+                            Toppings:{" "}
+                            {item.toppings
+                              .map(
+                                (t) =>
+                                  `${t.toppingName} (+${formatPrice(t.unitPrice)})`,
+                              )
+                              .join(", ")}
+                          </span>
+                        )}
                       </span>
                       <span className="font-medium">
-                        {formatPrice(item.unitPrice * item.quantity)}
+                        {formatPrice(
+                          (item.unitPrice +
+                            item.toppings.reduce(
+                              (acc, t) => acc + t.unitPrice,
+                              0,
+                            )) *
+                            item.quantity,
+                        )}
                       </span>
                     </div>
                   ))}

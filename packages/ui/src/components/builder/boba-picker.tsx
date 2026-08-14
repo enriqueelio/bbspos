@@ -1,5 +1,5 @@
 import type { BobaType } from "@bubba/types";
-import { BobaKindLabel, formatPrice } from "@bubba/types";
+import { BobaKindLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 
@@ -31,16 +31,10 @@ export function BobaPicker({
             <div className="flex items-start justify-between gap-2">
               <div>
                 <div className="font-semibold">{boba.name}</div>
-                <Badge
-                  variant="outline"
-                  className="mt-1"
-                >
+                <Badge variant="outline" className="mt-1">
                   {BobaKindLabel[boba.kind]}
                 </Badge>
               </div>
-              <span className="text-lg font-bold text-primary">
-                {formatPrice(boba.price)}
-              </span>
             </div>
           </button>
         );

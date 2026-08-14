@@ -8,24 +8,28 @@ export type FlavorCategory =
   (typeof FlavorCategory)[keyof typeof FlavorCategory];
 
 export const FlavorCategoryLabel: Record<FlavorCategory, string> = {
-  MILK: "Leche",
-  WATER: "Agua",
+  MILK: "Con leche",
+  WATER: "Con agua",
   SPECIAL: "Especiales",
 };
+
+export const FlavorCategoryList: FlavorCategory[] = [
+  FlavorCategory.SPECIAL,
+  FlavorCategory.WATER,
+  FlavorCategory.MILK,
+];
 
 export interface Size {
   id: string;
   name: string;
-  ml: number;
-  price: number;
+  oz: number;
   available: boolean;
 }
 
 export interface Flavor {
   id: string;
   name: string;
-  category: FlavorCategory;
-  price: number;
+  categories: FlavorCategory[];
   available: boolean;
 }
 
@@ -45,27 +49,54 @@ export interface BobaType {
   id: string;
   name: string;
   kind: BobaKind;
+  available: boolean;
+}
+
+export interface Topping {
+  id: string;
+  name: string;
   price: number;
   available: boolean;
+}
+
+export interface DrinkPrice {
+  id: string;
+  category: FlavorCategory;
+  sizeId: string;
+  bobaTypeId: string;
+  price: number;
 }
 
 export interface Catalog {
   sizes: Size[];
   flavors: Flavor[];
   bobaTypes: BobaType[];
+  drinkPrices: DrinkPrice[];
+  toppings: Topping[];
 }
 
 export interface DrinkSelection {
-  sizeId: string;
-  flavorId: string;
-  bobaTypeId: string;
+  category: FlavorCategory | null;
+  flavorId: string | null;
+  sizeId: string | null;
+  bobaTypeId: string | null;
+  toppingIds: string[];
+}
+
+export interface CartTopping {
+  id: string;
+  name: string;
+  price: number;
 }
 
 export interface CartItem {
   id: string;
   size: Size;
   flavor: Flavor;
+  category: FlavorCategory;
   bobaType: BobaType;
+  unitPrice: number;
+  toppings: CartTopping[];
   quantity: number;
 }
 
@@ -89,11 +120,10 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
   ENTREGADO: "Entregado",
 };
 
-export const FlavorCategoryList: FlavorCategory[] = [
-  FlavorCategory.MILK,
-  FlavorCategory.WATER,
-  FlavorCategory.SPECIAL,
-];
+export interface OrderItemTopping {
+  toppingName: string;
+  unitPrice: number;
+}
 
 export interface OrderItem {
   id: string;
@@ -103,6 +133,7 @@ export interface OrderItem {
   bobaTypeName: string;
   unitPrice: number;
   quantity: number;
+  toppings: OrderItemTopping[];
 }
 
 export interface Order {
@@ -113,17 +144,41 @@ export interface Order {
   items: OrderItem[];
 }
 
-export function computeDrinkPrice(
-  size: Size,
-  flavor: Flavor,
-  bobaType: BobaType,
-): number {
-  return size.price + flavor.price + bobaType.price;
+export function findDrinkPrice(
+  drinkPrices: DrinkPrice[],
+  category: FlavorCategory,
+  sizeId: string,
+  bobaTypeId: string,
+): DrinkPrice | undefined {
+  return drinkPrices.find(
+    (p) =>
+      p.category === category &&
+      p.sizeId === sizeId &&
+      p.bobaTypeId === bobaTypeId,
+  );
 }
 
-export function formatPrice(cents: number): string {
-  return new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(cents / 100);
+export function computeBasePrice(
+  drinkPrices: DrinkPrice[],
+  category: FlavorCategory,
+  sizeId: string,
+  bobaTypeId: string,
+): number | null {
+  const entry = findDrinkPrice(drinkPrices, category, sizeId, bobaTypeId);
+  return entry ? entry.price : null;
+}
+
+export function sumToppings(toppings: Pick<Topping, "price">[]): number {
+  return toppings.reduce((acc, t) => acc + t.price, 0);
+}
+
+export function computeItemPrice(
+  basePrice: number,
+  toppings: Pick<Topping, "price">[],
+): number {
+  return basePrice + sumToppings(toppings);
+}
+
+export function formatPrice(bs: number): string {
+  return `${bs} Bs`;
 }

@@ -1,5 +1,4 @@
 import type { Size } from "@bubba/types";
-import { formatPrice } from "@bubba/types";
 import { cn } from "../../lib/utils";
 
 export interface SizeSelectorProps {
@@ -14,7 +13,7 @@ export function SizeSelector({
   onSelect,
 }: SizeSelectorProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       {sizes.map((size) => {
         const selected = size.id === selectedId;
         return (
@@ -29,18 +28,7 @@ export function SizeSelector({
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold">{size.name}</span>
-              <span className="text-sm text-muted-foreground">{size.ml} ml</span>
-            </div>
-            <div className="mt-1 flex items-center justify-between">
-              <span className="text-lg font-bold text-primary">
-                {formatPrice(size.price)}
-              </span>
-              <span
-                className={cn(
-                  "h-2 w-2 rounded-full",
-                  selected ? "bg-primary" : "bg-muted",
-                )}
-              />
+              <span className="text-sm text-muted-foreground">{size.oz} oz</span>
             </div>
           </button>
         );

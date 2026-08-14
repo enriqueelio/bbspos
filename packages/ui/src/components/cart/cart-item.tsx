@@ -1,5 +1,5 @@
 import type { CartItem } from "@bubba/types";
-import { computeDrinkPrice, formatPrice } from "@bubba/types";
+import { FlavorCategoryLabel, formatPrice, sumToppings } from "@bubba/types";
 import { Trash2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
@@ -16,18 +16,28 @@ export function CartItemRow({
   onUpdateQuantity,
   onRemove,
 }: CartItemRowProps) {
-  const unitPrice = computeDrinkPrice(item.size, item.flavor, item.bobaType);
+  const lineTotal = (item.unitPrice + sumToppings(item.toppings)) * item.quantity;
 
   return (
     <Card className="p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <div className="font-semibold">{item.size.name}</div>
-          <div className="text-sm text-muted-foreground">
-            {item.flavor.name} · {item.bobaType.name}
+          <div className="font-semibold">
+            {item.size.name} · {item.flavor.name}
           </div>
+          <div className="text-sm text-muted-foreground">
+            {FlavorCategoryLabel[item.category]} · {item.bobaType.name}
+          </div>
+          {item.toppings.length > 0 && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Toppings:{" "}
+              {item.toppings
+                .map((t) => `${t.name} (+${formatPrice(t.price)})`)
+                .join(", ")}
+            </div>
+          )}
           <div className="mt-1 text-sm font-medium text-primary">
-            {formatPrice(unitPrice)} c/u
+            {formatPrice(item.unitPrice + sumToppings(item.toppings))} c/u
           </div>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -36,7 +46,7 @@ export function CartItemRow({
             onChange={(q) => onUpdateQuantity(item.id, q)}
           />
           <div className="w-20 text-right font-bold">
-            {formatPrice(unitPrice * item.quantity)}
+            {formatPrice(lineTotal)}
           </div>
           <Button
             type="button"

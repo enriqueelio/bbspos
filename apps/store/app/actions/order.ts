@@ -1,11 +1,11 @@
 "use server";
 
 import { prisma } from "@bubba/db";
-import { computeDrinkPrice, type CartItem } from "@bubba/types";
+import { sumToppings, type CartItem } from "@bubba/types";
 
 export async function createOrder(
   items: CartItem[],
-): Promise<{ orderId: string }> {
+): Promise<{ orderId: string; total: number }> {
   if (items.length === 0) {
     throw new Error("El carrito está vacío");
   }
@@ -13,14 +13,21 @@ export async function createOrder(
   const orderItems = items.map((item) => ({
     sizeName: item.size.name,
     flavorName: item.flavor.name,
-    flavorCategory: item.flavor.category,
+    flavorCategory: item.category,
     bobaTypeName: item.bobaType.name,
-    unitPrice: computeDrinkPrice(item.size, item.flavor, item.bobaType),
+    unitPrice: item.unitPrice,
     quantity: item.quantity,
+    toppings: {
+      create: item.toppings.map((t) => ({
+        toppingName: t.name,
+        unitPrice: t.price,
+      })),
+    },
   }));
 
-  const total = orderItems.reduce(
-    (acc, item) => acc + item.unitPrice * item.quantity,
+  const total = items.reduce(
+    (acc, item) =>
+      acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
     0,
   );
 
@@ -33,5 +40,5 @@ export async function createOrder(
     },
   });
 
-  return { orderId: order.id };
+  return { orderId: order.id, total };
 }

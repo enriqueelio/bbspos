@@ -1,10 +1,4 @@
-# Drink Catalog Specification
-
-## Purpose
-
-Define el catálogo de bebidas del restaurante: tamaños de vaso, sabores agrupados por categoría y tipos de boba, con precios y disponibilidad gestionables por el admin y consultables por la tienda.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Gestión de tamaños de vaso
 
@@ -85,6 +79,8 @@ El sistema SHALL incluir una semilla inicial de catálogo con los tamaños Grand
 
 - **WHEN** la base de datos se inicializa por primera vez y se ejecuta la semilla
 - **THEN** el catálogo contiene tamaños, sabores de las tres categorías, tipos de boba, la matriz de precios completa y los toppings listos para la venta
+
+## ADDED Requirements
 
 ### Requirement: Gestión de matriz de precios
 

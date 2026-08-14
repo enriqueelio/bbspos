@@ -1,10 +1,4 @@
-# Drink Builder Specification
-
-## Purpose
-
-Permite al cliente armar su bebida de burbujas paso a paso: elegir tamaño de vaso, sabor (leche, agua o especiales) y tipo de boba, ver el precio resultante y agregarla al carrito.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Configurador paso a paso
 
@@ -90,6 +84,8 @@ El sistema SHALL permitir al cliente quitar una bebida del carrito, cambiar su c
 
 - **WHEN** el cliente aumenta o disminuye la cantidad de una bebida
 - **THEN** el subtotal se actualiza de acuerdo con la nueva cantidad
+
+## ADDED Requirements
 
 ### Requirement: Selección de toppings opcionales
 

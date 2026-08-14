@@ -6,17 +6,29 @@ export const metadata = {
 };
 
 export default async function MenuPage() {
-  const [sizes, flavors, bobaTypes] = await Promise.all([
-    prisma.size.findMany({ orderBy: { price: "asc" } }),
-    prisma.flavor.findMany({ orderBy: { price: "asc" } }),
-    prisma.bobaType.findMany({ orderBy: { price: "asc" } }),
+  const [sizes, flavors, bobaTypes, toppings, drinkPrices] = await Promise.all([
+    prisma.size.findMany({ orderBy: { oz: "asc" } }),
+    prisma.flavor.findMany({
+      include: { categories: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.bobaType.findMany({ orderBy: { name: "asc" } }),
+    prisma.topping.findMany({ orderBy: { name: "asc" } }),
+    prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
   ]);
 
   return (
     <MenuManager
       sizes={sizes}
-      flavors={flavors}
+      flavors={flavors.map((f) => ({
+        id: f.id,
+        name: f.name,
+        categories: f.categories.map((c) => c.category),
+        available: f.available,
+      }))}
       bobaTypes={bobaTypes}
+      toppings={toppings}
+      drinkPrices={drinkPrices}
     />
   );
 }

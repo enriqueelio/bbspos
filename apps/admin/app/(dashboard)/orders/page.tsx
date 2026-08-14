@@ -26,7 +26,7 @@ export default async function OrdersPage({
 
   const rawOrders = await prisma.order.findMany({
     where,
-    include: { items: true },
+    include: { items: { include: { toppings: true } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -43,6 +43,11 @@ export default async function OrdersPage({
       bobaTypeName: i.bobaTypeName,
       unitPrice: i.unitPrice,
       quantity: i.quantity,
+      toppings: i.toppings.map((t) => ({
+        id: t.id,
+        toppingName: t.toppingName,
+        unitPrice: t.unitPrice,
+      })),
     })),
   }));
 

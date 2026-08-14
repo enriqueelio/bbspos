@@ -11,7 +11,6 @@ import {
   BobaKindLabel,
   FlavorCategoryLabel,
   FlavorCategoryList,
-  formatPrice,
 } from "@bubba/types";
 import { getCatalog } from "@/lib/catalog";
 
@@ -56,10 +55,7 @@ export default async function HomePage() {
                   className="flex items-center justify-between text-sm"
                 >
                   <span>
-                    {size.name} · {size.ml} ml
-                  </span>
-                  <span className="font-semibold">
-                    {formatPrice(size.price)}
+                    {size.name} · {size.oz} oz
                   </span>
                 </div>
               ))}
@@ -81,7 +77,7 @@ export default async function HomePage() {
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {catalog.flavors
-                      .filter((f) => f.category === category)
+                      .filter((f) => f.categories.includes(category))
                       .map((f) => (
                         <Badge key={f.id} variant="outline">
                           {f.name}
@@ -110,9 +106,6 @@ export default async function HomePage() {
                 >
                   <span>
                     {boba.name} · {BobaKindLabel[boba.kind]}
-                  </span>
-                  <span className="font-semibold">
-                    {formatPrice(boba.price)}
                   </span>
                 </div>
               ))}

@@ -16,27 +16,57 @@ model User {
 }
 
 model Size {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  ml        Int
-  price     Int
-  available Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  name       String   @unique
+  oz         Int
+  available  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  drinkPrices DrinkPrice[]
 }
 
 model Flavor {
-  id        String         @id @default(cuid())
-  name      String         @unique
-  category  FlavorCategory
-  price     Int
-  available Boolean        @default(true)
-  createdAt DateTime       @default(now())
+  id         String               @id @default(cuid())
+  name       String               @unique
+  categories FlavorCategoryLink[]
+  available  Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+}
+
+model FlavorCategoryLink {
+  id       String        @id @default(cuid())
+  flavorId String
+  flavor   Flavor        @relation(fields: [flavorId], references: [id], onDelete: Cascade)
+  category FlavorCategory
+  createdAt DateTime     @default(now())
+
+  @@unique([flavorId, category])
 }
 
 model BobaType {
   id        String   @id @default(cuid())
   name      String   @unique
   kind      BobaKind
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+  drinkPrices DrinkPrice[]
+}
+
+model DrinkPrice {
+  id         String        @id @default(cuid())
+  category   FlavorCategory
+  sizeId     String
+  size       Size          @relation(fields: [sizeId], references: [id], onDelete: Cascade)
+  bobaTypeId String
+  bobaType   BobaType      @relation(fields: [bobaTypeId], references: [id], onDelete: Cascade)
+  price      Int
+  createdAt  DateTime      @default(now())
+
+  @@unique([category, sizeId, bobaTypeId])
+}
+
+model Topping {
+  id        String   @id @default(cuid())
+  name      String   @unique
   price     Int
   available Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -51,15 +81,31 @@ model Order {
 }
 
 model OrderItem {
-  id             String        @id @default(cuid())
+  id             String            @id @default(cuid())
   orderId        String
-  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order          Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
   sizeName       String
   flavorName     String
   flavorCategory FlavorCategory
   bobaTypeName   String
   unitPrice      Int
   quantity       Int
+  toppings       OrderItemTopping[]
+}
+
+model OrderItemTopping {
+  id          String    @id @default(cuid())
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  toppingName String
+  unitPrice   Int
+}
+
+model PaymentConfig {
+  id        String   @id @default("default")
+  qrImage   String
+  mimeType  String
+  updatedAt DateTime @updatedAt
 }
 
 enum FlavorCategory {

@@ -35,6 +35,7 @@ export function AdminNav({ userName }: { userName: string }) {
         <NavLink href="/">Dashboard</NavLink>
         <NavLink href="/menu">Menú</NavLink>
         <NavLink href="/orders">Pedidos</NavLink>
+        <NavLink href="/payments">Pagos</NavLink>
       </nav>
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground">{userName}</span>

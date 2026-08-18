@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista Previa - Tema Naranja Bubba</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      color: #3d1e00;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* === FONDO CON MARCA DE AGUA === */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-color: #ff8c33;
+      background-image:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 120' opacity='0.06'%3E%3Cellipse cx='40' cy='95' rx='22' ry='8' fill='%23d96a00'/%3E%3Crect x='22' y='20' width='36' height='75' rx='8' fill='none' stroke='%23d96a00' stroke-width='3'/%3E%3Crect x='18' y='12' width='44' height='14' rx='4' fill='%23d96a00'/%3E%3Ccircle cx='32' cy='55' r='5' fill='%23d96a00'/%3E%3Ccircle cx='48' cy='50' r='4' fill='%23d96a00'/%3E%3Ccircle cx='38' cy='65' r='4.5' fill='%23d96a00'/%3E%3Ccircle cx='50' cy='62' r='3.5' fill='%23d96a00'/%3E%3Cline x1='40' y1='5' x2='40' y2='16' stroke='%23d96a00' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-size: 120px 180px;
+      pointer-events: none;
+    }
+
+    /* === HEADER === */
+    .header {
+      position: relative; z-index: 1;
+      background: linear-gradient(135deg, #e85d00, #ff8533);
+      padding: 1rem 1.5rem;
+      box-shadow: 0 4px 20px rgba(232, 93, 0, 0.3);
+    }
+    .header-inner {
+      max-width: 1000px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo {
+      font-size: 1.75rem; font-weight: 800; color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .logo span { color: #ffe0b2; }
+    .header-badge {
+      background: rgba(255,255,255,0.2); color: #fff;
+      padding: 0.35rem 0.75rem; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600;
+      backdrop-filter: blur(4px);
+    }
+
+    /* === CONTENIDO === */
+    .main {
+      position: relative; z-index: 1;
+      max-width: 1000px; margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .hero {
+      text-align: center; margin-bottom: 2rem;
+    }
+    .hero h1 {
+      font-size: 2.2rem; font-weight: 800;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .hero p { color: rgba(255,255,255,0.9); margin-top: 0.5rem; font-size: 1.05rem; }
+
+    /* === STEP INDICATOR === */
+    .steps {
+      display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 2rem;
+    }
+    .step {
+      padding: 0.5rem 1.2rem; border-radius: 999px;
+      font-size: 0.85rem; font-weight: 600;
+    }
+    .step.active {
+      background: linear-gradient(135deg, #e85d00, #ff8533);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(232, 93, 0, 0.35);
+    }
+    .step.inactive {
+      background: rgba(255,255,255,0.3); color: #fff;
+    }
+
+    /* === CARD === */
+    .card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      margin-bottom: 1.5rem;
+    }
+    .card h2 {
+      font-size: 1.15rem; font-weight: 700; color: #5a2d00;
+      margin-bottom: 1rem;
+    }
+
+    /* === BOTONES CATEGORÍA === */
+    .cat-btn {
+      width: 100%; padding: 1rem; margin-bottom: 0.75rem;
+      border: 2px solid rgba(232, 140, 60, 0.25);
+      border-radius: 0.75rem; background: #fffdf9;
+      font-size: 1rem; font-weight: 600; color: #5a2d00;
+      cursor: pointer; text-align: left;
+      transition: all 0.2s;
+    }
+    .cat-btn:hover {
+      border-color: #e85d00; box-shadow: 0 4px 16px rgba(232, 93, 0, 0.15);
+    }
+    .cat-btn.selected {
+      border-color: #e85d00; background: #fff3e6;
+      box-shadow: 0 0 0 3px rgba(232, 93, 0, 0.15);
+    }
+
+    /* === SABORES === */
+    .flavors {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+      padding-left: 1rem;
+    }
+    .flavor-btn {
+      padding: 0.65rem; border-radius: 0.5rem;
+      border: 1.5px solid rgba(232, 140, 60, 0.2);
+      background: #fff; font-size: 0.85rem; font-weight: 500;
+      color: #5a2d00; cursor: pointer; text-align: center;
+      transition: all 0.2s;
+    }
+    .flavor-btn:hover { border-color: #ff8533; }
+    .flavor-btn.selected {
+      border-color: #e85d00; background: #ff8533; color: #fff;
+    }
+
+    /* === GRID PRECIOS === */
+    .price-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
+    }
+    .price-cell {
+      padding: 1rem; border-radius: 0.75rem;
+      border: 1.5px solid rgba(232, 140, 60, 0.2);
+      background: #fff; display: flex;
+      justify-content: space-between; align-items: center;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .price-cell:hover { border-color: #e85d00; }
+    .price-cell.selected {
+      border-color: #e85d00; background: #fff3e6;
+      box-shadow: 0 0 0 3px rgba(232, 93, 0, 0.15);
+    }
+    .price-cell .name { font-weight: 600; color: #5a2d00; }
+    .price-cell .sub { font-size: 0.8rem; color: #a0693a; }
+    .price-cell .price {
+      font-size: 1.15rem; font-weight: 700; color: #e85d00;
+    }
+
+    /* === BOTONES NAVEGACIÓN === */
+    .nav {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .btn {
+      padding: 0.65rem 1.5rem; border-radius: 0.5rem;
+      font-weight: 600; font-size: 0.95rem; cursor: pointer;
+      border: none; transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #e85d00, #ff8533);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(232, 93, 0, 0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 24px rgba(232, 93, 0, 0.4);
+      transform: translateY(-1px);
+    }
+    .btn-ghost {
+      background: transparent; color: #a0693a;
+    }
+
+    /* === TOTAL === */
+    .total-label { font-size: 0.8rem; color: rgba(255,255,255,0.8); }
+    .total-price { font-size: 1.8rem; font-weight: 800; color: #fff; }
+
+    /* === PALETA DE COLORES === */
+    .palette {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem; margin-top: 2rem;
+    }
+    .swatch {
+      border-radius: 0.75rem; overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .swatch-color { height: 80px; }
+    .swatch-info { padding: 0.6rem; background: #fff; }
+    .swatch-name { font-size: 0.75rem; font-weight: 700; color: #333; }
+    .swatch-hex { font-size: 0.7rem; color: #888; font-family: monospace; }
+
+    .divider { border: none; border-top: 1px dashed rgba(232, 140, 60, 0.3); margin: 2rem 0; }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo">BUBBA <span>drinks</span></div>
+      <div class="header-badge">Ver preview del tema</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- HERO -->
+    <div class="hero">
+      <h1>Vista previa del tema naranja</h1>
+      <p>Así se vería tu app con el nuevo fondo y colores</p>
+    </div>
+
+    <!-- STEP INDICATOR -->
+    <div class="steps">
+      <div class="step active">Categoría y sabor</div>
+      <div class="step inactive">Tamaño y boba</div>
+      <div class="step inactive">Toppings</div>
+    </div>
+
+    <!-- CARD 1: Categoría + Sabores -->
+    <div class="card">
+      <h2>Elige la categoría de tu bebida</h2>
+      <button class="cat-btn selected">Especiales</button>
+      <button class="cat-btn">Con agua</button>
+      <button class="cat-btn">Con leche</button>
+
+      <div style="margin-top: 1rem; padding-left: 0.5rem;">
+        <p style="font-size: 0.85rem; color: #a0693a; margin-bottom: 0.5rem; font-weight: 500;">Elige tu sabor</p>
+        <div class="flavors">
+          <button class="flavor-btn selected">Taro</button>
+          <button class="flavor-btn">Matcha</button>
+          <button class="flavor-btn">Mango</button>
+          <button class="flavor-btn">Fresa</button>
+          <button class="flavor-btn">Chocolate</button>
+          <button class="flavor-btn">Vainilla</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 2: Tamaño + Boba -->
+    <div class="card">
+      <h2>Elige tamaño y tipo de boba</h2>
+      <div class="price-grid">
+        <div class="price-cell selected">
+          <div><div class="name">Pequeña</div><div class="sub">Tapioca</div></div>
+          <div class="price">15 Bs</div>
+        </div>
+        <div class="price-cell">
+          <div><div class="name">Pequeña</div><div class="sub">Explosivas</div></div>
+          <div class="price">15 Bs</div>
+        </div>
+        <div class="price-cell">
+          <div><div class="name">Mediana</div><div class="sub">Tapioca</div></div>
+          <div class="price">18 Bs</div>
+        </div>
+        <div class="price-cell">
+          <div><div class="name">Grande</div><div class="sub">Tapioca</div></div>
+          <div class="price">22 Bs</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAVEGACIÓN -->
+    <div class="card">
+      <div class="nav">
+        <button class="btn btn-ghost">Atrás</button>
+        <div style="text-align: right;">
+          <div class="total-label">Total estimado</div>
+          <div class="total-price">15 Bs</div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- PALETA DE COLORES PROPUESTA -->
+    <h2 style="text-align:center; color:#5a2d00; margin-bottom:1rem;">Paleta de colores propuesta</h2>
+    <div class="palette">
+      <div class="swatch">
+        <div class="swatch-color" style="background: #fff3e6;"></div>
+        <div class="swatch-info"><div class="swatch-name">Fondo</div><div class="swatch-hex">#fff3e6</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #e85d00;"></div>
+        <div class="swatch-info"><div class="swatch-name">Primario</div><div class="swatch-hex">#e85d00</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #ff8533;"></div>
+        <div class="swatch-info"><div class="swatch-name">Acento</div><div class="swatch-hex">#ff8533</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #5a2d00;"></div>
+        <div class="swatch-info"><div class="swatch-name">Texto</div><div class="swatch-hex">#5a2d00</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #a0693a;"></div>
+        <div class="swatch-info"><div class="swatch-name">Texto secundario</div><div class="swatch-hex">#a0693a</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: #fff; border: 1px solid #f5d9b8;"></div>
+        <div class="swatch-info"><div class="swatch-name">Cards</div><div class="swatch-hex">#ffffffcc</div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

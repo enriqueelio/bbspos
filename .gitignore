@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 build/
+!apps/store/app/build/
 *.log
 *.db
 *.db-journal

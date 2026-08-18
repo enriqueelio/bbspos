@@ -14,8 +14,10 @@ import {
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
 import { formatPrice } from "@bubba/types";
+import type { CartItem } from "@bubba/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
+import { printReceipt } from "@/lib/print-receipt";
 
 export default function CartPage() {
   const hydrated = useHasHydrated();
@@ -28,6 +30,7 @@ export default function CartPage() {
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderTotal, setOrderTotal] = useState<number | null>(null);
+  const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [paymentQr, setPaymentQr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,12 +76,16 @@ export default function CartPage() {
             />
           </div>
         )}
-        <div className="flex justify-center gap-2">
-          <Button asChild>
-            <Link href="/build">Armar otra bebida</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/">Volver al inicio</Link>
+        <div className="flex flex-col gap-2">
+          <Button
+            className="w-full"
+            onClick={() =>
+              printReceipt(orderId, orderItems, orderTotal ?? 0, () => {
+                window.location.href = "/";
+              })
+            }
+          >
+            Imprimir comanda
           </Button>
         </div>
       </div>
@@ -104,6 +111,7 @@ export default function CartPage() {
     setPlacing(true);
     setError(null);
     try {
+      setOrderItems([...items]);
       const { orderId: newOrderId, total } = await createOrder(items);
       setOrderId(newOrderId);
       setOrderTotal(total);

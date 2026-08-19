@@ -56,3 +56,24 @@ El sistema SHALL proveer paquetes compartidos para componentes de interfaz, acce
 
 - **WHEN** una app importa un tipo de dominio del paquete de tipos
 - **THEN** el tipo refleja el mismo contrato de datos en toda la base de código
+
+### Requirement: Tema visual naranja
+
+El sistema SHALL aplicar un tema visual naranja consistente en todas las aplicaciones, definido mediante variables CSS en `globals.css` y un preset de Tailwind compartido. La paleta SHALL usar:
+
+- **Fondo:** `#fff3e6` (naranja muy claro)
+- **Primario:** `#e85d00` (naranja vibrante)
+- **Acento:** `#ff8533` (naranja claro)
+- **Texto:** `#5a2d00` (marrón oscuro)
+- **Texto secundario:** `#a0693a` (marrón medio)
+- **Bordes:** `#d4a574` (naranja suave)
+
+#### Scenario: Colores consistentes entre apps
+
+- **WHEN** se renderiza cualquier pantalla en store o admin
+- **THEN** los colores de fondo, primario, texto y bordes coinciden con la paleta naranja definida
+
+#### Scenario: Variables CSS centralizadas
+
+- **WHEN** se modifica un color en `globals.css`
+- **THEN** el cambio se refleja en todos los componentes que usan las variables CSS correspondientes

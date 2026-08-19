@@ -8,7 +8,7 @@ Permite al cliente armar su bebida de burbujas paso a paso: elegir tamaño de va
 
 ### Requirement: Configurador paso a paso
 
-El sistema SHALL ofrecer un configurador de bebida en pasos secuenciales: (1) selección de categoría (especiales, con agua o con leche), (2) selección de sabor dentro de la categoría, (3) selección de tamaño y tipo de boba (ambos obligatorios) y (4) selección de toppings opcionales. El cliente no puede avanzar al siguiente paso sin haber completado el actual.
+El sistema SHALL ofrecer un configurador de bebida en pasos secuenciales: (1) selección de categoría (especiales, con agua o con leche), (2) selección de sabor dentro de la categoría, (3) selección de tamaño y tipo de boba (ambos obligatorios) y (4) selección de toppings opcionales. El cliente no puede avanzar al siguiente paso sin haber completado el actual. La interfaz SHALL seguir el tema visual naranja definido en la paleta del proyecto.
 
 #### Scenario: Flujo completo de configuración
 

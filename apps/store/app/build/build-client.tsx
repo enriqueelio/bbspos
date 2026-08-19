@@ -85,8 +85,8 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Arma tu bubble drink</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-bold text-white">Arma tu bubble drink</h1>
+          <p className="text-white/80">
             Sigue los pasos para personalizar tu bebida.
           </p>
         </div>
@@ -220,8 +220,8 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div>
-            <div className="text-sm text-muted-foreground">Total estimado</div>
-            <div className="text-2xl font-bold">
+            <div className="text-sm text-white/70">Total estimado</div>
+            <div className="text-2xl font-bold text-white">
               {price !== null ? formatPrice(price) : "—"}
             </div>
           </div>
@@ -229,29 +229,38 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
 
         <div className="flex gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
+            className="border-white/40 bg-white/10 text-white hover:bg-white/20"
             disabled={step === 0}
             onClick={() => setStep((s) => Math.max(0, s - 1))}
           >
             Atrás
           </Button>
           {step < STEPS.length - 1 ? (
-            <Button disabled={!canGoNext} onClick={() => setStep((s) => s + 1)}>
+            <Button
+              className="bg-white text-primary hover:bg-white/90"
+              disabled={!canGoNext}
+              onClick={() => setStep((s) => s + 1)}
+            >
               Siguiente
             </Button>
           ) : (
-            <Button disabled={!canFinish} onClick={handleAddToCart}>
+            <Button
+              className="bg-white text-primary hover:bg-white/90"
+              disabled={!canFinish}
+              onClick={handleAddToCart}
+            >
               Agregar al carrito
             </Button>
           )}
         </div>
       </div>
 
-      <div className="text-center text-sm text-muted-foreground">
+      <div className="text-center text-sm text-white/60">
         ¿Ya tienes todo listo?{" "}
         <Link
           href="/cart"
-          className="font-medium text-primary underline-offset-4 hover:underline"
+          className="font-medium text-white underline-offset-4 hover:underline"
         >
           Ir a mi carrito
         </Link>

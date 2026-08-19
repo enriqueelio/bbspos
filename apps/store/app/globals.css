@@ -4,25 +4,25 @@
 
 @layer base {
   :root {
-    --background: 30 100% 95%;
-    --foreground: 30 100% 18%;
+    --background: 24 85% 72%;
+    --foreground: 30 100% 21%;
     --card: 0 0% 100%;
-    --card-foreground: 30 100% 18%;
+    --card-foreground: 30 100% 21%;
     --popover: 0 0% 100%;
-    --popover-foreground: 30 100% 18%;
-    --primary: 24 95% 45%;
+    --popover-foreground: 30 100% 21%;
+    --primary: 24 100% 45%;
     --primary-foreground: 0 0% 100%;
     --secondary: 30 80% 92%;
-    --secondary-foreground: 30 100% 18%;
+    --secondary-foreground: 30 100% 21%;
     --muted: 30 40% 94%;
     --muted-foreground: 28 46% 43%;
-    --accent: 24 100% 60%;
-    --accent-foreground: 30 100% 18%;
+    --accent: 22 100% 60%;
+    --accent-foreground: 30 100% 21%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 28 60% 82%;
-    --input: 28 60% 82%;
-    --ring: 24 95% 45%;
+    --border: 28 50% 74%;
+    --input: 28 50% 74%;
+    --ring: 24 100% 45%;
     --radius: 0.75rem;
     --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
       Arial, sans-serif;

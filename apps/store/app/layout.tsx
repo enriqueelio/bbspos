@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="min-h-screen font-sans antialiased">
+      <body className="min-h-screen bg-background font-sans text-foreground antialiased">
         <SiteHeader />
         <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6">
           {children}

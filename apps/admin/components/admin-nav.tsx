@@ -34,6 +34,7 @@ export function AdminNav({ userName }: { userName: string }) {
       <nav className="flex items-center gap-1">
         <NavLink href="/">Dashboard</NavLink>
         <NavLink href="/menu">Menú</NavLink>
+        <NavLink href="/slideshow">Carrusel</NavLink>
         <NavLink href="/orders">Pedidos</NavLink>
         <NavLink href="/payments">Pagos</NavLink>
       </nav>

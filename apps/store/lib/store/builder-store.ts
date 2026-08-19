@@ -15,6 +15,7 @@ interface BuilderState {
   setSize: (id: string) => void;
   setBobaType: (id: string) => void;
   toggleTopping: (id: string) => void;
+  clearToppings: () => void;
   reset: () => void;
 }
 
@@ -36,6 +37,7 @@ export const useBuilderStore = create<BuilderState>()(
             ? state.toppingIds.filter((t) => t !== id)
             : [...state.toppingIds, id],
         })),
+      clearToppings: () => set({ toppingIds: [] }),
       reset: () =>
         set({
           category: null,

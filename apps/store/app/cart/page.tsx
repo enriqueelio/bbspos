@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, ShoppingCart } from "lucide-react";
 import {
   Badge,
@@ -20,6 +21,7 @@ import { getPaymentQr } from "@/app/actions/payment";
 import { printReceipt } from "@/lib/print-receipt";
 
 export default function CartPage() {
+  const router = useRouter();
   const hydrated = useHasHydrated();
   const items = useCartStore((s) => s.items);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -167,8 +169,18 @@ export default function CartPage() {
           >
             {placing ? "Creando pedido..." : "Confirmar pedido"}
           </Button>
-          <Button variant="outline" className="w-full" asChild>
+          <Button variant="outline" className="w-full border-white/40 bg-red-500/80 text-white hover:bg-red-500" asChild>
             <Link href="/build">Armar otra bebida</Link>
+          </Button>
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={() => {
+              clear();
+              router.push("/");
+            }}
+          >
+            Cancelar pedido
           </Button>
         </div>
       </div>

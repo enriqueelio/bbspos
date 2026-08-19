@@ -22,12 +22,9 @@ export function FlavorPicker({
 
   return (
     <div className="space-y-6">
-      <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {FlavorCategoryLabel[category]}
-        </h3>
-        <Badge variant="secondary">{categoryFlavors.length}</Badge>
-      </div>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        {FlavorCategoryLabel[category]}
+      </h3>
       {categoryFlavors.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No hay sabores disponibles en esta categoría.
@@ -42,8 +39,10 @@ export function FlavorPicker({
                 type="button"
                 onClick={() => onSelect(flavor.id)}
                 className={cn(
-                  "rounded-xl border bg-card px-4 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  selected && "border-primary ring-2 ring-primary/30",
+                  "rounded-xl border px-4 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card",
                 )}
               >
                 <span className="font-medium">{flavor.name}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -28,6 +28,7 @@ const STEPS = ["Categoría y sabor", "Tamaño y boba", "Toppings"];
 export function BuildClient({ catalog }: { catalog: Catalog }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const {
     category,
     flavorId,
@@ -39,9 +40,14 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
     setSize,
     setBobaType,
     toggleTopping,
+    clearToppings,
     reset,
   } = useBuilderStore();
   const addItem = useCartStore((s) => s.addItem);
+
+  useEffect(() => {
+    reset();
+  }, []);
 
   const size = catalog.sizes.find((s) => s.id === sizeId);
   const flavor = catalog.flavors.find((f) => f.id === flavorId);
@@ -100,15 +106,24 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
               <h2 className="font-semibold">Elige la categoría de tu bebida</h2>
               <div className="flex flex-col gap-3">
                 {FlavorCategoryList.map((cat: FlavorCategory) => {
-                  const selected = category === cat;
+                  const expanded = expandedCategory === cat;
                   return (
                     <div key={cat} className="space-y-3">
                       <button
                         type="button"
-                        onClick={() => setCategory(cat)}
+                        onClick={() => {
+                          if (expanded) {
+                            setExpandedCategory(null);
+                          } else {
+                            setExpandedCategory(cat);
+                            setCategory(cat);
+                          }
+                        }}
                         className={cn(
                           "w-full rounded-xl border bg-card p-4 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selected && "border-primary ring-2 ring-primary/30",
+                          expanded
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border",
                         )}
                       >
                         <span className="font-semibold">
@@ -116,9 +131,8 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                         </span>
                       </button>
 
-                      {selected && (
+                      {expanded && (
                         <div className="pl-4">
-                          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Elige tu sabor</h3>
                           <FlavorPicker
                             flavors={catalog.flavors}
                             category={category}
@@ -157,18 +171,26 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                         }}
                         disabled={cellPrice === null}
                         className={cn(
-                          "rounded-xl border bg-card p-4 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-                          selected && "border-primary ring-2 ring-primary/30",
+                          "rounded-xl border p-4 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card",
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div>
                             <div className="font-semibold">{s.name}</div>
-                            <div className="text-sm text-muted-foreground">
+                            <div className={cn(
+                              "text-sm",
+                              selected ? "text-primary-foreground/70" : "text-muted-foreground",
+                            )}>
                               {b.name}
                             </div>
                           </div>
-                          <span className="text-lg font-bold text-primary">
+                          <span className={cn(
+                            "text-lg font-bold",
+                            selected ? "text-primary-foreground" : "text-primary",
+                          )}>
                             {cellPrice !== null
                               ? formatPrice(cellPrice)
                               : "—"}
@@ -199,12 +221,17 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                         type="button"
                         onClick={() => toggleTopping(t.id)}
                         className={cn(
-                          "flex items-center justify-between gap-2 rounded-xl border bg-card px-4 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selected && "border-primary ring-2 ring-primary/30",
+                          "flex items-center justify-between gap-2 rounded-xl border px-4 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          selected
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card",
                         )}
                       >
                         <span className="font-medium">{t.name}</span>
-                        <span className="text-sm font-semibold text-primary">
+                        <span className={cn(
+                          "text-sm font-semibold",
+                          selected ? "text-primary-foreground" : "text-primary",
+                        )}>
                           +{formatPrice(t.price)}
                         </span>
                       </button>
@@ -229,16 +256,27 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
 
         <div className="flex gap-2">
           <Button
-            variant="outline"
-            className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
             disabled={step === 0}
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            onClick={() => {
+              if (step === 2) {
+                clearToppings();
+              }
+              if (step === 1) {
+                setSize(null);
+                setBobaType(null);
+              }
+              setStep((s) => Math.max(0, s - 1));
+            }}
           >
             Atrás
           </Button>
           {step < STEPS.length - 1 ? (
             <Button
-              className="bg-white text-primary hover:bg-white/90"
+              className={cn(
+                "bg-white text-primary hover:bg-white/90",
+                flavorId && "ring-2 ring-white/50 shadow-lg shadow-white/20",
+              )}
               disabled={!canGoNext}
               onClick={() => setStep((s) => s + 1)}
             >
@@ -246,7 +284,10 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
             </Button>
           ) : (
             <Button
-              className="bg-white text-primary hover:bg-white/90"
+              className={cn(
+                "bg-white text-primary hover:bg-white/90",
+                "ring-2 ring-white/50 shadow-lg shadow-white/20",
+              )}
               disabled={!canFinish}
               onClick={handleAddToCart}
             >

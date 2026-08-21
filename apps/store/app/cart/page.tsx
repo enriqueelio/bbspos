@@ -35,6 +35,9 @@ export default function CartPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderTotal, setOrderTotal] = useState<number | null>(null);
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
+  const [orderCustomerName, setOrderCustomerName] = useState<string | null>(
+    null,
+  );
   const [paymentQr, setPaymentQr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -55,7 +58,15 @@ export default function CartPage() {
         <h1 className="text-2xl font-bold">¡Pedido confirmado!</h1>
         <p className="text-muted-foreground">
           Tu pedido <span className="font-semibold">#{orderId}</span> fue
-          registrado. Pasa por tu bubble drink en mostrador.
+          registrado.
+          {orderCustomerName && (
+            <>{" "}Queda a nombre de{" "}
+              <span className="font-semibold text-foreground">
+                {orderCustomerName}
+              </span>
+            </>
+          )}
+          {" "}Pasa por tu bubble drink en mostrador.
         </p>
         {orderTotal !== null && (
           <div className="rounded-lg border border-primary/30 bg-primary/5 px-6 py-4">
@@ -88,7 +99,7 @@ export default function CartPage() {
                 orderId,
                 orderItems,
                 orderTotal ?? 0,
-                customerName,
+                orderCustomerName,
                 () => {
                   window.location.href = "/";
                 },
@@ -126,6 +137,7 @@ export default function CartPage() {
     setError(null);
     try {
       setOrderItems([...items]);
+      setOrderCustomerName(customerName.trim());
       const { orderId: newOrderId, total } = await createOrder(
         items,
         customerName.trim(),

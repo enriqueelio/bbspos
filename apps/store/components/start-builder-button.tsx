@@ -12,6 +12,18 @@ export function StartBuilderButton() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  function handleOpen() {
+    setName("");
+    setError(null);
+    setOpen(true);
+  }
+
+  function handleClose() {
+    setName("");
+    setError(null);
+    setOpen(false);
+  }
+
   function handleConfirm() {
     const trimmed = name.trim();
     if (!trimmed) {
@@ -27,7 +39,7 @@ export function StartBuilderButton() {
       <Button
         size="lg"
         className="mt-6 bg-white text-primary hover:bg-white/90"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
       >
         Arma tu boba ahora
       </Button>
@@ -39,7 +51,7 @@ export function StartBuilderButton() {
           aria-modal="true"
           aria-label="Introduce tu nombre"
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
+            if (e.target === e.currentTarget) handleClose();
           }}
         >
           <Card className="w-full max-w-sm">
@@ -62,7 +74,7 @@ export function StartBuilderButton() {
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleConfirm();
-                  if (e.key === "Escape") setOpen(false);
+                  if (e.key === "Escape") handleClose();
                 }}
                 className="w-full rounded-lg border border-border bg-card px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
               />
@@ -73,7 +85,7 @@ export function StartBuilderButton() {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => setOpen(false)}
+                  onClick={handleClose}
                 >
                   Cancelar
                 </Button>

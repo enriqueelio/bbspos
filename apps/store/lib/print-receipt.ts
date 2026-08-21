@@ -9,7 +9,7 @@ export function printReceipt(
   onDone?: () => void,
 ) {
   const lines: string[] = [];
-  const w = 32;
+  const w = 26;
 
   const center = (text: string) => {
     const pad = Math.max(0, Math.floor((w - text.length) / 2));
@@ -54,7 +54,7 @@ export function printReceipt(
 
   const receipt = lines.join("\n");
 
-  const printWindow = window.open("", "_blank", "width=360,height=700");
+  const printWindow = window.open("", "_blank", "width=420,height=800");
   if (!printWindow) return;
 
   printWindow.document.write(`
@@ -69,7 +69,7 @@ export function printReceipt(
         }
         body {
           font-family: "Courier New", Courier, monospace;
-          font-size: 14.4px;
+          font-size: 17.28px;
           white-space: pre;
           margin: 8px;
           line-height: 1.3;

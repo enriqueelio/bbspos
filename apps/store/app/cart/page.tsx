@@ -24,6 +24,8 @@ export default function CartPage() {
   const router = useRouter();
   const hydrated = useHasHydrated();
   const items = useCartStore((s) => s.items);
+  const customerName = useCartStore((s) => s.customerName);
+  const setCustomerName = useCartStore((s) => s.setCustomerName);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const clear = useCartStore((s) => s.clear);
@@ -82,9 +84,15 @@ export default function CartPage() {
           <Button
             className="w-full"
             onClick={() =>
-              printReceipt(orderId, orderItems, orderTotal ?? 0, () => {
-                window.location.href = "/";
-              })
+              printReceipt(
+                orderId,
+                orderItems,
+                orderTotal ?? 0,
+                customerName,
+                () => {
+                  window.location.href = "/";
+                },
+              )
             }
           >
             Imprimir comanda
@@ -110,11 +118,18 @@ export default function CartPage() {
   }
 
   async function handleCheckout() {
+    if (!customerName?.trim()) {
+      setError("Escribe tu nombre para que podamos entregarte el pedido.");
+      return;
+    }
     setPlacing(true);
     setError(null);
     try {
       setOrderItems([...items]);
-      const { orderId: newOrderId, total } = await createOrder(items);
+      const { orderId: newOrderId, total } = await createOrder(
+        items,
+        customerName.trim(),
+      );
       setOrderId(newOrderId);
       setOrderTotal(total);
       clear();
@@ -153,6 +168,25 @@ export default function CartPage() {
       <div className="grid gap-6 md:grid-cols-[1fr_320px]">
         <div />
         <div className="space-y-4">
+          <Card>
+            <CardContent className="space-y-2 p-4">
+              <label
+                htmlFor="customer-name"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                Tu nombre (para entregar tu pedido)
+              </label>
+              <input
+                id="customer-name"
+                type="text"
+                maxLength={40}
+                placeholder="Ej. María Pérez"
+                value={customerName ?? ""}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full rounded-lg border border-border bg-card px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+              />
+            </CardContent>
+          </Card>
           <CartSummary items={items} />
           {error && (
             <Card>

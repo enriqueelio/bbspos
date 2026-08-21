@@ -5,6 +5,7 @@ export function printReceipt(
   orderId: string,
   items: CartItem[],
   total: number,
+  customerName?: string | null,
   onDone?: () => void,
 ) {
   const lines: string[] = [];
@@ -21,6 +22,9 @@ export function printReceipt(
   lines.push(center("Tu bubble drink"));
   lines.push(line());
   lines.push(`Pedido: #${orderId}`);
+  if (customerName?.trim()) {
+    lines.push(`Cliente: ${customerName.trim()}`);
+  }
   lines.push(`Fecha: ${new Date().toLocaleString("es-BO")}`);
   lines.push(line());
 
@@ -41,6 +45,10 @@ export function printReceipt(
   lines.push(line());
   lines.push(center(`TOTAL: ${total} Bs`));
   lines.push(line());
+  if (customerName?.trim()) {
+    lines.push(center(`PARA: ${customerName.trim().toUpperCase()}`));
+    lines.push("");
+  }
   lines.push(center("Gracias por tu compra!"));
   lines.push("");
 

@@ -22,6 +22,8 @@ export interface AddItemInput {
 
 interface CartState {
   items: CartItem[];
+  customerName: string | null;
+  setCustomerName: (name: string) => void;
   addItem: (input: AddItemInput) => void;
   updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
@@ -32,6 +34,8 @@ export const useCartStore = create<CartState>()(
   persist(
     (set) => ({
       items: [],
+      customerName: null,
+      setCustomerName: (customerName) => set({ customerName }),
       addItem: (input) =>
         set((state) => {
           const toppingKey = input.toppings
@@ -73,7 +77,7 @@ export const useCartStore = create<CartState>()(
         })),
       removeItem: (id) =>
         set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
-      clear: () => set({ items: [] }),
+      clear: () => set({ items: [], customerName: null }),
     }),
     {
       name: "bubba-cart-v2",

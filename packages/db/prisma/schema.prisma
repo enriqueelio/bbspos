@@ -73,11 +73,12 @@ model Topping {
 }
 
 model Order {
-  id        String      @id @default(cuid())
-  status    OrderStatus @default(RECIBIDO)
-  total     Int
-  createdAt DateTime    @default(now())
-  items     OrderItem[]
+  id           String      @id @default(cuid())
+  status       OrderStatus @default(RECIBIDO)
+  customerName String?
+  total        Int
+  createdAt    DateTime    @default(now())
+  items        OrderItem[]
 }
 
 model OrderItem {

@@ -84,6 +84,11 @@ export function OrdersClient({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <CardTitle className="text-base">Pedido #{order.id}</CardTitle>
+                    {order.customerName && (
+                      <p className="text-sm font-semibold text-primary">
+                        Para: {order.customerName}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground">
                       {new Date(order.createdAt).toLocaleString("es-MX", {
                         dateStyle: "short",

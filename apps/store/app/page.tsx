@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { readFile } from "fs/promises";
 import { join } from "path";
-import { Button } from "@bubba/ui";
 import { PhotoCarousel } from "@/components/photo-carousel";
+import { StartBuilderButton } from "@/components/start-builder-button";
 
 export const metadata = {
   title: "Bubba Drinks — Bubble Tea y bebidas con boba",
@@ -43,13 +42,7 @@ export default async function HomePage() {
           Arma tu bubble drink perfecta: elige el tamaño de tu vaso, tu sabor
           favorito y el tipo de boba. Hecho al momento para ti.
         </p>
-        <Button
-          size="lg"
-          className="mt-6 bg-white text-primary hover:bg-white/90"
-          asChild
-        >
-          <Link href="/build">Arma tu boba ahora</Link>
-        </Button>
+        <StartBuilderButton />
       </section>
 
       {slideshow.images.length > 0 && (

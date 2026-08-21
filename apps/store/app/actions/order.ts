@@ -5,9 +5,13 @@ import { sumToppings, type CartItem } from "@bubba/types";
 
 export async function createOrder(
   items: CartItem[],
+  customerName?: string,
 ): Promise<{ orderId: string; total: number }> {
   if (items.length === 0) {
     throw new Error("El carrito está vacío");
+  }
+  if (!customerName?.trim()) {
+    throw new Error("Falta el nombre del cliente");
   }
 
   const orderItems = items.map((item) => ({
@@ -33,6 +37,7 @@ export async function createOrder(
 
   const order = await prisma.order.create({
     data: {
+      customerName: customerName.trim(),
       total,
       items: {
         create: orderItems,

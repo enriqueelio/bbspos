@@ -139,6 +139,7 @@ export interface OrderItem {
 export interface Order {
   id: string;
   status: OrderStatus;
+  customerName: string | null;
   total: number;
   createdAt: string;
   items: OrderItem[];

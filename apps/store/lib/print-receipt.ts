@@ -46,7 +46,7 @@ export function printReceipt(
 
   const receipt = lines.join("\n");
 
-  const printWindow = window.open("", "_blank", "width=300,height=600");
+  const printWindow = window.open("", "_blank", "width=360,height=700");
   if (!printWindow) return;
 
   printWindow.document.write(`
@@ -61,7 +61,7 @@ export function printReceipt(
         }
         body {
           font-family: "Courier New", Courier, monospace;
-          font-size: 12px;
+          font-size: 14.4px;
           white-space: pre;
           margin: 8px;
           line-height: 1.3;

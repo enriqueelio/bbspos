@@ -12,8 +12,8 @@ interface BuilderState {
   toppingIds: string[];
   setCategory: (category: FlavorCategory) => void;
   setFlavor: (id: string) => void;
-  setSize: (id: string) => void;
-  setBobaType: (id: string) => void;
+  setSize: (id: string | null) => void;
+  setBobaType: (id: string | null) => void;
   toggleTopping: (id: string) => void;
   clearToppings: () => void;
   reset: () => void;

@@ -135,7 +135,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                         <div className="pl-4">
                           <FlavorPicker
                             flavors={catalog.flavors}
-                            category={category}
+                            category={cat}
                             selectedId={flavorId ?? undefined}
                             onSelect={setFlavor}
                           />

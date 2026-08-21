@@ -1,7 +1,6 @@
 import type { Flavor, FlavorCategory } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
-import { Badge } from "../ui/badge";
 
 export interface FlavorPickerProps {
   flavors: Flavor[];

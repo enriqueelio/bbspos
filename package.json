@@ -12,7 +12,8 @@
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @bubba/db generate",
     "db:migrate": "pnpm --filter @bubba/db migrate",
-    "db:seed": "pnpm --filter @bubba/db seed"
+    "db:seed": "pnpm --filter @bubba/db seed",
+    "db:sync": "scripts\\db-sync.bat"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

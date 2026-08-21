@@ -6,7 +6,7 @@ import { sumToppings, type CartItem } from "@bubba/types";
 export async function createOrder(
   items: CartItem[],
   customerName?: string,
-): Promise<{ orderId: string; total: number }> {
+): Promise<{ orderId: string; seq: number; total: number }> {
   if (items.length === 0) {
     throw new Error("El carrito está vacío");
   }
@@ -35,15 +35,23 @@ export async function createOrder(
     0,
   );
 
-  const order = await prisma.order.create({
-    data: {
-      customerName: customerName.trim(),
-      total,
-      items: {
-        create: orderItems,
+  const order = await prisma.$transaction(async (tx) => {
+    const last = await tx.order.findFirst({
+      orderBy: { seq: "desc" },
+      select: { seq: true },
+    });
+    const seq = (last?.seq ?? 0) + 1;
+    return tx.order.create({
+      data: {
+        customerName: customerName.trim(),
+        seq,
+        total,
+        items: {
+          create: orderItems,
+        },
       },
-    },
+    });
   });
 
-  return { orderId: order.id, total };
+  return { orderId: order.id, seq: order.seq ?? 0, total };
 }

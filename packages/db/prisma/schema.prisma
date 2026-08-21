@@ -74,6 +74,7 @@ model Topping {
 
 model Order {
   id           String      @id @default(cuid())
+  seq          Int?        @unique
   status       OrderStatus @default(RECIBIDO)
   customerName String?
   total        Int

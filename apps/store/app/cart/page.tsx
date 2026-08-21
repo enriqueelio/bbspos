@@ -14,7 +14,7 @@ import {
 } from "@bubba/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
-import { formatPrice } from "@bubba/types";
+import { formatPrice, formatOrderCode } from "@bubba/types";
 import type { CartItem } from "@bubba/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
@@ -33,6 +33,7 @@ export default function CartPage() {
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderSeq, setOrderSeq] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState<number | null>(null);
   const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [orderCustomerName, setOrderCustomerName] = useState<string | null>(
@@ -57,8 +58,11 @@ export default function CartPage() {
         <CheckCircle2 className="mx-auto h-16 w-16 text-emerald-500" />
         <h1 className="text-2xl font-bold">¡Pedido confirmado!</h1>
         <p className="text-muted-foreground">
-          Tu pedido <span className="font-semibold">#{orderId}</span> fue
-          registrado.
+          Tu pedido{" "}
+          <span className="font-semibold">
+            #{formatOrderCode(orderSeq)}
+          </span>{" "}
+          fue registrado.
           {orderCustomerName && (
             <>{" "}Queda a nombre de{" "}
               <span className="font-semibold text-foreground">
@@ -96,7 +100,7 @@ export default function CartPage() {
             className="w-full"
             onClick={() =>
               printReceipt(
-                orderId,
+                formatOrderCode(orderSeq),
                 orderItems,
                 orderTotal ?? 0,
                 orderCustomerName,
@@ -138,11 +142,12 @@ export default function CartPage() {
     try {
       setOrderItems([...items]);
       setOrderCustomerName(customerName.trim());
-      const { orderId: newOrderId, total } = await createOrder(
+      const { orderId: newOrderId, seq, total } = await createOrder(
         items,
         customerName.trim(),
       );
       setOrderId(newOrderId);
+      setOrderSeq(seq);
       setOrderTotal(total);
       clear();
     } catch (e) {

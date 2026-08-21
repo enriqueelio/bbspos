@@ -10,7 +10,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@bubba/ui";
-import { formatPrice, type Order, type OrderStatus } from "@bubba/types";
+import {
+  formatPrice,
+  formatOrderCode,
+  type Order,
+  type OrderStatus,
+} from "@bubba/types";
 import { advanceOrderStatus } from "@/app/actions/orders";
 
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
@@ -83,7 +88,9 @@ export function OrdersClient({
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <CardTitle className="text-base">Pedido #{order.id}</CardTitle>
+                    <CardTitle className="text-base">
+                      Pedido #{formatOrderCode(order.seq)}
+                    </CardTitle>
                     {order.customerName && (
                       <p className="text-sm font-semibold text-primary">
                         Para: {order.customerName}

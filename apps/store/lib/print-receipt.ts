@@ -2,7 +2,7 @@ import type { CartItem } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 
 export function printReceipt(
-  orderId: string,
+  orderCode: string,
   items: CartItem[],
   total: number,
   customerName?: string | null,
@@ -21,7 +21,7 @@ export function printReceipt(
   lines.push(center("BEBUBBA"));
   lines.push(center("Tu bubble drink"));
   lines.push(line());
-  lines.push(`Pedido: #${orderId}`);
+  lines.push(`Pedido: #${orderCode}`);
   if (customerName?.trim()) {
     lines.push(`Cliente: ${customerName.trim()}`);
   }
@@ -61,7 +61,7 @@ export function printReceipt(
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Comanda #${orderId}</title>
+      <title>Comanda #${orderCode}</title>
       <style>
         @media print {
           @page { size: 80mm auto; margin: 2mm; }

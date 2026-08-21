@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@bubba/db";
-import { OrderStatusLabel, formatPrice } from "@bubba/types";
+import { OrderStatusLabel, formatPrice, formatOrderCode } from "@bubba/types";
 import {
   Badge,
   Button,
@@ -99,7 +99,9 @@ export default async function DashboardPage() {
             <Card key={order.id}>
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
-                  <div className="truncate font-medium">Pedido #{order.id}</div>
+                  <div className="truncate font-medium">
+                    Pedido #{formatOrderCode(order.seq)}
+                  </div>
                   <div className="text-sm text-muted-foreground">
                     {order.items.reduce((acc, i) => acc + i.quantity, 0)} bebida
                     {order.items.reduce((acc, i) => acc + i.quantity, 0) !== 1

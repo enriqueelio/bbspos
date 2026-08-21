@@ -138,11 +138,16 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
+  seq: number | null;
   status: OrderStatus;
   customerName: string | null;
   total: number;
   createdAt: string;
   items: OrderItem[];
+}
+
+export function formatOrderCode(seq: number | null | undefined): string {
+  return String(seq ?? 0).padStart(5, "0");
 }
 
 export function findDrinkPrice(

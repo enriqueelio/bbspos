@@ -12,12 +12,12 @@ import {
 
 function statusVariant(status: string) {
   switch (status) {
-    case "RECIBIDO":
+    case "INGRESADO":
       return "warning" as const;
-    case "EN_PREPARACION":
-      return "default" as const;
     case "ENTREGADO":
       return "success" as const;
+    case "ANULADO":
+      return "destructive" as const;
     default:
       return "secondary" as const;
   }
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
     await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.order.count({
-        where: { status: { in: ["RECIBIDO", "EN_PREPARACION"] } },
+        where: { status: "INGRESADO" },
       }),
       prisma.order.aggregate({
         where: { createdAt: { gte: todayStart } },
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
       value: String(todayOrders),
     },
     {
-      label: "En preparación",
+      label: "Pedidos por entregar",
       value: String(pendingOrders),
     },
     {

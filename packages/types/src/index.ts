@@ -101,24 +101,72 @@ export interface CartItem {
 }
 
 export const OrderStatus = {
-  RECIBIDO: "RECIBIDO",
-  EN_PREPARACION: "EN_PREPARACION",
+  INGRESADO: "INGRESADO",
   ENTREGADO: "ENTREGADO",
+  ANULADO: "ANULADO",
 } as const;
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export const OrderStatusSequence: OrderStatus[] = [
-  OrderStatus.RECIBIDO,
-  OrderStatus.EN_PREPARACION,
+  OrderStatus.INGRESADO,
   OrderStatus.ENTREGADO,
 ];
 
 export const OrderStatusLabel: Record<OrderStatus, string> = {
-  RECIBIDO: "Recibido",
-  EN_PREPARACION: "En preparación",
+  INGRESADO: "Ingresado",
   ENTREGADO: "Entregado",
+  ANULADO: "Anulado",
 };
+
+export const Role = {
+  ADMIN: "ADMIN",
+  CAJERO: "CAJERO",
+} as const;
+
+export type Role = (typeof Role)[keyof typeof Role];
+
+export const RoleLabel: Record<Role, string> = {
+  ADMIN: "Administrador",
+  CAJERO: "Cajero",
+};
+
+export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO];
+
+export interface StaffUser {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  active: boolean;
+}
+
+export function formatDurationMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
+export const PaymentMethod = {
+  EFECTIVO: "EFECTIVO",
+  QR: "QR",
+  TARJETA: "TARJETA",
+} as const;
+
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
+export const PaymentMethodLabel: Record<PaymentMethod, string> = {
+  EFECTIVO: "Efectivo",
+  QR: "QR",
+  TARJETA: "Tarjeta",
+};
+
+export const PaymentMethodList: PaymentMethod[] = [
+  PaymentMethod.EFECTIVO,
+  PaymentMethod.QR,
+  PaymentMethod.TARJETA,
+];
 
 export interface OrderItemTopping {
   toppingName: string;
@@ -143,7 +191,30 @@ export interface Order {
   customerName: string | null;
   total: number;
   createdAt: string;
+  deliveredAt?: string | null;
   items: OrderItem[];
+  userId?: string | null;
+  userName?: string | null;
+  paymentMethod?: PaymentMethod | null;
+  discountAmount?: number;
+  discountReason?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+}
+
+export interface CashierDailyData {
+  date: string;
+  revenueTotal: number;
+  deliveredOrders: number;
+  avgTicket: number;
+  avgDeliveryMinutes: number | null;
+  myDeliveredOrders: number;
+  myAvgDeliveryMinutes: number | null;
+  paymentBreakdown: {
+    method: PaymentMethod;
+    orders: number;
+    revenue: number;
+  }[];
 }
 
 export function formatOrderCode(seq: number | null | undefined): string {
@@ -187,4 +258,159 @@ export function computeItemPrice(
 
 export function formatPrice(bs: number): string {
   return `${bs} Bs`;
+}
+
+export type Granularity = "day" | "week" | "month";
+export type ReportFormat = "json" | "csv";
+export type TopProductsGroupBy =
+  | "drink"
+  | "flavor"
+  | "size"
+  | "bobaType"
+  | "topping";
+
+export interface ReportMeta {
+  report: string;
+  from: string;
+  to: string;
+  generatedAt: string;
+  currency: "BOB";
+}
+
+export interface ReportEnvelope<T> {
+  data: T;
+  meta: ReportMeta;
+}
+
+export interface ReportError {
+  error: {
+    code:
+      | "INVALID_PARAMETER"
+      | "MISSING_PARAMETER"
+      | "INVALID_DATE_RANGE"
+      | "UNAUTHENTICATED"
+      | "NOT_FOUND"
+      | "DATE_RANGE_TOO_LARGE"
+      | "NOT_IMPLEMENTED_SCHEMA"
+      | "INTERNAL_ERROR";
+    message: string;
+  };
+}
+
+export interface CategoryBreakdownRow {
+  category: FlavorCategory;
+  orders: number;
+  units: number;
+  revenue: number;
+}
+
+export interface PaymentBreakdownRow {
+  method: PaymentMethod;
+  orders: number;
+  revenue: number;
+}
+
+export interface DailyReportData {
+  date: string;
+  revenueTotal: number;
+  ordersTotal: number;
+  avgTicket: number;
+  itemsSold: number;
+  toppingsRevenue: number;
+  byCategory: CategoryBreakdownRow[];
+  paymentBreakdown: PaymentBreakdownRow[] | null;
+  discountsTotal: number | null;
+  cancellationsCount: number | null;
+}
+
+export interface SalesRangePoint {
+  bucket: string;
+  orders: number;
+  revenue: number;
+  avgTicket: number;
+}
+
+export interface SalesRangeData {
+  summary: {
+    revenueTotal: number;
+    ordersTotal: number;
+    avgTicket: number;
+    bestDay: { date: string; revenue: number } | null;
+    comparisonPrevPeriod: { revenueDeltaPct: number } | null;
+  };
+  series: SalesRangePoint[];
+}
+
+export interface PeakHoursData {
+  hourly: { hour: number; orders: number; revenue: number }[];
+  peakHour: { hour: number; orders: number } | null;
+  quietHour: { hour: number; orders: number } | null;
+}
+
+export interface StaffPerformanceRow {
+  user: { id: string; name: string };
+  ordersProcessed: number;
+  revenueTotal: number;
+  avgTicket: number;
+  shareOfRevenuePct: number;
+}
+
+export interface AdjustmentItem {
+  type: "discount" | "cancellation";
+  orderId: string;
+  orderSeq: number | null;
+  amount: number;
+  reason: string;
+  byUser: { id: string; name: string } | null;
+  at: string;
+}
+
+export interface AdjustmentsData {
+  summary: {
+    discountsCount: number;
+    discountsTotal: number;
+    cancellationsCount: number;
+    cancellationsLostRevenue: number;
+  };
+  items: AdjustmentItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
+
+export interface TopProductRow {
+  rank: number;
+  key: string;
+  unitsSold: number;
+  revenue: number;
+  unitPriceAvg: number;
+}
+
+export interface SlowMoverRow {
+  key: string;
+  unitsSold: number;
+  revenue: number;
+  available: boolean;
+}
+
+export interface CategorySalesData {
+  categories: {
+    category: FlavorCategory;
+    unitsSold: number;
+    revenue: number;
+    sharePct: number;
+    avgTicketItem: number;
+  }[];
+  bestCategory: FlavorCategory | null;
+}
+
+export interface DashboardSummaryData {
+  today: { revenue: number; orders: number; avgTicket: number };
+  yesterday: { revenue: number; orders: number; avgTicket: number };
+  deltaPct: { revenue: number | null; orders: number | null };
+  last7Days: { revenue: number; orders: number; avgTicket: number };
+  pendingOrders: number;
 }

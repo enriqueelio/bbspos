@@ -1,0 +1,20 @@
+Actúa como un arquitecto de software y genera las especificaciones técnicas completas para el nuevo módulo de reportes del proyecto
+
+
+Necesito que definas los endpoints, parámetros de consulta (query parameters), esquemas de respuesta (response schemas) y posibles errores (error codes) para una suite completa de reportes. Por favor, incluye los siguientes reportes detallados y cualquier otro que consideres de alto valor para el negocio:
+
+1. Reportes de Tiempo y Fechas:
+- Reporte Diario (Cierre de caja): Resumen de ingresos del día, total de órdenes, ticket promedio y desglose por método de pago.
+- Reporte por Rango de Fechas: Evolución de ventas entre una fecha de inicio y fin, permitiendo ver tendencias (días de mayor venta).
+- Reporte de Horas Pico: Volumen de transacciones por hora para identificar los momentos de mayor flujo en el local.
+
+2. Reportes por Usuario (Staff):
+- Rendimiento por Cajero/Mesero: Cantidad de órdenes procesadas o atendidas, total recaudado por usuario y promedios de venta.
+- Reporte de Anulaciones/Descuentos: Registro de qué usuarios aplicaron descuentos o cancelaron órdenes, por motivos de auditoría.
+
+3. Reportes por Producto y Menú:
+- Top Productos (Los más vendidos): Ranking de los platos más populares (ej. qué tipo de hamburguesas o alitas salen más) en cantidad y en ingresos generados.
+- Productos de Baja Rotación: Platos con menor movimiento en un periodo determinado.
+- Ventas por Categoría: Agrupación de ventas comparando el desempeño de categorías (Milanesas vs. Waffles, etc.).
+
+

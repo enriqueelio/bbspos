@@ -37,6 +37,8 @@ export function AdminNav({ userName }: { userName: string }) {
         <NavLink href="/slideshow">Carrusel</NavLink>
         <NavLink href="/orders">Pedidos</NavLink>
         <NavLink href="/payments">Pagos</NavLink>
+        <NavLink href="/reports">Reportes</NavLink>
+        <NavLink href="/users">Usuarios</NavLink>
       </nav>
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground">{userName}</span>

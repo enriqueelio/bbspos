@@ -12,7 +12,10 @@ model User {
   email     String   @unique
   name      String
   password  String
+  role      Role     @default(CAJERO)
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  orders    Order[]
 }
 
 model Size {
@@ -73,13 +76,24 @@ model Topping {
 }
 
 model Order {
-  id           String      @id @default(cuid())
-  seq          Int?        @unique
-  status       OrderStatus @default(RECIBIDO)
-  customerName String?
-  total        Int
-  createdAt    DateTime    @default(now())
-  items        OrderItem[]
+  id             String         @id @default(cuid())
+  seq            Int?           @unique
+  status         OrderStatus    @default(INGRESADO)
+  customerName   String?
+  total          Int
+  createdAt      DateTime       @default(now())
+  deliveredAt    DateTime?
+  items          OrderItem[]
+  userId         String?
+  user           User?          @relation(fields: [userId], references: [id])
+  paymentMethod  PaymentMethod?
+  discountAmount Int            @default(0)
+  discountReason String?
+  discountedAt   DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -122,7 +136,18 @@ enum BobaKind {
 }
 
 enum OrderStatus {
-  RECIBIDO
-  EN_PREPARACION
+  INGRESADO
   ENTREGADO
+  ANULADO
+}
+
+enum Role {
+  ADMIN
+  CAJERO
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  QR
+  TARJETA
 }

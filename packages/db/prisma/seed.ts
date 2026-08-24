@@ -151,15 +151,31 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: "admin@bubba.mx" },
-    update: {},
+    update: { role: "ADMIN" },
     create: {
       email: "admin@bubba.mx",
       name: "Administrador",
       password: adminPassword,
+      role: "ADMIN",
     },
   });
 
-  console.log("Catálogo, matriz de precios y usuario admin sembrados correctamente.");
+  const cajeroPassword = await hash("cajero123", 10);
+
+  await prisma.user.upsert({
+    where: { email: "cajero@bubba.mx" },
+    update: {},
+    create: {
+      email: "cajero@bubba.mx",
+      name: "Cajero Principal",
+      password: cajeroPassword,
+      role: "CAJERO",
+    },
+  });
+
+  console.log(
+    "Catálogo, matriz de precios, admin y cajero sembrados correctamente.",
+  );
 }
 
 main()

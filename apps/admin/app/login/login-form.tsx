@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { isAccountInactive } from "@/app/actions/auth";
 import { Button, Input, Label } from "@bubba/ui";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
@@ -24,7 +25,12 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
     });
 
     if (res?.error) {
-      setError("Credenciales inválidas. Verifica tu correo y contraseña.");
+      const inactive = await isAccountInactive(email, password);
+      setError(
+        inactive
+          ? "Esta cuenta está desactivada. Contacta al administrador."
+          : "Credenciales inválidas. Verifica tu correo y contraseña.",
+      );
       setLoading(false);
       return;
     }

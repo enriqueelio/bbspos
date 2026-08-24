@@ -1,7 +1,7 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import {
   Badge,
   Button,
@@ -9,33 +9,210 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
+  Label,
 } from "@bubba/ui";
 import {
   formatPrice,
   formatOrderCode,
+  PaymentMethodLabel,
+  PaymentMethodList,
   type Order,
   type OrderStatus,
+  type PaymentMethod,
 } from "@bubba/types";
-import { advanceOrderStatus } from "@/app/actions/orders";
+import {
+  applyDiscount,
+  cancelOrder,
+  deliverOrder,
+  markOrderPaid,
+} from "@/app/actions/orders";
 
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
   { value: "ALL", label: "Todos" },
-  { value: "RECIBIDO", label: "Recibidos" },
-  { value: "EN_PREPARACION", label: "En preparación" },
+  { value: "INGRESADO", label: "Ingresados" },
   { value: "ENTREGADO", label: "Entregados" },
+  { value: "ANULADO", label: "Anulados" },
 ];
 
 function statusVariant(status: OrderStatus) {
   switch (status) {
-    case "RECIBIDO":
+    case "INGRESADO":
       return "warning" as const;
-    case "EN_PREPARACION":
-      return "default" as const;
     case "ENTREGADO":
       return "success" as const;
+    case "ANULADO":
+      return "destructive" as const;
     default:
       return "secondary" as const;
   }
+}
+
+function runAction(fn: () => Promise<void>) {
+  fn().catch((e) => {
+    alert(e instanceof Error ? e.message : "Ocurrió un error.");
+  });
+}
+
+function OrderActions({ order }: { order: Order }) {
+  const [panel, setPanel] = useState<"pay" | "discount" | "cancel" | null>(
+    null,
+  );
+  const [method, setMethod] = useState<PaymentMethod>("EFECTIVO");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+
+  if (order.status === "ANULADO") {
+    return null;
+  }
+
+  const close = () => {
+    setPanel(null);
+    setAmount("");
+    setReason("");
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-3">
+      <div className="flex flex-wrap justify-end gap-2">
+        {order.status === "INGRESADO" && (
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() =>
+              runAction(async () => {
+                await deliverOrder(order.id);
+              })
+            }
+          >
+            Entregar
+          </Button>
+        )}
+        {!order.paymentMethod && order.status === "INGRESADO" && (
+          <Button
+            size="sm"
+            variant={panel === "pay" ? "default" : "outline"}
+            onClick={() => setPanel(panel === "pay" ? null : "pay")}
+          >
+            Cobrar
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant={panel === "discount" ? "default" : "outline"}
+          onClick={() => setPanel(panel === "discount" ? null : "discount")}
+        >
+          Descontar
+        </Button>
+        <Button
+          size="sm"
+          variant={panel === "cancel" ? "destructive" : "outline"}
+          onClick={() => setPanel(panel === "cancel" ? null : "cancel")}
+        >
+          Anular
+        </Button>
+      </div>
+
+      {panel === "pay" && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
+          <div className="space-y-1">
+            <Label htmlFor={`method-${order.id}`}>Método de pago</Label>
+            <select
+              id={`method-${order.id}`}
+              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+              value={method}
+              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+            >
+              {PaymentMethodList.map((m) => (
+                <option key={m} value={m}>
+                  {PaymentMethodLabel[m]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            size="sm"
+            onClick={() =>
+              runAction(async () => {
+                await markOrderPaid(order.id, method);
+                close();
+              })
+            }
+          >
+            Confirmar cobro ({formatPrice(order.total)})
+          </Button>
+        </div>
+      )}
+
+      {panel === "discount" && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
+          <div className="w-24 space-y-1">
+            <Label htmlFor={`amount-${order.id}`}>Monto (Bs)</Label>
+            <Input
+              id={`amount-${order.id}`}
+              type="number"
+              min={1}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div className="min-w-48 flex-1 space-y-1">
+            <Label htmlFor={`reason-${order.id}`}>Motivo</Label>
+            <Input
+              id={`reason-${order.id}`}
+              type="text"
+              value={reason}
+              placeholder="Ej. promo del día"
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={() =>
+              runAction(async () => {
+                await applyDiscount(order.id, Number(amount), reason);
+                close();
+              })
+            }
+          >
+            Aplicar descuento
+          </Button>
+        </div>
+      )}
+
+      {panel === "cancel" && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+          <div className="min-w-48 flex-1 space-y-1">
+            <Label htmlFor={`cancel-${order.id}`}>
+              Motivo de anulación (obligatorio)
+            </Label>
+            <Input
+              id={`cancel-${order.id}`}
+              type="text"
+              value={reason}
+              placeholder="Ej. pedido duplicado"
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => {
+              if (!confirm("¿Anular este pedido? Esta acción es irreversible.")) {
+                return;
+              }
+              runAction(async () => {
+                await cancelOrder(order.id, reason);
+                close();
+              });
+            }}
+          >
+            Anular pedido
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function OrdersClient({
@@ -103,7 +280,12 @@ export function OrdersClient({
                       })}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {order.paymentMethod && (
+                      <Badge variant="secondary">
+                        {PaymentMethodLabel[order.paymentMethod]}
+                      </Badge>
+                    )}
                     <Badge variant={statusVariant(order.status)}>
                       {statusLabels[order.status]}
                     </Badge>
@@ -112,6 +294,36 @@ export function OrdersClient({
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
+                {(order.cancelReason ||
+                  order.discountReason ||
+                  order.deliveredAt) && (
+                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    {order.deliveredAt && (
+                      <p>
+                        Entregado:{" "}
+                        {new Date(order.deliveredAt).toLocaleString("es-MX", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    )}
+                    {order.cancelledAt && order.cancelReason && (
+                      <p>
+                        Anulado: {order.cancelReason} ·{" "}
+                        {new Date(order.cancelledAt).toLocaleString("es-MX", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    )}
+                    {(order.discountAmount ?? 0) > 0 && order.discountReason && (
+                      <p>
+                        Descuento aplicado: −{formatPrice(order.discountAmount ?? 0)}{" "}
+                        ({order.discountReason})
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="space-y-1">
                   {order.items.map((item) => (
                     <div
@@ -146,27 +358,7 @@ export function OrdersClient({
                     </div>
                   ))}
                 </div>
-                {order.status !== "ENTREGADO" && (
-                  <div className="flex justify-end pt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        advanceOrderStatus(order.id).catch((e) => {
-                          alert(
-                            e instanceof Error ? e.message : "Ocurrió un error.",
-                          );
-                        });
-                      }}
-                    >
-                      Avanzar a:{" "}
-                      {order.status === "RECIBIDO"
-                        ? "En preparación"
-                        : "Entregado"}
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <OrderActions order={order} />
               </CardContent>
             </Card>
           ))}

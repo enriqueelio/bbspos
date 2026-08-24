@@ -51,6 +51,12 @@ export default async function OrdersPage({
         unitPrice: t.unitPrice,
       })),
     })),
+    userId: o.userId,
+    paymentMethod: o.paymentMethod ?? null,
+    discountAmount: o.discountAmount,
+    discountReason: o.discountReason,
+    cancelledAt: o.cancelledAt ? o.cancelledAt.toISOString() : null,
+    cancelReason: o.cancelReason,
   }));
 
   return (

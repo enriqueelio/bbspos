@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { prisma } from "@bubba/db";
+import { Role } from "@bubba/types";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -31,7 +32,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const valid = await compare(credentials.password, user.password);
-        if (!valid) {
+        if (!valid || !user.active) {
           return null;
         }
 
@@ -39,6 +40,7 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
         };
       },
     }),
@@ -47,12 +49,15 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // authorize devuelve role; el tipo de next-auth no lo declara.
+        token.role = (user as { role?: Role }).role;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
+        session.user.role = (token.role ?? "CAJERO") as Role;
       }
       return session;
     },

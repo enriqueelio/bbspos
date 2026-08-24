@@ -21,10 +21,56 @@ interface SlideshowConfig {
   images: SlideImage[];
 }
 
+/**
+ * Reduce la imagen en el navegador antes de subirla: máximo 1600px de ancho
+ * y re-codificación a JPEG (calidad 0.82) para que el carrusel cargue rápido.
+ * Si no se puede procesar, devuelve el archivo original.
+ */
+async function compressImage(file: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const MAX_WIDTH = 1600;
+    const scale = Math.min(1, MAX_WIDTH / bitmap.width);
+    if (scale === 1 && file.type === "image/jpeg" && file.size < 400 * 1024) {
+      bitmap.close();
+      return file;
+    }
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    // Fondo blanco: evita que PNGs con transparencia salgan negros en JPEG.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82),
+    );
+    if (!blob || blob.size >= file.size) return file;
+
+    const base = file.name.replace(/\.[^.]+$/, "");
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 export default function SlideshowPage() {
   const [config, setConfig] = useState<SlideshowConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -76,22 +122,32 @@ export default function SlideshowPage() {
   }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !config) return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || !config) return;
 
     setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("alt", file.name.replace(/\.[^.]+$/, ""));
+    try {
+      // Secuencial para conservar el orden de selección en el carrusel.
+      for (let i = 0; i < files.length; i++) {
+        setProgress({ done: i + 1, total: files.length });
 
-    const res = await fetch("/api/slideshow/upload", {
-      method: "POST",
-      body: fd,
-    });
-    const data = await res.json();
-    setConfig(data.config);
-    setUploading(false);
-    if (fileRef.current) fileRef.current.value = "";
+        const file = await compressImage(files[i]);
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("alt", file.name.replace(/\.[^.]+$/, ""));
+
+        const res = await fetch("/api/slideshow/upload", {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (data.config) setConfig(data.config);
+      }
+    } finally {
+      setUploading(false);
+      setProgress(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   if (!config) {
@@ -108,7 +164,9 @@ export default function SlideshowPage() {
       <div>
         <h1 className="text-2xl font-bold">Carrusel de imágenes</h1>
         <p className="text-muted-foreground">
-          Administra las fotos del carrusel de la página de inicio.
+          Administra las fotos del carrusel de la página de inicio. Puedes
+          seleccionar varias a la vez; se optimizan automáticamente para carga
+          rápida.
         </p>
       </div>
 
@@ -145,6 +203,7 @@ export default function SlideshowPage() {
             ref={fileRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={handleUpload}
           />
@@ -153,7 +212,11 @@ export default function SlideshowPage() {
             disabled={uploading}
           >
             <Upload className="mr-2 h-4 w-4" />
-            {uploading ? "Subiendo..." : "Subir imagen"}
+            {uploading && progress
+              ? `Subiendo ${progress.done} de ${progress.total}...`
+              : uploading
+                ? "Subiendo..."
+                : "Subir imágenes"}
           </Button>
         </div>
       </div>

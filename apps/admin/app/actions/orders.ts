@@ -8,6 +8,11 @@ import {
   type PaymentMethod as PaymentMethodType,
 } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
+import {
+  formatComanda,
+  getPrinterConfig,
+  printText,
+} from "@/lib/printing";
 
 /** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO. */
 export async function acceptOrder(orderId: string, method: string) {
@@ -168,4 +173,48 @@ export async function applyDiscount(
 
   revalidatePath("/orders");
   revalidatePath("/");
+}
+
+/** Reimprime la comanda de un pedido en la impresora configurada. */
+export async function reprintOrder(orderId: string): Promise<string> {
+  await getRequiredSession();
+
+  const printerName = (await getPrinterConfig())?.printerName;
+  if (!printerName) {
+    throw new Error(
+      "Configura primero la impresora de comandas en la pesta�a Impresora.",
+    );
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: { include: { toppings: true } } },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  await printText(
+    printerName,
+    formatComanda({
+      seq: order.seq,
+      customerName: order.customerName,
+      createdAt: order.createdAt,
+      total: order.total,
+      items: order.items.map((item) => ({
+        sizeName: item.sizeName,
+        flavorName: item.flavorName,
+        bobaTypeName: item.bobaTypeName,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        toppings: item.toppings.map((t) => ({
+          toppingName: t.toppingName,
+          unitPrice: t.unitPrice,
+        })),
+      })),
+    }),
+  );
+
+  return `Comanda #${String(order.seq ?? 0).padStart(5, "0")} enviada a "${printerName}".`;
 }

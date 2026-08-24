@@ -26,6 +26,7 @@ import {
   applyDiscount,
   cancelOrder,
   deliverOrder,
+  reprintOrder,
 } from "@/app/actions/orders";
 
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
@@ -55,6 +56,33 @@ function runAction(fn: () => Promise<void>) {
   fn().catch((e) => {
     alert(e instanceof Error ? e.message : "Ocurrió un error.");
   });
+}
+
+function ReprintButton({ orderId }: { orderId: string }) {
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const message = await reprintOrder(orderId);
+          alert(message);
+        } catch (e) {
+          alert(
+            e instanceof Error ? e.message : "No se pudo reimprimir la comanda.",
+          );
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "Imprimiendo..." : "Reimprimir comanda"}
+    </Button>
+  );
 }
 
 function OrderActions({ order }: { order: Order }) {
@@ -372,6 +400,9 @@ export function OrdersClient({
                   ))}
                 </div>
                 <OrderActions order={order} />
+                <div className="flex justify-end">
+                  <ReprintButton orderId={order.id} />
+                </div>
               </CardContent>
             </Card>
           ))}

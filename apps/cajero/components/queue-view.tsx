@@ -18,6 +18,7 @@ import {
   type Order,
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
+import { reprintOrder } from "@/app/actions/printing";
 
 function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
@@ -28,6 +29,7 @@ function useQueueClock() {
   const [now, setNow] = useState(() => Date.now());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Reloj para la antigüedad de cada pedido.
   useEffect(() => {
@@ -57,6 +59,7 @@ function useQueueClock() {
     if (confirmMsg && !confirm(confirmMsg)) return;
     setBusyId(orderId);
     setError(null);
+    setNotice(null);
     try {
       await action();
       router.refresh();
@@ -67,7 +70,22 @@ function useQueueClock() {
     }
   }
 
-  return { now, busyId, error, run, setError };
+  async function reprint(orderId: string) {
+    setBusyId(orderId);
+    setError(null);
+    setNotice(null);
+    try {
+      setNotice(await reprintOrder(orderId));
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "No se pudo reimprimir la comanda.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return { now, busyId, error, notice, run, reprint, setError };
 }
 
 function AgeBadge({ createdAtIso, now }: { createdAtIso: string; now: number }) {
@@ -147,6 +165,14 @@ function PendingPaymentCard({
           </span>
           <div className="flex gap-2">
             <Button
+              variant="ghost"
+              size="sm"
+              disabled={clock.busyId === order.id}
+              onClick={() => clock.reprint(order.id)}
+            >
+              {clock.busyId === order.id ? "…" : "Reimprimir"}
+            </Button>
+            <Button
               disabled={clock.busyId === order.id}
               onClick={() =>
                 clock.run(order.id, async () => {
@@ -208,21 +234,31 @@ function ReadyToDeliverCard({
           <span className="text-lg font-bold">
             Total: {formatPrice(order.total)}
           </span>
-          <Button
-            size="lg"
-            disabled={clock.busyId === order.id}
-            onClick={() =>
-              clock.run(
-                order.id,
-                async () => {
-                  await deliverOrder(order.id);
-                },
-                "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
-              )
-            }
-          >
-            {clock.busyId === order.id ? "Entregando…" : "Marcar entregado"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={clock.busyId === order.id}
+              onClick={() => clock.reprint(order.id)}
+            >
+              {clock.busyId === order.id ? "…" : "Reimprimir"}
+            </Button>
+            <Button
+              size="lg"
+              disabled={clock.busyId === order.id}
+              onClick={() =>
+                clock.run(
+                  order.id,
+                  async () => {
+                    await deliverOrder(order.id);
+                  },
+                  "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
+                )
+              }
+            >
+              {clock.busyId === order.id ? "Entregando…" : "Marcar entregado"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -264,6 +300,11 @@ export function QueueView({
       {clock.error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {clock.error}
+        </p>
+      )}
+      {clock.notice && !clock.error && (
+        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
+          {clock.notice}
         </p>
       )}
 

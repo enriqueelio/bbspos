@@ -38,6 +38,7 @@ export function AdminNav({ userName }: { userName: string }) {
         <NavLink href="/orders">Pedidos</NavLink>
         <NavLink href="/payments">Pagos</NavLink>
         <NavLink href="/reports">Reportes</NavLink>
+        <NavLink href="/printer">Impresora</NavLink>
         <NavLink href="/users">Usuarios</NavLink>
       </nav>
       <div className="flex items-center gap-3">

@@ -15,10 +15,8 @@ import {
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
 import { formatPrice, formatOrderCode } from "@bubba/types";
-import type { CartItem } from "@bubba/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
-import { printReceipt } from "@/lib/print-receipt";
 
 export default function CartPage() {
   const router = useRouter();
@@ -35,7 +33,6 @@ export default function CartPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [orderSeq, setOrderSeq] = useState<number | null>(null);
   const [orderTotal, setOrderTotal] = useState<number | null>(null);
-  const [orderItems, setOrderItems] = useState<CartItem[]>([]);
   const [orderCustomerName, setOrderCustomerName] = useState<string | null>(
     null,
   );
@@ -96,22 +93,12 @@ export default function CartPage() {
           </div>
         )}
         <div className="flex flex-col gap-2">
-          <Button
-            className="w-full"
-            onClick={() =>
-              printReceipt(
-                formatOrderCode(orderSeq),
-                orderItems,
-                orderTotal ?? 0,
-                orderCustomerName,
-                () => {
-                  window.location.href = "/";
-                },
-              )
-            }
-          >
-            Imprimir comanda
+          <Button className="w-full" asChild>
+            <Link href="/">Volver al inicio</Link>
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Tu comanda ya se está imprimiendo en mostrador.
+          </p>
         </div>
       </div>
     );
@@ -140,7 +127,6 @@ export default function CartPage() {
     setPlacing(true);
     setError(null);
     try {
-      setOrderItems([...items]);
       setOrderCustomerName(customerName.trim());
       const { orderId: newOrderId, seq, total } = await createOrder(
         items,

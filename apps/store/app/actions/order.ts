@@ -1,7 +1,9 @@
 "use server";
 
+import { after } from "next/server";
 import { prisma } from "@bubba/db";
 import { sumToppings, type CartItem } from "@bubba/types";
+import { formatComanda, getPrinterName, printText } from "@/lib/printing";
 
 export async function createOrder(
   items: CartItem[],
@@ -51,6 +53,43 @@ export async function createOrder(
         },
       },
     });
+  });
+
+  // Impresión automática de la comanda, best-effort y fuera del request:
+  // un fallo de impresora nunca debe impedir crear el pedido.
+  after(async () => {
+    try {
+      const printerName = getPrinterName();
+      if (!printerName) return;
+
+      const full = await prisma.order.findUniqueOrThrow({
+        where: { id: order.id },
+        include: { items: { include: { toppings: true } } },
+      });
+
+      await printText(
+        printerName,
+        formatComanda({
+          seq: full.seq,
+          customerName: full.customerName,
+          createdAt: full.createdAt,
+          total: full.total,
+          items: full.items.map((item) => ({
+            sizeName: item.sizeName,
+            flavorName: item.flavorName,
+            bobaTypeName: item.bobaTypeName,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            toppings: item.toppings.map((t) => ({
+              toppingName: t.toppingName,
+              unitPrice: t.unitPrice,
+            })),
+          })),
+        }),
+      );
+    } catch {
+      // Sin impresora o con fallo de impresión: el pedido sigue válido.
+    }
   });
 
   return { orderId: order.id, seq: order.seq ?? 0, total };

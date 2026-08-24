@@ -98,7 +98,7 @@ export async function GET() {
           select: { total: true },
         }),
         prisma.order.count({
-          where: { status: "INGRESADO" },
+          where: { status: "RECIBIDO" },
         }),
       ]);
 

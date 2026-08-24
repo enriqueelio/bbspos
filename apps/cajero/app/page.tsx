@@ -56,7 +56,7 @@ export default async function CashierPage({
     const bounds = dayBounds(todayKey());
     const rows = await prisma.order.findMany({
       where: {
-        status: OrderStatus.INGRESADO,
+        status: { in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO] },
         createdAt: { gte: bounds.gte, lt: bounds.lt },
       },
       include: {
@@ -65,10 +65,17 @@ export default async function CashierPage({
       orderBy: { createdAt: "asc" },
     });
 
+    const plain = rows.map(toPlainOrder);
+    const pendingPayment = plain.filter((o) => o.status === OrderStatus.RECIBIDO);
+    const readyToDeliver = plain.filter((o) => o.status === OrderStatus.ACEPTADO);
+
     return (
       <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
         <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-        <QueueView orders={rows.map(toPlainOrder)} />
+        <QueueView
+          pendingPayment={pendingPayment}
+          readyToDeliver={readyToDeliver}
+        />
       </main>
     );
   }

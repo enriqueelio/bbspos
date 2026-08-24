@@ -16,29 +16,32 @@ import {
   formatPrice,
   formatOrderCode,
   PaymentMethodLabel,
-  PaymentMethodList,
+  AcceptablePayment,
   type Order,
   type OrderStatus,
   type PaymentMethod,
 } from "@bubba/types";
 import {
+  acceptOrder,
   applyDiscount,
   cancelOrder,
   deliverOrder,
-  markOrderPaid,
 } from "@/app/actions/orders";
 
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
   { value: "ALL", label: "Todos" },
-  { value: "INGRESADO", label: "Ingresados" },
+  { value: "RECIBIDO", label: "Recibidos" },
+  { value: "ACEPTADO", label: "Aceptados" },
   { value: "ENTREGADO", label: "Entregados" },
   { value: "ANULADO", label: "Anulados" },
 ];
 
 function statusVariant(status: OrderStatus) {
   switch (status) {
-    case "INGRESADO":
+    case "RECIBIDO":
       return "warning" as const;
+    case "ACEPTADO":
+      return "default" as const;
     case "ENTREGADO":
       return "success" as const;
     case "ANULADO":
@@ -75,7 +78,16 @@ function OrderActions({ order }: { order: Order }) {
   return (
     <div className="space-y-3 border-t pt-3">
       <div className="flex flex-wrap justify-end gap-2">
-        {order.status === "INGRESADO" && (
+        {order.status === "RECIBIDO" && (
+          <Button
+            size="sm"
+            variant={panel === "pay" ? "default" : "outline"}
+            onClick={() => setPanel(panel === "pay" ? null : "pay")}
+          >
+            Registrar pago
+          </Button>
+        )}
+        {order.status === "ACEPTADO" && (
           <Button
             size="sm"
             variant="default"
@@ -86,15 +98,6 @@ function OrderActions({ order }: { order: Order }) {
             }
           >
             Entregar
-          </Button>
-        )}
-        {!order.paymentMethod && order.status === "INGRESADO" && (
-          <Button
-            size="sm"
-            variant={panel === "pay" ? "default" : "outline"}
-            onClick={() => setPanel(panel === "pay" ? null : "pay")}
-          >
-            Cobrar
           </Button>
         )}
         <Button
@@ -123,7 +126,7 @@ function OrderActions({ order }: { order: Order }) {
               value={method}
               onChange={(e) => setMethod(e.target.value as PaymentMethod)}
             >
-              {PaymentMethodList.map((m) => (
+              {AcceptablePayment.map((m) => (
                 <option key={m} value={m}>
                   {PaymentMethodLabel[m]}
                 </option>
@@ -134,12 +137,12 @@ function OrderActions({ order }: { order: Order }) {
             size="sm"
             onClick={() =>
               runAction(async () => {
-                await markOrderPaid(order.id, method);
+                await acceptOrder(order.id, method);
                 close();
               })
             }
           >
-            Confirmar cobro ({formatPrice(order.total)})
+            Confirmar pago ({formatPrice(order.total)})
           </Button>
         </div>
       )}
@@ -296,8 +299,18 @@ export function OrdersClient({
               <CardContent className="space-y-2">
                 {(order.cancelReason ||
                   order.discountReason ||
+                  order.paidAt ||
                   order.deliveredAt) && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                    {order.paidAt && (
+                      <p>
+                        Pago registrado:{" "}
+                        {new Date(order.paidAt).toLocaleString("es-MX", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                        })}
+                      </p>
+                    )}
                     {order.deliveredAt && (
                       <p>
                         Entregado:{" "}

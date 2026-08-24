@@ -12,8 +12,10 @@ import {
 
 function statusVariant(status: string) {
   switch (status) {
-    case "INGRESADO":
+    case "RECIBIDO":
       return "warning" as const;
+    case "ACEPTADO":
+      return "default" as const;
     case "ENTREGADO":
       return "success" as const;
     case "ANULADO":
@@ -31,7 +33,7 @@ export default async function DashboardPage() {
     await Promise.all([
       prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
       prisma.order.count({
-        where: { status: "INGRESADO" },
+        where: { status: "RECIBIDO" },
       }),
       prisma.order.aggregate({
         where: { createdAt: { gte: todayStart } },
@@ -50,7 +52,7 @@ export default async function DashboardPage() {
       value: String(todayOrders),
     },
     {
-      label: "Pedidos por entregar",
+      label: "Pedidos por cobrar",
       value: String(pendingOrders),
     },
     {

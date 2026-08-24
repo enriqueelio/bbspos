@@ -3,11 +3,53 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@bubba/db";
 import {
+  AcceptablePayment,
   OrderStatus,
-  PaymentMethod,
   type PaymentMethod as PaymentMethodType,
 } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
+
+/** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO. */
+export async function acceptOrder(orderId: string, method: string) {
+  const session = await getRequiredSession();
+
+  if (!AcceptablePayment.includes(method as PaymentMethodType)) {
+    throw new Error(
+      "Selecciona un método de pago válido: Efectivo o QR.",
+    );
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("El pedido está anulado.");
+  }
+
+  if (order.status !== OrderStatus.RECIBIDO) {
+    throw new Error(
+      "Solo los pedidos en estado Recibido pueden aceptarse con pago.",
+    );
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: OrderStatus.ACEPTADO,
+      paymentMethod: method as PaymentMethodType,
+      paidAt: new Date(),
+      userId: order.userId ?? session.user.id,
+    },
+  });
+
+  revalidatePath("/orders");
+  revalidatePath("/");
+}
 
 export async function deliverOrder(orderId: string) {
   const session = await getRequiredSession();
@@ -24,7 +66,13 @@ export async function deliverOrder(orderId: string) {
     throw new Error("El pedido está anulado.");
   }
 
-  if (order.status === OrderStatus.ENTREGADO) {
+  if (order.status === OrderStatus.RECIBIDO) {
+    throw new Error(
+      "El pedido aún no está pagado: registra el pago antes de entregarlo.",
+    );
+  }
+
+  if (order.status !== OrderStatus.ACEPTADO) {
     throw new Error("El pedido ya está entregado.");
   }
 
@@ -67,41 +115,6 @@ export async function cancelOrder(orderId: string, reason: string) {
       cancelledAt: new Date(),
       cancelReason: trimmed,
       userId: session.user.id,
-    },
-  });
-
-  revalidatePath("/orders");
-  revalidatePath("/");
-}
-
-export async function markOrderPaid(orderId: string, method: string) {
-  const session = await getRequiredSession();
-
-  if (!Object.values(PaymentMethod).includes(method as PaymentMethodType)) {
-    throw new Error("Método de pago no válido.");
-  }
-
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-
-  if (!order) {
-    throw new Error("Pedido no encontrado.");
-  }
-
-  if (order.status === OrderStatus.ANULADO) {
-    throw new Error("El pedido está anulado.");
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      paymentMethod: method as PaymentMethodType,
-      ...(order.status === OrderStatus.INGRESADO
-        ? {
-            status: OrderStatus.ENTREGADO,
-            deliveredAt: order.deliveredAt ?? new Date(),
-          }
-        : {}),
-      userId: order.userId ?? session.user.id,
     },
   });
 

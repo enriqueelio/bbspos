@@ -78,10 +78,11 @@ model Topping {
 model Order {
   id             String         @id @default(cuid())
   seq            Int?           @unique
-  status         OrderStatus    @default(INGRESADO)
+  status         OrderStatus    @default(RECIBIDO)
   customerName   String?
   total          Int
   createdAt      DateTime       @default(now())
+  paidAt         DateTime?
   deliveredAt    DateTime?
   items          OrderItem[]
   userId         String?
@@ -136,7 +137,8 @@ enum BobaKind {
 }
 
 enum OrderStatus {
-  INGRESADO
+  RECIBIDO
+  ACEPTADO
   ENTREGADO
   ANULADO
 }

@@ -13,7 +13,8 @@ export const formatSchema = z.enum(["json", "csv"]).default("json");
 export type ReportFormat = z.infer<typeof formatSchema>;
 
 export const orderStatusValues = [
-  "INGRESADO",
+  "RECIBIDO",
+  "ACEPTADO",
   "ENTREGADO",
   "ANULADO",
 ] as const;

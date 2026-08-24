@@ -101,7 +101,8 @@ export interface CartItem {
 }
 
 export const OrderStatus = {
-  INGRESADO: "INGRESADO",
+  RECIBIDO: "RECIBIDO",
+  ACEPTADO: "ACEPTADO",
   ENTREGADO: "ENTREGADO",
   ANULADO: "ANULADO",
 } as const;
@@ -109,12 +110,14 @@ export const OrderStatus = {
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export const OrderStatusSequence: OrderStatus[] = [
-  OrderStatus.INGRESADO,
+  OrderStatus.RECIBIDO,
+  OrderStatus.ACEPTADO,
   OrderStatus.ENTREGADO,
 ];
 
 export const OrderStatusLabel: Record<OrderStatus, string> = {
-  INGRESADO: "Ingresado",
+  RECIBIDO: "Recibido",
+  ACEPTADO: "Aceptado",
   ENTREGADO: "Entregado",
   ANULADO: "Anulado",
 };
@@ -168,6 +171,12 @@ export const PaymentMethodList: PaymentMethod[] = [
   PaymentMethod.TARJETA,
 ];
 
+/** Métodos de pago que el cajero puede registrar al aceptar un pedido. */
+export const AcceptablePayment: PaymentMethod[] = [
+  PaymentMethod.EFECTIVO,
+  PaymentMethod.QR,
+];
+
 export interface OrderItemTopping {
   toppingName: string;
   unitPrice: number;
@@ -191,6 +200,7 @@ export interface Order {
   customerName: string | null;
   total: number;
   createdAt: string;
+  paidAt?: string | null;
   deliveredAt?: string | null;
   items: OrderItem[];
   userId?: string | null;

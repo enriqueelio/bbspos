@@ -256,7 +256,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
 
         <div className="flex gap-2">
           <Button
-            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            className="bg-purple-200 text-purple-900 hover:bg-purple-300"
             disabled={step === 0}
             onClick={() => {
               if (step === 2) {
@@ -274,7 +274,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
           {step < STEPS.length - 1 ? (
             <Button
               className={cn(
-                "bg-white text-primary hover:bg-white/90",
+                "bg-green-200 text-green-900 hover:bg-green-300",
                 flavorId && "ring-2 ring-white/50 shadow-lg shadow-white/20",
               )}
               disabled={!canGoNext}
@@ -285,7 +285,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
           ) : (
             <Button
               className={cn(
-                "bg-white text-primary hover:bg-white/90",
+                "bg-green-200 text-green-900 hover:bg-green-300",
                 "ring-2 ring-white/50 shadow-lg shadow-white/20",
               )}
               disabled={!canFinish}

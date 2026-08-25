@@ -1,32 +1,6 @@
 import type { Flavor, FlavorCategory } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
-import { Coffee, Cookie, Leaf, Citrus, Cherry, Flower2, Sparkles } from "lucide-react";
-
-const FLAVOR_ICONS: Record<string, React.ReactNode> = {
-  "capuchino": <Coffee className="h-4 w-4" />,
-  "oreo": <Cookie className="h-4 w-4" />,
-  "fruticoco": <Cherry className="h-4 w-4" />,
-  "matcha": <Leaf className="h-4 w-4" />,
-  "piña colada": <Citrus className="h-4 w-4" />,
-  "limonada brasilera": <Citrus className="h-4 w-4" />,
-  "frutilimon": <Cherry className="h-4 w-4" />,
-  "taro": <Sparkles className="h-4 w-4" />,
-  "frutilla": <Cherry className="h-4 w-4" />,
-  "limón": <Citrus className="h-4 w-4" />,
-  "piña": <Citrus className="h-4 w-4" />,
-  "manzana": <Citrus className="h-4 w-4" />,
-  "naranja": <Citrus className="h-4 w-4" />,
-  "mango": <Citrus className="h-4 w-4" />,
-  "coco": <Cookie className="h-4 w-4" />,
-  "vainilla": <Flower2 className="h-4 w-4" />,
-  "chocolate": <Cookie className="h-4 w-4" />,
-  "mora": <Cherry className="h-4 w-4" />,
-};
-
-function getFlavorIcon(name: string): React.ReactNode {
-  return FLAVOR_ICONS[name.toLowerCase()] ?? <Coffee className="h-4 w-4" />;
-}
 
 export interface FlavorPickerProps {
   flavors: Flavor[];
@@ -70,10 +44,7 @@ export function FlavorPicker({
                     : "border-border bg-card",
                 )}
               >
-                <span className="flex items-center justify-between font-medium">
-                  {flavor.name}
-                  {getFlavorIcon(flavor.name)}
-                </span>
+                <span className="font-medium">{flavor.name}</span>
               </button>
             );
           })}

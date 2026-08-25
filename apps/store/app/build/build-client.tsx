@@ -244,7 +244,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
         </CardContent>
       </Card>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-end">
+      <div className="flex flex-col items-end gap-4 sm:flex-row sm:items-center sm:justify-end">
         <div className="flex items-center gap-3">
           <div>
             <div className="text-sm text-white/70">Total estimado</div>

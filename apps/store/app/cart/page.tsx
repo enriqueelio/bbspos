@@ -199,19 +199,18 @@ export default function CartPage() {
             </Card>
           )}
           <Button
-            className="w-full bg-green-200 text-green-900 hover:bg-green-300"
-            size="lg"
+            className="w-36 h-7 bg-green-200 text-green-900 hover:bg-green-300"
             disabled={placing}
             onClick={handleCheckout}
           >
             {placing ? "Creando pedido..." : "Confirmar pedido"}
           </Button>
-          <Button variant="outline" className="w-full border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
+          <Button variant="outline" className="w-36 h-7 border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
             <Link href="/build">Armar otra bebida</Link>
           </Button>
           <Button
             variant="destructive"
-            className="w-full"
+            className="w-36 h-7"
             onClick={() => {
               clear();
               router.push("/");

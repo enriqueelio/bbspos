@@ -55,7 +55,16 @@ function runPowerShell(script: string, input?: string): Promise<string> {
   });
 }
 
-/** Lista las impresoras instaladas en Windows del servidor. */
+/** Conecta una impresora compartida por otra computadora de la red,
+ * ej.: \\CAJA\POS-80. Queda instalada y aparece en la lista local. */
+export async function connectSharedPrinter(uncPath: string): Promise<void> {
+  const safe = uncPath.trim().replace(/'/g, "''");
+  await runPowerShell(
+    `try { Add-Printer -ConnectionName '${safe}' -ErrorAction Stop } catch { throw $_.Exception.Message }`,
+  );
+}
+
+/** Lista las impresoras instaladas en Windows de esta computadora. */
 export async function listPrinters(): Promise<PrinterInfo[]> {
   const stdout = await runPowerShell(
     "ConvertTo-Json -InputObject @(Get-CimInstance Win32_Printer | Select-Object Name,Default,WorkOffline) -Compress",
@@ -65,7 +74,7 @@ export async function listPrinters(): Promise<PrinterInfo[]> {
   try {
     parsed = JSON.parse(stdout.trim());
   } catch {
-    throw new Error("No se pudo leer la lista de impresoras del servidor.");
+    throw new Error("No se pudo leer la lista de impresoras de esta computadora.");
   }
 
   const rows = Array.isArray(parsed) ? parsed : [parsed];

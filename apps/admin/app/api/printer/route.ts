@@ -34,7 +34,7 @@ export async function PUT(req: NextRequest) {
 
   if (!exists) {
     return NextResponse.json(
-      { error: "La impresora ya no está instalada en el servidor." },
+        { error: "La impresora ya no está instalada en esta computadora." },
       { status: 400 },
     );
   }

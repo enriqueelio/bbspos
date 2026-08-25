@@ -8,6 +8,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
 } from "@bubba/ui";
 import { Loader2, Printer } from "lucide-react";
 
@@ -24,6 +25,8 @@ export default function PrinterPage() {
   const [configured, setConfigured] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [uncPath, setUncPath] = useState("");
+  const [connecting, setConnecting] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
@@ -44,7 +47,7 @@ export default function PrinterPage() {
     } catch {
       setMessage({
         ok: false,
-        text: "No se pudo leer la lista de impresoras del servidor.",
+        text: "No se pudo leer la lista de impresoras de esta computadora.",
       });
     } finally {
       setLoading(false);
@@ -76,6 +79,35 @@ export default function PrinterPage() {
       });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleConnect() {
+    const path = uncPath.trim();
+    if (!path) return;
+    setConnecting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/printer/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ uncPath: path }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "No se pudo conectar.");
+      setMessage({
+        ok: true,
+        text: `Impresora "${path}" conectada. Ya aparece en la lista.`,
+      });
+      setUncPath("");
+      await load();
+    } catch (e) {
+      setMessage({
+        ok: false,
+        text: e instanceof Error ? e.message : "No se pudo conectar.",
+      });
+    } finally {
+      setConnecting(false);
     }
   }
 
@@ -115,8 +147,9 @@ export default function PrinterPage() {
       <div>
         <h1 className="text-2xl font-bold">Impresora de comandas</h1>
         <p className="text-sm text-muted-foreground">
-          Elige la impresora instalada en el servidor donde se imprimen las
-          comandas cuando un cliente confirma un pedido.
+          Elige la impresora de esta computadora (o una compartida desde otro
+          equipo de la red) donde se imprimirán las comandas cuando un cliente
+          confirma un pedido.
         </p>
       </div>
 
@@ -124,7 +157,7 @@ export default function PrinterPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Printer className="h-5 w-5" />
-            Impresoras del servidor
+            Impresoras de esta computadora
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -135,8 +168,9 @@ export default function PrinterPage() {
             </div>
           ) : printers.length === 0 ? (
             <p className="py-4 text-sm text-muted-foreground">
-              No se encontraron impresoras instaladas en Windows. Instala la
-              térmica (o cualquier impresora) en el servidor y vuelve a cargar.
+              No se encontraron impresoras instaladas en Windows en esta
+              computadora. Instala la térmica (o cualquier impresora) y vuelve
+              a cargar.
             </p>
           ) : (
             <>
@@ -187,6 +221,36 @@ export default function PrinterPage() {
               </div>
             </>
           )}
+
+          <div className="space-y-2 rounded-lg border border-dashed p-3">
+            <p className="text-sm font-medium">
+              Impresora conectada a otra computadora
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Si la térmica está enchufada a otro equipo, compártela ahí
+              (Panel de control → Dispositivos e impresoras → clic derecho →
+              Propiedades de la impresora → Compartir) y conéctala aquí con su
+              ruta de red, ej.: <code>\\CAJA\POS-80</code>.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={uncPath}
+                onChange={(e) => setUncPath(e.target.value)}
+                placeholder="\\EQUIPO\Impresora"
+                className="max-w-xs"
+              />
+              <Button
+                variant="outline"
+                onClick={handleConnect}
+                disabled={connecting || !uncPath.trim()}
+              >
+                {connecting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Conectar impresora de red
+              </Button>
+            </div>
+          </div>
 
           {message && (
             <p

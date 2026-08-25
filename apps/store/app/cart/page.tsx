@@ -198,7 +198,7 @@ export default function CartPage() {
               </CardContent>
             </Card>
           )}
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col items-center gap-3">
             <Button
               className="w-36 h-7 bg-green-200 text-green-900 hover:bg-green-300"
               disabled={placing}

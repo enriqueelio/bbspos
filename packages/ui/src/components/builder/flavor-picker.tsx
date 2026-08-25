@@ -1,30 +1,6 @@
 import type { Flavor, FlavorCategory } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
-import { GlassWater, Cherry, Leaf, Coffee, Cookie, Citrus, Banana, Sparkles } from "lucide-react";
-
-const FLAVOR_ICON_KEYWORDS: [string, React.ReactNode][] = [
-  ["fresa", <Cherry className="h-4 w-4" />],
-  ["mango", <Citrus className="h-4 w-4" />],
-  ["taro", <Sparkles className="h-4 w-4" />],
-  ["matcha", <Leaf className="h-4 w-4" />],
-  ["vainilla", <Cookie className="h-4 w-4" />],
-  ["chocolate", <Coffee className="h-4 w-4" />],
-  ["cafe", <Coffee className="h-4 w-4" />],
-  ["limon", <Citrus className="h-4 w-4" />],
-  ["piña", <Citrus className="h-4 w-4" />],
-  ["coco", <Cookie className="h-4 w-4" />],
-  ["plátano", <Banana className="h-4 w-4" />],
-  ["banana", <Banana className="h-4 w-4" />],
-];
-
-function getFlavorIcon(name: string): React.ReactNode {
-  const lower = name.toLowerCase();
-  for (const [keyword, icon] of FLAVOR_ICON_KEYWORDS) {
-    if (lower.includes(keyword)) return icon;
-  }
-  return <GlassWater className="h-4 w-4" />;
-}
 
 export interface FlavorPickerProps {
   flavors: Flavor[];
@@ -68,10 +44,7 @@ export function FlavorPicker({
                     : "border-border bg-card",
                 )}
               >
-                <span className="flex items-center justify-between font-medium">
-                  {flavor.name}
-                  {getFlavorIcon(flavor.name)}
-                </span>
+                <span className="font-medium">{flavor.name}</span>
               </button>
             );
           })}

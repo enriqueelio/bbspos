@@ -16,3 +16,9 @@ build/
 
 # config local de impresora
 apps/store/printing.json
+
+# reference files
+color.png
+colori.txt
+flavors-icons.csv
+flavors-icons.xlsx

@@ -26,8 +26,8 @@ const FLAVOR_ICONS: Record<string, string> = {
 
 function getFlavorIcon(name: string): React.ReactNode {
   const icon = FLAVOR_ICONS[name.toLowerCase()];
-  if (!icon) return <Icon icon="mdi:food" className="h-4 w-4" />;
-  return <Icon icon={icon} className="h-4 w-4" />;
+  if (!icon) return <Icon icon="mdi:food" className="h-3 w-3" />;
+  return <Icon icon={icon} className="h-3 w-3" />;
 }
 
 export interface FlavorPickerProps {
@@ -57,7 +57,7 @@ export function FlavorPicker({
           No hay sabores disponibles en esta categoría.
         </p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-1 sm:grid-cols-3">
           {categoryFlavors.map((flavor) => {
             const selected = flavor.id === selectedId;
             return (
@@ -66,7 +66,7 @@ export function FlavorPicker({
                 type="button"
                 onClick={() => onSelect(flavor.id)}
                 className={cn(
-                  "rounded-xl border px-4 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "rounded-xl border px-2 py-1.5 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card",

@@ -134,8 +134,8 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                         )}
                       >
                         <span className="flex items-center gap-2 font-semibold">
-                          {CATEGORY_ICONS[cat]}
                           {FlavorCategoryLabel[cat]}
+                          {CATEGORY_ICONS[cat]}
                         </span>
                       </button>
 

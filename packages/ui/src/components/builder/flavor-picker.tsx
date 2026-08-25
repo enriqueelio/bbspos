@@ -66,7 +66,7 @@ export function FlavorPicker({
                 type="button"
                 onClick={() => onSelect(flavor.id)}
                 className={cn(
-                  "rounded-xl border px-1 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "w-fit rounded-xl border px-2 py-3 text-left transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card",

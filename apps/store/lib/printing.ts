@@ -134,7 +134,7 @@ export function formatComanda(order: ComandaOrder): string {
   const money = (n: number) => `Bs ${n}`;
 
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("BUBBA DRINKS"));
+  lines.push(centered("BUBBLE DRINK"));
   lines.push(centered(`Comanda #${String(order.seq ?? 0).padStart(5, "0")}`));
   lines.push(repeat("=", WIDTH));
 

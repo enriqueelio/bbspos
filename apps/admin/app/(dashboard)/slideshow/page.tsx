@@ -16,6 +16,13 @@ interface SlideImage {
   alt: string;
 }
 
+function mediaUrl(src: string) {
+  if (src.startsWith("/images/")) {
+    return `/api/slideshow/media/${src.slice("/images/".length)}`;
+  }
+  return src;
+}
+
 interface SlideshowConfig {
   intervalMs: number;
   images: SlideImage[];
@@ -234,7 +241,7 @@ export default function SlideshowPage() {
             <Card key={img.src}>
               <CardContent className="flex items-center gap-4 p-4">
                 <img
-                  src={img.src}
+                  src={mediaUrl(img.src)}
                   alt={img.alt}
                   className="h-20 w-32 rounded-lg object-cover"
                 />

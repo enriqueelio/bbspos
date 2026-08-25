@@ -18,12 +18,9 @@ export function SiteHeader() {
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 font-bold text-primary-foreground">
           <span className="inline-block h-6 w-6 rounded-full bg-white/20" />
-          <span className="text-lg">Bubba Drinks</span>
+          <span className="text-lg">Bubble Drink</span>
         </Link>
         <nav className="flex items-center gap-2">
-          <Button variant="ghost" className="text-white hover:bg-white/20 hover:text-white" asChild>
-            <Link href="/build">Arma tu boba</Link>
-          </Button>
           <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" asChild>
             <Link href="/cart" className="relative">
               <ShoppingCart className="h-4 w-4" />

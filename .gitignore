@@ -13,3 +13,6 @@ build/
 .DS_Store
 *.tsbuildinfo
 .next/cache/
+
+# config local de impresora
+apps/store/printing.json

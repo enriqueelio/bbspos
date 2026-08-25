@@ -4,7 +4,7 @@ import { PhotoCarousel } from "@/components/photo-carousel";
 import { StartBuilderButton } from "@/components/start-builder-button";
 
 export const metadata = {
-  title: "Bubba Drinks — Bubble Tea y bebidas con boba",
+  title: "Bubble Drink — Bubble Tea y bebidas con boba",
 };
 
 interface SlideshowImage {
@@ -36,7 +36,7 @@ export default async function HomePage() {
     <div className="space-y-8">
       <section className="rounded-3xl bg-gradient-to-br from-primary via-accent to-orange-300 p-10 text-center text-white shadow-lg shadow-primary/20">
         <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Bubba Drinks
+          Bubble Drink
         </h1>
         <p className="mx-auto mt-3 max-w-xl text-lg text-white/90">
           Arma tu bubble drink perfecta: elige el tamaño de tu vaso, tu sabor

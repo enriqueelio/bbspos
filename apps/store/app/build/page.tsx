@@ -2,7 +2,7 @@ import { getCatalog } from "@/lib/catalog";
 import { BuildClient } from "./build-client";
 
 export const metadata = {
-  title: "Arma tu boba — Bubba Drinks",
+  title: "Arma tu boba — Bubble Drink",
 };
 
 export const dynamic = "force-dynamic";

@@ -1,11 +1,11 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "Bubba Drinks — Bubble Tea y bebidas con boba",
+  title: "Bubble Drink â€” Bubble Tea y bebidas con boba",
   description:
-    "Arma tu bubble drink: elige tamaño, sabor y tipo de boba.",
+    "Arma tu bubble drink: elige tamaÃ±o, sabor y tipo de boba.",
 };
 
 export default function RootLayout({

@@ -56,13 +56,51 @@ function runPowerShell(script: string, input?: string): Promise<string> {
   });
 }
 
-/** Envía texto plano a la impresora indicada usando Out-Printer. */
+const TICKET_FONT_PT = 10;
+const TICKET_TEXT_WIDTH_PT = 204; // ancho útil de rollo térmico de 80mm
+
+/** Envía texto plano a la impresora con letra grande y negritas, ajustada
+ * para que la línea más larga quepa en el ancho del rollo térmico. */
 export async function printText(
   printerName: string,
   text: string,
 ): Promise<void> {
   const safeName = printerName.replace(/'/g, "''");
-  await runPowerShell(`$input | Out-Printer -Name '${safeName}'`, text);
+  const b64 = Buffer.from(text, "utf8").toString("base64");
+  const script = [
+    "Add-Type -AssemblyName System.Drawing",
+    `$raw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}'))`,
+    "$raw = $raw.Replace([string][char]13, '')",
+    "$lines = $raw.Split([char]10)",
+    "$probeG = [System.Drawing.Graphics]::FromImage((New-Object System.Drawing.Bitmap(10, 10)))",
+    "$fmt = [System.Drawing.StringFormat]::GenericTypographic",
+    "$fProbe = New-Object System.Drawing.Font('Consolas', 12, [System.Drawing.FontStyle]::Bold)",
+    "$cw = $probeG.MeasureString(([string]'0' * 20), $fProbe, $fmt).Width / 20",
+    "$maxLen = 1",
+    "foreach ($l in $lines) { if ($l.Length -gt $maxLen) { $maxLen = $l.Length } }",
+    `$size = [Math]::Min(${TICKET_FONT_PT}, ${TICKET_TEXT_WIDTH_PT} / ($maxLen * $cw) * 12)`,
+    "if ($size -lt 4) { $size = 4 }",
+    "$font = New-Object System.Drawing.Font('Consolas', $size, [System.Drawing.FontStyle]::Bold)",
+    "$doc = New-Object System.Drawing.Printing.PrintDocument",
+    `$doc.PrinterSettings.PrinterName = '${safeName}'`,
+    "$margins = New-Object System.Drawing.Printing.Margins(10, 10, 10, 10)",
+    "$doc.DefaultPageSettings.Margins = $margins",
+    "$script:i = 0",
+    "$handler = [System.Drawing.Printing.PrintPageEventHandler]{",
+    "  param($sender, $e)",
+    "  $y = $e.MarginBounds.Top",
+    "  $h = $font.GetHeight($e.Graphics)",
+    "  while ($script:i -lt $lines.Count -and ($y + $h) -le $e.MarginBounds.Bottom) {",
+    "    $e.Graphics.DrawString($lines[$script:i], $font, [System.Drawing.Brushes]::Black, $e.MarginBounds.Left, $y)",
+    "    $y += $h",
+    "    $script:i++",
+    "  }",
+    "  $e.HasMorePages = ($script:i -lt $lines.Count)",
+    "}",
+    "$doc.add_PrintPage($handler)",
+    "try { $doc.Print() } finally { $doc.remove_PrintPage($handler) }",
+  ].join("\n");
+  await runPowerShell(script);
 }
 
 // La térmica puede no manejar acentos ni símbolos: versión ASCII segura.
@@ -102,7 +140,7 @@ interface ComandaOrder {
   items: ComandaItem[];
 }
 
-const WIDTH = 40;
+const WIDTH = 30;
 
 function repeat(ch: string, count: number): string {
   return ch.repeat(Math.max(0, count));
@@ -128,6 +166,24 @@ function row(left: string, right: string): string {
   return `${l}${repeat(" ", space)}${r}`;
 }
 
+function wrap(text: string, width: number): string[] {
+  const words = toAscii(text).split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const w = word.length > width ? `${word.slice(0, width - 1)}.` : word;
+    const candidate = current ? `${current} ${w}` : w;
+    if (candidate.length <= width) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = w;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
+}
+
 /** Formatea la comanda como texto plano para impresora de tickets. */
 export function formatComanda(order: ComandaOrder): string {
   const lines: string[] = [];
@@ -135,11 +191,11 @@ export function formatComanda(order: ComandaOrder): string {
 
   lines.push(repeat("=", WIDTH));
   lines.push(centered("BUBBLE DRINK"));
-  lines.push(centered(`Comanda #${String(order.seq ?? 0).padStart(5, "0")}`));
+  lines.push(centered(`COMANDA #${String(order.seq ?? 0).padStart(5, "0")}`));
   lines.push(repeat("=", WIDTH));
 
   if (order.customerName) {
-    lines.push(row("Cliente:", order.customerName));
+    lines.push(...wrap(`Cliente: ${order.customerName}`, WIDTH));
   }
   lines.push(
     row(
@@ -153,14 +209,14 @@ export function formatComanda(order: ComandaOrder): string {
   lines.push(repeat("-", WIDTH));
 
   for (const item of order.items) {
-    lines.push(
-      truncate(
-        `${item.quantity}x ${item.flavorName} (${item.sizeName} - ${item.bobaTypeName})`,
-        WIDTH,
-      ),
-    );
+    lines.push(...wrap(`${item.quantity}x ${item.flavorName}`, WIDTH));
+    for (const l of wrap(`${item.sizeName} - ${item.bobaTypeName}`, WIDTH - 3)) {
+      lines.push(`   ${l}`);
+    }
     for (const topping of item.toppings) {
-      lines.push(truncate(`   + ${topping.toppingName}`, WIDTH));
+      for (const l of wrap(topping.toppingName, WIDTH - 5)) {
+        lines.push(`   + ${l}`);
+      }
     }
     lines.push(row("", money(item.unitPrice * item.quantity)));
   }

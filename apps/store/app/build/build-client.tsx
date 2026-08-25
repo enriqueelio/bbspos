@@ -10,6 +10,7 @@ import {
   FlavorPicker,
   StepIndicator,
 } from "@bubba/ui";
+import { Droplets, Milk, Sparkles } from "lucide-react";
 import {
   FlavorCategory,
   FlavorCategoryLabel,
@@ -24,6 +25,12 @@ import { useCartStore } from "@/lib/store/cart-store";
 import { cn } from "@bubba/ui";
 
 const STEPS = ["Categoría y sabor", "Tamaño y boba", "Toppings"];
+
+const CATEGORY_ICONS: Record<FlavorCategory, React.ReactNode> = {
+  WATER: <Droplets className="h-5 w-5" />,
+  MILK: <Milk className="h-5 w-5" />,
+  SPECIAL: <Sparkles className="h-5 w-5" />,
+};
 
 export function BuildClient({ catalog }: { catalog: Catalog }) {
   const router = useRouter();
@@ -126,7 +133,8 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
                             : "border-border",
                         )}
                       >
-                        <span className="font-semibold">
+                        <span className="flex items-center gap-2 font-semibold">
+                          {CATEGORY_ICONS[cat]}
                           {FlavorCategoryLabel[cat]}
                         </span>
                       </button>

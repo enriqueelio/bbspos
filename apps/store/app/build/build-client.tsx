@@ -44,6 +44,7 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
     reset,
   } = useBuilderStore();
   const addItem = useCartStore((s) => s.addItem);
+  const items = useCartStore((s) => s.items);
 
   useEffect(() => {
     reset();
@@ -297,15 +298,13 @@ export function BuildClient({ catalog }: { catalog: Catalog }) {
         </div>
       </div>
 
-      <div className="text-center text-sm text-white/60">
-        ¿Ya tienes todo listo?{" "}
-        <Link
-          href="/cart"
-          className="font-medium text-white underline-offset-4 hover:underline"
-        >
-          Ir a mi carrito
-        </Link>
-      </div>
+      {items.length > 0 && (
+        <div className="text-center">
+          <Button variant="outline" size="sm" className="border-white/30 bg-white/10 text-white hover:bg-white/20" asChild>
+            <Link href="/cart">Volver al carrito ({items.length})</Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

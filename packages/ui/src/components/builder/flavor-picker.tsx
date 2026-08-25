@@ -1,6 +1,34 @@
 import type { Flavor, FlavorCategory } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
+import { Icon } from "@iconify/react";
+
+const FLAVOR_ICONS: Record<string, string> = {
+  "capuchino": "mdi:coffee",
+  "oreo": "twemoji:cookie",
+  "fruticoco": "twemoji:strawberry",
+  "matcha": "mdi:tea",
+  "piña colada": "twemoji:tropical-drink",
+  "limonada brasilera": "twemoji:lemon",
+  "frutilimon": "twemoji:strawberry",
+  "taro": "twemoji:bubble-tea",
+  "frutilla": "twemoji:strawberry",
+  "limón": "twemoji:lemon",
+  "piña": "twemoji:pineapple",
+  "manzana": "mdi:food-apple",
+  "naranja": "twemoji:tangerine",
+  "mango": "twemoji:mango",
+  "coco": "twemoji:coconut",
+  "vainilla": "twemoji:flower",
+  "chocolate": "twemoji:chocolate-bar",
+  "mora": "twemoji:blueberries",
+};
+
+function getFlavorIcon(name: string): React.ReactNode {
+  const icon = FLAVOR_ICONS[name.toLowerCase()];
+  if (!icon) return <Icon icon="mdi:food" className="h-4 w-4" />;
+  return <Icon icon={icon} className="h-4 w-4" />;
+}
 
 export interface FlavorPickerProps {
   flavors: Flavor[];
@@ -44,7 +72,10 @@ export function FlavorPicker({
                     : "border-border bg-card",
                 )}
               >
-                <span className="font-medium">{flavor.name}</span>
+                <span className="flex items-center justify-between font-medium">
+                  {flavor.name}
+                  {getFlavorIcon(flavor.name)}
+                </span>
               </button>
             );
           })}

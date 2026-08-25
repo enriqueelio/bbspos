@@ -198,26 +198,28 @@ export default function CartPage() {
               </CardContent>
             </Card>
           )}
-          <Button
-            className="w-36 h-7 bg-green-200 text-green-900 hover:bg-green-300"
-            disabled={placing}
-            onClick={handleCheckout}
-          >
-            {placing ? "Creando pedido..." : "Confirmar pedido"}
-          </Button>
-          <Button variant="outline" className="w-36 h-7 border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
-            <Link href="/build">Armar otra bebida</Link>
-          </Button>
-          <Button
-            variant="destructive"
-            className="w-36 h-7"
-            onClick={() => {
-              clear();
-              router.push("/");
-            }}
-          >
-            Cancelar pedido
-          </Button>
+          <div className="flex flex-col gap-3">
+            <Button
+              className="w-36 h-7 bg-green-200 text-green-900 hover:bg-green-300"
+              disabled={placing}
+              onClick={handleCheckout}
+            >
+              {placing ? "Creando pedido..." : "Confirmar pedido"}
+            </Button>
+            <Button variant="outline" className="w-36 h-7 border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
+              <Link href="/build">Armar otra bebida</Link>
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-36 h-7"
+              onClick={() => {
+                clear();
+                router.push("/");
+              }}
+            >
+              Cancelar pedido
+            </Button>
+          </div>
         </div>
       </div>
     </div>

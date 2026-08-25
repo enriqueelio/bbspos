@@ -19,7 +19,7 @@ const FLAVOR_ICONS: Record<string, string> = {
   "naranja": "twemoji:tangerine",
   "mango": "twemoji:mango",
   "coco": "twemoji:coconut",
-  "vainilla": "twemoji:flower",
+  "vainilla": "twemoji:blossom",
   "chocolate": "twemoji:chocolate-bar",
   "mora": "twemoji:blueberries",
 };

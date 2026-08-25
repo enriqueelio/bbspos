@@ -199,14 +199,14 @@ export default function CartPage() {
             </Card>
           )}
           <Button
-            className="w-full"
+            className="w-full bg-green-200 text-green-900 hover:bg-green-300"
             size="lg"
             disabled={placing}
             onClick={handleCheckout}
           >
             {placing ? "Creando pedido..." : "Confirmar pedido"}
           </Button>
-          <Button variant="outline" className="w-full border-white/40 bg-red-500/80 text-white hover:bg-red-500" asChild>
+          <Button variant="outline" className="w-full border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
             <Link href="/build">Armar otra bebida</Link>
           </Button>
           <Button

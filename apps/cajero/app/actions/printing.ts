@@ -24,6 +24,13 @@ export async function reprintOrder(orderId: string): Promise<string> {
     throw new Error("Pedido no encontrado.");
   }
 
+  // La comanda solo se reimprime mientras el pedido está por cobrar.
+  if (order.status !== "RECIBIDO") {
+    throw new Error(
+      "La comanda ya no se puede reimprimir: el pedido fue aceptado.",
+    );
+  }
+
   await printText(
     printerName,
     formatComanda({

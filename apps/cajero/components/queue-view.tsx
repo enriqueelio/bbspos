@@ -15,6 +15,8 @@ import {
   formatPrice,
   formatDurationMinutes,
   PaymentMethodLabel,
+  OrderStatus,
+  OrderStatusLabel,
   type Order,
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
@@ -88,14 +90,45 @@ function useQueueClock() {
   return { now, busyId, error, notice, run, reprint, setError };
 }
 
-function AgeBadge({ createdAtIso, now }: { createdAtIso: string; now: number }) {
-  const minutes = ageMinutes(createdAtIso, now);
+function AgeBadge({ order, now }: { order: Order; now: number }) {
+  // Entregado: tiempo fijo desde el ingreso hasta la entrega.
+  if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
+    const minutes = Math.max(
+      0,
+      Math.floor(
+        (new Date(order.deliveredAt).getTime() -
+          new Date(order.createdAt).getTime()) /
+          60_000,
+      ),
+    );
+    const slow = minutes >= 10;
+    return (
+      <Badge variant={slow ? "destructive" : "secondary"}>
+        Entregado en {formatDurationMinutes(minutes)}
+      </Badge>
+    );
+  }
+  const minutes = ageMinutes(order.createdAt, now);
   const urgent = minutes >= 15;
   return (
     <Badge variant={urgent ? "destructive" : "secondary"}>
       Ingresado hace {formatDurationMinutes(minutes)}
     </Badge>
   );
+}
+
+/** Color del estado: rojo recibido, amarillo aceptado, verde entregado. */
+function statusVariant(status: Order["status"]) {
+  switch (status) {
+    case OrderStatus.RECIBIDO:
+      return "destructive" as const;
+    case OrderStatus.ACEPTADO:
+      return "warning" as const;
+    case OrderStatus.ENTREGADO:
+      return "success" as const;
+    default:
+      return "secondary" as const;
+  }
 }
 
 function ItemsList({ order }: { order: Order }) {
@@ -124,8 +157,26 @@ function ItemsList({ order }: { order: Order }) {
   );
 }
 
-/** Pedido RECIBIDO: falta registrar el pago (Efectivo o QR). */
-function PendingPaymentCard({
+function ReprintButton({
+  order,
+  clock,
+}: {
+  order: Order;
+  clock: ReturnType<typeof useQueueClock>;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={clock.busyId === order.id}
+      onClick={() => clock.reprint(order.id)}
+    >
+      {clock.busyId === order.id ? "…" : "Reimprimir"}
+    </Button>
+  );
+}
+
+function OrderCard({
   order,
   clock,
 }: {
@@ -146,8 +197,11 @@ function PendingPaymentCard({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <AgeBadge createdAtIso={order.createdAt} now={clock.now} />
+          <div className="flex flex-wrap items-center justify-end gap-2 text-right">
+            <Badge variant={statusVariant(order.status)}>
+              {OrderStatusLabel[order.status]}
+            </Badge>
+            <AgeBadge order={order} now={clock.now} />
             <span className="text-sm text-muted-foreground">
               {new Date(order.createdAt).toLocaleTimeString("es-MX", {
                 hour: "2-digit",
@@ -163,101 +217,53 @@ function PendingPaymentCard({
           <span className="text-lg font-bold">
             Total: {formatPrice(order.total)}
           </span>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={clock.busyId === order.id}
-              onClick={() => clock.reprint(order.id)}
-            >
-              {clock.busyId === order.id ? "…" : "Reimprimir"}
-            </Button>
-            <Button
-              disabled={clock.busyId === order.id}
-              onClick={() =>
-                clock.run(order.id, async () => {
-                  await acceptOrder(order.id, "EFECTIVO");
-                })
-              }
-            >
-              {clock.busyId === order.id ? "…" : `Cobró ${PaymentMethodLabel.EFECTIVO}`}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={clock.busyId === order.id}
-              onClick={() =>
-                clock.run(order.id, async () => {
-                  await acceptOrder(order.id, "QR");
-                })
-              }
-            >
-              Cobró {PaymentMethodLabel.QR}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Pedido ACEPTADO (pagado): listo para entregar. */
-function ReadyToDeliverCard({
-  order,
-  clock,
-}: {
-  order: Order;
-  clock: ReturnType<typeof useQueueClock>;
-}) {
-  return (
-    <Card key={order.id}>
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-lg">
-              Pedido #{formatOrderCode(order.seq)}
-            </CardTitle>
-            {order.customerName && (
-              <p className="text-sm font-semibold text-primary">
-                Para: {order.customerName}
-              </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {order.status === OrderStatus.RECIBIDO && (
+              <ReprintButton order={order} clock={clock} />
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="default">Pagado</Badge>
-            <AgeBadge createdAtIso={order.createdAt} now={clock.now} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ItemsList order={order} />
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <span className="text-lg font-bold">
-            Total: {formatPrice(order.total)}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={clock.busyId === order.id}
-              onClick={() => clock.reprint(order.id)}
-            >
-              {clock.busyId === order.id ? "…" : "Reimprimir"}
-            </Button>
-            <Button
-              size="lg"
-              disabled={clock.busyId === order.id}
-              onClick={() =>
-                clock.run(
-                  order.id,
-                  async () => {
-                    await deliverOrder(order.id);
-                  },
-                  "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
-                )
-              }
-            >
-              {clock.busyId === order.id ? "Entregando…" : "Marcar entregado"}
-            </Button>
+            {order.status === OrderStatus.RECIBIDO && (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={clock.busyId === order.id}
+                  onClick={() =>
+                    clock.run(order.id, async () => {
+                      await acceptOrder(order.id, "EFECTIVO");
+                    })
+                  }
+                >
+                  Cobró {PaymentMethodLabel.EFECTIVO}
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={clock.busyId === order.id}
+                  onClick={() =>
+                    clock.run(order.id, async () => {
+                      await acceptOrder(order.id, "QR");
+                    })
+                  }
+                >
+                  Cobró {PaymentMethodLabel.QR}
+                </Button>
+              </>
+            )}
+            {order.status === OrderStatus.ACEPTADO && (
+              <Button
+                size="lg"
+                disabled={clock.busyId === order.id}
+                onClick={() =>
+                  clock.run(
+                    order.id,
+                    async () => {
+                      await deliverOrder(order.id);
+                    },
+                    "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
+                  )
+                }
+              >
+                {clock.busyId === order.id ? "Entregando…" : "Marcar entregado"}
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -276,17 +282,10 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-export function QueueView({
-  pendingPayment,
-  readyToDeliver,
-}: {
-  pendingPayment: Order[];
-  readyToDeliver: Order[];
-}) {
+export function QueueView({ orders }: { orders: Order[] }) {
   const clock = useQueueClock();
-  const empty = pendingPayment.length === 0 && readyToDeliver.length === 0;
 
-  if (empty) {
+  if (orders.length === 0) {
     return (
       <EmptyQueue
         title="No hay pedidos por preparar"
@@ -294,6 +293,11 @@ export function QueueView({
       />
     );
   }
+
+  const pendingCount = orders.filter(
+    (o) =>
+      o.status === OrderStatus.RECIBIDO || o.status === OrderStatus.ACEPTADO,
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -310,36 +314,12 @@ export function QueueView({
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-bold">
-          Por cobrar
-          <Badge variant="warning">{pendingPayment.length}</Badge>
+          Pedidos del día
+          {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
         </h2>
-        {pendingPayment.length === 0 ? (
-          <EmptyQueue
-            title="Nada pendiente de pago"
-            hint="Los pedidos sin pagar del día aparecerán aquí."
-          />
-        ) : (
-          pendingPayment.map((order) => (
-            <PendingPaymentCard key={order.id} order={order} clock={clock} />
-          ))
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-bold">
-          Por entregar
-          <Badge variant="default">{readyToDeliver.length}</Badge>
-        </h2>
-        {readyToDeliver.length === 0 ? (
-          <EmptyQueue
-            title="Nada pendiente de entrega"
-            hint="Los pedidos pagados esperando entrega aparecerán aquí."
-          />
-        ) : (
-          readyToDeliver.map((order) => (
-            <ReadyToDeliverCard key={order.id} order={order} clock={clock} />
-          ))
-        )}
+        {orders.map((order) => (
+          <OrderCard key={order.id} order={order} clock={clock} />
+        ))}
       </section>
     </div>
   );

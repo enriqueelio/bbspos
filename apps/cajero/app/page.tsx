@@ -16,6 +16,7 @@ function toPlainOrder(order: {
   customerName: string | null;
   total: number;
   createdAt: Date;
+  deliveredAt: Date | null;
   items: {
     id: string;
     sizeName: string;
@@ -34,7 +35,7 @@ function toPlainOrder(order: {
     customerName: order.customerName,
     total: order.total,
     createdAt: order.createdAt.toISOString(),
-    deliveredAt: null,
+    deliveredAt: order.deliveredAt?.toISOString() ?? null,
     items: order.items.map((item) => ({
       ...item,
       flavorCategory: item.flavorCategory as Order["items"][number]["flavorCategory"],
@@ -56,26 +57,22 @@ export default async function CashierPage({
     const bounds = dayBounds(todayKey());
     const rows = await prisma.order.findMany({
       where: {
-        status: { in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO] },
+        status: {
+          in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
+        },
         createdAt: { gte: bounds.gte, lt: bounds.lt },
       },
       include: {
         items: { include: { toppings: true } },
       },
-      orderBy: { createdAt: "asc" },
+      // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
+      orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
     });
-
-    const plain = rows.map(toPlainOrder);
-    const pendingPayment = plain.filter((o) => o.status === OrderStatus.RECIBIDO);
-    const readyToDeliver = plain.filter((o) => o.status === OrderStatus.ACEPTADO);
 
     return (
       <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
         <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-        <QueueView
-          pendingPayment={pendingPayment}
-          readyToDeliver={readyToDeliver}
-        />
+        <QueueView orders={rows.map(toPlainOrder)} />
       </main>
     );
   }

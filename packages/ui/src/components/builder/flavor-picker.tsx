@@ -1,62 +1,6 @@
 import type { Flavor, FlavorCategory } from "@bubba/types";
 import { FlavorCategoryLabel } from "@bubba/types";
 import { cn } from "../../lib/utils";
-import {
-  MdCoffee,
-  MdCookie,
-  MdCake,
-  MdLeaf,
-  MdLocalBar,
-  MdLocalCafe,
-  MdEmojiFoodBeverage,
-  MdIcecream,
-  MdEgg,
-  MdRestaurant,
-  MdLunchDining,
-  MdBreakfastDining,
-  MdDinnerDining,
-  MdSetMeal,
-  MdTapas,
-  MdOutdoorGrill,
-  MdFoodBank,
-} from "react-icons/md";
-import {
-  FaCookieBite,
-  FaLemon,
-  FaCheese,
-  FaBreadSlice,
-  FaBeerMugEmpty,
-  FaWineGlass,
-  FaAppleWhole,
-  FaEgg,
-} from "react-icons/fa6";
-
-const FLAVOR_ICONS: Record<string, React.ComponentType<any>> = {
-  "capuchino": MdCoffee,
-  "oreo": FaCookieBite,
-  "fruticoco": MdCake,
-  "matcha": MdLeaf,
-  "piña colada": MdLocalBar,
-  "limonada brasilera": MdLocalCafe,
-  "frutilimon": MdEmojiFoodBeverage,
-  "taro": MdIcecream,
-  "frutilla": MdCake,
-  "limón": FaLemon,
-  "piña": MdEmojiFoodBeverage,
-  "manzana": FaAppleWhole,
-  "naranja": MdEmojiFoodBeverage,
-  "mango": MdEmojiFoodBeverage,
-  "coco": MdEmojiFoodBeverage,
-  "vainilla": MdIcecream,
-  "chocolate": MdCake,
-  "mora": MdCake,
-};
-
-function getFlavorIcon(name: string): React.ReactNode {
-  const IconComponent = FLAVOR_ICONS[name.toLowerCase()];
-  if (!IconComponent) return <MdEmojiFoodBeverage className="h-4 w-4" />;
-  return <IconComponent className="h-4 w-4" />;
-}
 
 export interface FlavorPickerProps {
   flavors: Flavor[];
@@ -100,10 +44,7 @@ export function FlavorPicker({
                     : "border-border bg-card",
                 )}
               >
-                <span className="flex items-center justify-between font-medium">
-                  {flavor.name}
-                  {getFlavorIcon(flavor.name)}
-                </span>
+                <span className="font-medium">{flavor.name}</span>
               </button>
             );
           })}

@@ -111,11 +111,10 @@ export async function setPrinterConfig(printerName: string): Promise<void> {
   );
 }
 
-const TICKET_FONT_PT = 10;
-const TICKET_TEXT_WIDTH_PT = 204; // ancho útil de rollo térmico de 80mm
+const TICKET_FONT_PT = 12;
 
 /** Envía texto plano a la impresora con letra grande y negritas, ajustada
- * para que la línea más larga quepa en el ancho del rollo térmico. */
+ * para que la línea más larga quepa en el ancho del rollo térmico de 80mm. */
 export async function printText(
   printerName: string,
   text: string,
@@ -127,19 +126,24 @@ export async function printText(
     `$raw = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${b64}'))`,
     "$raw = $raw.Replace([string][char]13, '')",
     "$lines = $raw.Split([char]10)",
+    "$maxLen = 1",
+    "foreach ($l in $lines) { if ($l.Length -gt $maxLen) { $maxLen = $l.Length } }",
+    "$doc = New-Object System.Drawing.Printing.PrintDocument",
+    `$doc.PrinterSettings.PrinterName = '${safeName}'`,
+    "$doc.DefaultPageSettings.Landscape = $false",
+    "$paperW = 315; $found = $false",
+    "foreach ($ps in $doc.PrinterSettings.PaperSizes) { if ($ps.Width -ge 300 -and $ps.Width -le 340) { $doc.DefaultPageSettings.PaperSize = $ps; $paperW = $ps.Width; $found = $true; break } }",
+    "if (-not $found) { $doc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize('Custom80mm', 315, 10000); $paperW = 315 }",
+    "$margins = New-Object System.Drawing.Printing.Margins(2, 2, 2, 2)",
+    "$doc.DefaultPageSettings.Margins = $margins",
     "$probeG = [System.Drawing.Graphics]::FromImage((New-Object System.Drawing.Bitmap(10, 10)))",
     "$fmt = [System.Drawing.StringFormat]::GenericTypographic",
     "$fProbe = New-Object System.Drawing.Font('Consolas', 12, [System.Drawing.FontStyle]::Bold)",
-    "$cw = $probeG.MeasureString(([string]'0' * 20), $fProbe, $fmt).Width / 20",
-    "$maxLen = 1",
-    "foreach ($l in $lines) { if ($l.Length -gt $maxLen) { $maxLen = $l.Length } }",
-    `$size = [Math]::Min(${TICKET_FONT_PT}, ${TICKET_TEXT_WIDTH_PT} / ($maxLen * $cw) * 12)`,
+    "$cw = $probeG.MeasureString(([string]'0' * 20), $fProbe, 0, $fmt).Width / 20",
+    `$availW = $paperW - 4`,
+    `$size = [Math]::Min(${TICKET_FONT_PT}, $availW / ($maxLen * $cw) * 12)`,
     "if ($size -lt 4) { $size = 4 }",
     "$font = New-Object System.Drawing.Font('Consolas', $size, [System.Drawing.FontStyle]::Bold)",
-    "$doc = New-Object System.Drawing.Printing.PrintDocument",
-    `$doc.PrinterSettings.PrinterName = '${safeName}'`,
-    "$margins = New-Object System.Drawing.Printing.Margins(10, 10, 10, 10)",
-    "$doc.DefaultPageSettings.Margins = $margins",
     "$script:i = 0",
     "$handler = [System.Drawing.Printing.PrintPageEventHandler]{",
     "  param($sender, $e)",

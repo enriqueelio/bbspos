@@ -14,8 +14,14 @@ import {
   printText,
 } from "@/lib/printing";
 
-/** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO. */
-export async function acceptOrder(orderId: string, method: string) {
+/** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO.
+ *  Soporta pago simple (un método) o dividido (dos métodos con montos). */
+export async function acceptOrder(
+  orderId: string,
+  method: string,
+  method2?: string,
+  amount2?: number,
+) {
   const session = await getRequiredSession();
 
   if (!AcceptablePayment.includes(method as PaymentMethodType)) {
@@ -42,11 +48,33 @@ export async function acceptOrder(orderId: string, method: string) {
     );
   }
 
+  let paymentMethod2: PaymentMethodType | null = null;
+  let paymentAmount2: number | null = null;
+
+  if (method2 && amount2 !== undefined) {
+    if (!AcceptablePayment.includes(method2 as PaymentMethodType)) {
+      throw new Error("El segundo método de pago no es válido.");
+    }
+    if (method2 === method) {
+      throw new Error("Los dos métodos de pago deben ser distintos.");
+    }
+    if (amount2 <= 0) {
+      throw new Error("El monto del segundo pago debe ser mayor a cero.");
+    }
+    if (amount2 >= order.total) {
+      throw new Error("El monto del segundo pago debe ser menor al total.");
+    }
+    paymentMethod2 = method2 as PaymentMethodType;
+    paymentAmount2 = Math.trunc(amount2);
+  }
+
   await prisma.order.update({
     where: { id: orderId },
     data: {
       status: OrderStatus.ACEPTADO,
       paymentMethod: method as PaymentMethodType,
+      paymentMethod2,
+      paymentAmount2,
       paidAt: new Date(),
       userId: order.userId ?? session.user.id,
     },

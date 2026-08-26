@@ -61,11 +61,26 @@ export async function GET(request: Request) {
     const paymentTotals = new Map<string, { orders: number; revenue: number }>();
     for (const order of orders) {
       if (!order.paymentMethod) continue;
-      const entry =
-        paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
-      entry.orders += 1;
-      entry.revenue += order.total;
-      paymentTotals.set(order.paymentMethod, entry);
+
+      if (order.paymentMethod2 && order.paymentAmount2 != null) {
+        // Pago dividido
+        const amount1 = order.total - order.paymentAmount2;
+        const entry1 = paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
+        entry1.orders += 1;
+        entry1.revenue += amount1;
+        paymentTotals.set(order.paymentMethod, entry1);
+
+        const entry2 = paymentTotals.get(order.paymentMethod2) ?? { orders: 0, revenue: 0 };
+        entry2.orders += 1;
+        entry2.revenue += order.paymentAmount2;
+        paymentTotals.set(order.paymentMethod2, entry2);
+      } else {
+        // Pago simple
+        const entry = paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
+        entry.orders += 1;
+        entry.revenue += order.total;
+        paymentTotals.set(order.paymentMethod, entry);
+      }
     }
     const paymentBreakdown = [...paymentTotals.entries()]
       .sort((a, b) => b[1].revenue - a[1].revenue)

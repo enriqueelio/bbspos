@@ -53,6 +53,8 @@ export default async function OrdersPage({
     })),
     userId: o.userId,
     paymentMethod: o.paymentMethod ?? null,
+    paymentMethod2: o.paymentMethod2 ?? null,
+    paymentAmount2: o.paymentAmount2 ?? null,
     discountAmount: o.discountAmount,
     discountReason: o.discountReason,
     cancelledAt: o.cancelledAt ? o.cancelledAt.toISOString() : null,

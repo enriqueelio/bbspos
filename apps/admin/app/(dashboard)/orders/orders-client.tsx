@@ -314,7 +314,9 @@ export function OrdersClient({
                   <div className="flex items-center gap-2">
                     {order.paymentMethod && (
                       <Badge variant="secondary">
-                        {PaymentMethodLabel[order.paymentMethod]}
+                        {order.paymentMethod2 && order.paymentAmount2 != null
+                          ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
+                          : PaymentMethodLabel[order.paymentMethod]}
                       </Badge>
                     )}
                     <Badge variant={statusVariant(order.status)}>

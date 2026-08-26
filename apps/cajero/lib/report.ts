@@ -33,6 +33,8 @@ export async function getCashierDailyData(
     select: {
       total: true,
       paymentMethod: true,
+      paymentMethod2: true,
+      paymentAmount2: true,
       userId: true,
       createdAt: true,
       deliveredAt: true,
@@ -44,11 +46,26 @@ export async function getCashierDailyData(
   const paymentTotals = new Map<string, { orders: number; revenue: number }>();
   for (const order of delivered) {
     if (!order.paymentMethod) continue;
-    const entry =
-      paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
-    entry.orders += 1;
-    entry.revenue += order.total;
-    paymentTotals.set(order.paymentMethod, entry);
+
+    if (order.paymentMethod2 && order.paymentAmount2 != null) {
+      // Pago dividido: el primer método recibe (total - amount2), el segundo recibe amount2
+      const amount1 = order.total - order.paymentAmount2;
+      const entry1 = paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
+      entry1.orders += 1;
+      entry1.revenue += amount1;
+      paymentTotals.set(order.paymentMethod, entry1);
+
+      const entry2 = paymentTotals.get(order.paymentMethod2) ?? { orders: 0, revenue: 0 };
+      entry2.orders += 1;
+      entry2.revenue += order.paymentAmount2;
+      paymentTotals.set(order.paymentMethod2, entry2);
+    } else {
+      // Pago simple
+      const entry = paymentTotals.get(order.paymentMethod) ?? { orders: 0, revenue: 0 };
+      entry.orders += 1;
+      entry.revenue += order.total;
+      paymentTotals.set(order.paymentMethod, entry);
+    }
   }
 
   const mine = delivered.filter((o) => o.userId === userId);

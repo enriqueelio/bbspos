@@ -206,6 +206,8 @@ export interface Order {
   userId?: string | null;
   userName?: string | null;
   paymentMethod?: PaymentMethod | null;
+  paymentMethod2?: PaymentMethod | null;
+  paymentAmount2?: number | null;
   discountAmount?: number;
   discountReason?: string | null;
   cancelledAt?: string | null;

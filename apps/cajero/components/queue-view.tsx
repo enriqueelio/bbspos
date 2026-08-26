@@ -21,6 +21,7 @@ import {
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
+import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 
 function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
@@ -183,6 +184,8 @@ function OrderCard({
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
 }) {
+  const [showSplit, setShowSplit] = useState(false);
+
   return (
     <Card key={order.id}>
       <CardHeader className="pb-3">
@@ -214,9 +217,20 @@ function OrderCard({
       <CardContent className="space-y-3">
         <ItemsList order={order} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <span className="text-lg font-bold">
-            Total: {formatPrice(order.total)}
-          </span>
+          <div className="space-y-1">
+            <span className="text-lg font-bold">
+              Total: {formatPrice(order.total)}
+            </span>
+            {order.paymentMethod && (
+              <p className="text-sm text-muted-foreground">
+                Pago: {PaymentMethodLabel[order.paymentMethod]}
+                {order.paymentMethod2 &&
+                  order.paymentAmount2 != null &&
+                  ` + ${PaymentMethodLabel[order.paymentMethod2]} ${formatPrice(order.total - order.paymentAmount2)}`}
+                {!order.paymentMethod2 && " ✓"}
+              </p>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             {order.status === OrderStatus.RECIBIDO && (
               <ReprintButton order={order} clock={clock} />
@@ -245,6 +259,13 @@ function OrderCard({
                 >
                   Cobró {PaymentMethodLabel.QR}
                 </Button>
+                <Button
+                  variant="secondary"
+                  disabled={clock.busyId === order.id}
+                  onClick={() => setShowSplit(true)}
+                >
+                  Cobro dividido
+                </Button>
               </>
             )}
             {order.status === OrderStatus.ACEPTADO && (
@@ -267,6 +288,20 @@ function OrderCard({
           </div>
         </div>
       </CardContent>
+
+      {showSplit && (
+        <SplitPaymentDialog
+          total={order.total}
+          busy={clock.busyId === order.id}
+          onConfirm={async (method, method2, amount2) => {
+            await clock.run(order.id, async () => {
+              await acceptOrder(order.id, method, method2, amount2);
+            });
+            setShowSplit(false);
+          }}
+          onCancel={() => setShowSplit(false)}
+        />
+      )}
     </Card>
   );
 }

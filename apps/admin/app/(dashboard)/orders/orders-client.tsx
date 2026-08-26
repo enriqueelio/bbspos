@@ -28,6 +28,7 @@ import {
   deliverOrder,
   reprintOrder,
 } from "@/app/actions/orders";
+import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
   { value: "ALL", label: "Todos" },
@@ -92,6 +93,8 @@ function OrderActions({ order }: { order: Order }) {
   const [method, setMethod] = useState<PaymentMethod>("EFECTIVO");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
+  const [showSplit, setShowSplit] = useState(false);
+  const [splitBusy, setSplitBusy] = useState(false);
 
   if (order.status === "ANULADO") {
     return null;
@@ -107,13 +110,22 @@ function OrderActions({ order }: { order: Order }) {
     <div className="space-y-3 border-t pt-3">
       <div className="flex flex-wrap justify-end gap-2">
         {order.status === "RECIBIDO" && (
-          <Button
-            size="sm"
-            variant={panel === "pay" ? "default" : "outline"}
-            onClick={() => setPanel(panel === "pay" ? null : "pay")}
-          >
-            Registrar pago
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant={panel === "pay" ? "default" : "outline"}
+              onClick={() => setPanel(panel === "pay" ? null : "pay")}
+            >
+              Registrar pago
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowSplit(true)}
+            >
+              Cobro dividido
+            </Button>
+          </>
         )}
         {order.status === "ACEPTADO" && (
           <Button
@@ -241,6 +253,22 @@ function OrderActions({ order }: { order: Order }) {
             Anular pedido
           </Button>
         </div>
+      )}
+
+      {showSplit && (
+        <SplitPaymentDialog
+          total={order.total}
+          busy={splitBusy}
+          onConfirm={(m1, m2, a2) => {
+            setSplitBusy(true);
+            runAction(async () => {
+              await acceptOrder(order.id, m1, m2, a2);
+              setShowSplit(false);
+              setSplitBusy(false);
+            });
+          }}
+          onCancel={() => setShowSplit(false)}
+        />
       )}
     </div>
   );

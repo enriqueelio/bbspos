@@ -55,10 +55,14 @@ export async function GET(request: Request) {
       hourly[hour].revenue += order.total;
     }
 
+    const hourFrom = query.hourFrom;
+    const hourTo = query.hourTo;
+    const inRange = hourly.filter((e) => e.hour >= hourFrom && e.hour <= hourTo);
+
     let peakHour: PeakHoursData["peakHour"] = null;
     let quietHour: PeakHoursData["quietHour"] = null;
 
-    for (const entry of hourly) {
+    for (const entry of inRange) {
       if (entry.orders > 0) {
         if (!peakHour || entry.orders > peakHour.orders) {
           peakHour = { hour: entry.hour, orders: entry.orders };
@@ -69,11 +73,11 @@ export async function GET(request: Request) {
       }
     }
 
-    const data: PeakHoursData = { hourly, peakHour, quietHour };
+    const data: PeakHoursData = { hourly: inRange, peakHour, quietHour };
 
     if (query.format === "csv") {
       const headers = ["Hora", "Órdenes", "Ingresos"];
-      const rows = hourly.map((h) => [
+      const rows = inRange.map((h) => [
         `${String(h.hour).padStart(2, "0")}:00`,
         h.orders,
         h.revenue,

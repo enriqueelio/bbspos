@@ -151,7 +151,7 @@ async function toppingRanking(
 
 function rank(
   accs: Map<string, Acc>,
-  query: { metric: "quantity" | "revenue"; limit: number },
+  query: { metric: "quantity" | "revenue"; limit?: number },
 ): TopProductRow[] {
   const sorted = [...accs.entries()].sort((a, b) => {
     const diff =
@@ -161,7 +161,9 @@ function rank(
     return diff !== 0 ? diff : a[0].localeCompare(b[0]);
   });
 
-  return sorted.slice(0, query.limit).map(([key, acc], index) => ({
+  const sliced = query.limit ? sorted.slice(0, query.limit) : sorted;
+
+  return sliced.map(([key, acc], index) => ({
     rank: index + 1,
     key,
     unitsSold: acc.unitsSold,

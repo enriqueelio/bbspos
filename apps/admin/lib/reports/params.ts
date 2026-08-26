@@ -69,6 +69,8 @@ export const salesRangeQuerySchema = rangeObject({
 
 export const peakHoursQuerySchema = rangeObject({
   weekday: z.coerce.number().int().min(0).max(6).optional(),
+  hourFrom: z.coerce.number().int().min(0).max(23).default(11),
+  hourTo: z.coerce.number().int().min(0).max(23).default(23),
   format: formatSchema,
 });
 
@@ -79,7 +81,7 @@ export const topProductsQuerySchema = rangeObject({
     .enum(["drink", "flavor", "size", "bobaType", "topping"])
     .default("flavor"),
   metric: z.enum(["quantity", "revenue"]).default("quantity"),
-  limit: z.coerce.number().int().min(1).max(100).default(10),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
   format: formatSchema,
 });
 

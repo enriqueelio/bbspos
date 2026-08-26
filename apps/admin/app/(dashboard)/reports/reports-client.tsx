@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Download } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import {
   Badge,
   Button,
@@ -11,33 +11,25 @@ import {
   CardTitle,
   Input,
 } from "@bubba/ui";
+import type {
+  AdjustmentsData,
+  CategorySalesData,
+  DailyReportData,
+  DashboardSummaryData,
+  Granularity,
+  PeakHoursData,
+  ReportEnvelope,
+  SalesRangeData,
+  SlowMoverRow,
+  StaffPerformanceRow,
+  TopProductRow,
+} from "@bubba/types";
 import {
   FlavorCategoryLabel,
   formatPrice,
   PaymentMethodLabel,
-  type AdjustmentsData,
-  type CategorySalesData,
-  type DailyReportData,
-  type PeakHoursData,
-  type ReportEnvelope,
-  type SalesRangeData,
-  type SlowMoverRow,
-  type StaffPerformanceRow,
-  type TopProductRow,
-  type DashboardSummaryData,
-  type Granularity,
 } from "@bubba/types";
-
-type ReportKey =
-  | "dashboard"
-  | "daily"
-  | "sales-range"
-  | "peak-hours"
-  | "category-sales"
-  | "top-products"
-  | "slow-movers"
-  | "staff-performance"
-  | "adjustments";
+import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
 
 const REPORT_TABS: { key: ReportKey; label: string; needsRange: boolean }[] = [
   { key: "dashboard", label: "Resumen", needsRange: false },
@@ -123,6 +115,9 @@ export function ReportsClient({
   const [from, setFrom] = useState(daysAgoStr(6));
   const [to, setTo] = useState(todayStr());
   const [granularity, setGranularity] = useState<Granularity>("day");
+  const [hourFrom, setHourFrom] = useState(11);
+  const [hourTo, setHourTo] = useState(23);
+  const [topOnly, setTopOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,8 +131,15 @@ export function ReportsClient({
     if (report === "sales-range") {
       params.set("granularity", granularity);
     }
+    if (report === "peak-hours") {
+      params.set("hourFrom", String(hourFrom));
+      params.set("hourTo", String(hourTo));
+    }
+    if (report === "top-products" && topOnly) {
+      params.set("limit", "10");
+    }
     return params.toString();
-  }, [from, to, granularity, report]);
+  }, [from, to, granularity, report, hourFrom, hourTo, topOnly]);
 
   const fetchData = useCallback(
     async <T,>(endpoint: string): Promise<T | null> => {
@@ -240,11 +242,30 @@ export function ReportsClient({
           </p>
         </div>
         {exportUrl && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={exportUrl}>
-              <Download className="mr-1 h-4 w-4" /> Exportar CSV
-            </a>
-          </Button>
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <a href={exportUrl}>
+                <Download className="mr-1 h-4 w-4" /> Exportar CSV
+              </a>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!fetched || fetched.key !== report}
+              onClick={() => {
+                if (!fetched || fetched.key !== report) return;
+                const reportDate = report === "daily" ? to : undefined;
+                exportReportToExcel(
+                  report,
+                  fetched.payload,
+                  from,
+                  reportDate ?? to,
+                );
+              }}
+            >
+              <FileSpreadsheet className="mr-1 h-4 w-4" /> Exportar Excel
+            </Button>
+          </>
         )}
       </div>
 
@@ -304,6 +325,67 @@ export function ReportsClient({
               </select>
             </div>
           )}
+          {report === "peak-hours" && (
+            <>
+              <div className="space-y-1">
+                <label htmlFor="reports-hour-from" className="text-sm font-medium">
+                  Desde hora
+                </label>
+                <select
+                  id="reports-hour-from"
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                  value={hourFrom}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setHourFrom(v);
+                    if (v > hourTo) setHourTo(v);
+                  }}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {String(i).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="reports-hour-to" className="text-sm font-medium">
+                  Hasta hora
+                </label>
+                <select
+                  id="reports-hour-to"
+                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                  value={hourTo}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setHourTo(v);
+                    if (v < hourFrom) setHourFrom(v);
+                  }}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {String(i).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {report === "top-products" && (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={topOnly ? "default" : "outline"}
+            onClick={() => setTopOnly(!topOnly)}
+          >
+            {topOnly ? "Top 10" : "Todos los productos"}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            {topOnly ? "Mostrando los 10 más vendidos" : "Mostrando todos los productos"}
+          </span>
         </div>
       )}
 

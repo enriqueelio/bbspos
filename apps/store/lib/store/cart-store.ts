@@ -20,10 +20,14 @@ export interface AddItemInput {
   toppings: CartTopping[];
 }
 
+type DeliveryType = "MESA" | "LLEVAR";
+
 interface CartState {
   items: CartItem[];
   customerName: string | null;
+  deliveryType: DeliveryType | null;
   setCustomerName: (name: string) => void;
+  setDeliveryType: (type: DeliveryType) => void;
   addItem: (input: AddItemInput) => void;
   updateQuantity: (id: string, quantity: number) => void;
   removeItem: (id: string) => void;
@@ -35,7 +39,9 @@ export const useCartStore = create<CartState>()(
     (set) => ({
       items: [],
       customerName: null,
+      deliveryType: null,
       setCustomerName: (customerName) => set({ customerName }),
+      setDeliveryType: (deliveryType) => set({ deliveryType }),
       addItem: (input) =>
         set((state) => {
           const toppingKey = input.toppings
@@ -77,7 +83,7 @@ export const useCartStore = create<CartState>()(
         })),
       removeItem: (id) =>
         set((state) => ({ items: state.items.filter((i) => i.id !== id) })),
-      clear: () => set({ items: [], customerName: null }),
+      clear: () => set({ items: [], customerName: null, deliveryType: null }),
     }),
     {
       name: "bubba-cart-v2",

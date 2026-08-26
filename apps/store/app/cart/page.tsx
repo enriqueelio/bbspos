@@ -10,11 +10,10 @@ import {
   Card,
   CardContent,
   CartItemRow,
-  CartSummary,
 } from "@bubba/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
-import { formatPrice, formatOrderCode } from "@bubba/types";
+import { formatPrice, formatOrderCode, sumToppings } from "@bubba/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
 
@@ -24,6 +23,8 @@ export default function CartPage() {
   const items = useCartStore((s) => s.items);
   const customerName = useCartStore((s) => s.customerName);
   const setCustomerName = useCartStore((s) => s.setCustomerName);
+  const deliveryType = useCartStore((s) => s.deliveryType);
+  const setDeliveryType = useCartStore((s) => s.setDeliveryType);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const clear = useCartStore((s) => s.clear);
@@ -131,6 +132,7 @@ export default function CartPage() {
       const { orderId: newOrderId, seq, total } = await createOrder(
         items,
         customerName.trim(),
+        deliveryType,
       );
       setOrderId(newOrderId);
       setOrderSeq(seq);
@@ -151,10 +153,23 @@ export default function CartPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Mi carrito</h1>
-        <Badge variant="secondary">
-          {items.reduce((acc, i) => acc + i.quantity, 0)} bebida
-          {items.reduce((acc, i) => acc + i.quantity, 0) !== 1 ? "s" : ""}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">
+            {items.reduce((acc, i) => acc + i.quantity, 0)} bebida
+            {items.reduce((acc, i) => acc + i.quantity, 0) !== 1 ? "s" : ""}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground h-7 px-2"
+            onClick={() => {
+              clear();
+              router.push("/");
+            }}
+          >
+            Cancelar
+          </Button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -173,40 +188,38 @@ export default function CartPage() {
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-3 p-4">
-              <label
-                htmlFor="customer-name"
-                className="text-sm font-medium text-muted-foreground"
-              >
-                Tu nombre (para entregar tu pedido)
-              </label>
-              <input
-                id="customer-name"
-                type="text"
-                maxLength={40}
-                placeholder="Ej. María Pérez"
-                value={customerName ?? ""}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="h-16 w-full text-xl rounded-xl border-2 border-slate-300 bg-slate-50 px-6 focus:border-primary focus:ring-4 focus:ring-primary/20 text-center outline-none"
-              />
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className="h-14 w-full text-lg"
-                  onClick={() => setCustomerName("Para Servirse")}
+                  className={`h-14 w-full text-lg ${deliveryType === "MESA" ? "border-primary bg-primary/10" : ""}`}
+                  onClick={() => setDeliveryType("MESA")}
                 >
                   Para Servirse
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-14 w-full text-lg"
-                  onClick={() => setCustomerName("Para Llevar")}
+                  className={`h-14 w-full text-lg ${deliveryType === "LLEVAR" ? "border-primary bg-primary/10" : ""}`}
+                  onClick={() => setDeliveryType("LLEVAR")}
                 >
                   Para Llevar
                 </Button>
               </div>
             </CardContent>
           </Card>
-          <CartSummary items={items} />
+          <div className="rounded-lg border border-primary/30 bg-primary/5 px-6 py-4 text-center">
+            <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
+              Total a pagar
+            </p>
+            <p className="text-4xl font-extrabold text-foreground">
+              {formatPrice(
+                items.reduce(
+                  (acc, item) =>
+                    acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
+                  0,
+                ),
+              )}
+            </p>
+          </div>
           {error && (
             <Card>
               <CardContent className="p-4 text-sm text-destructive">
@@ -214,26 +227,20 @@ export default function CartPage() {
               </CardContent>
             </Card>
           )}
-          <div className="flex flex-col items-center gap-3">
+          <div className="grid grid-cols-1 gap-4 w-full max-w-lg mx-auto">
             <Button
-              className="w-36 h-7 bg-green-200 text-green-900 hover:bg-green-300"
+              className="w-full h-20 text-2xl font-bold bg-primary text-white rounded-2xl shadow-xl active:bg-primary/90"
               disabled={placing}
               onClick={handleCheckout}
             >
-              {placing ? "Creando pedido..." : "Confirmar pedido"}
-            </Button>
-            <Button variant="outline" className="w-36 h-7 border-orange-400 bg-orange-200 text-orange-900 hover:bg-orange-300" asChild>
-              <Link href="/build">Armar otra bebida</Link>
+              {placing ? "Creando pedido..." : "Pagar ahora"}
             </Button>
             <Button
-              variant="destructive"
-              className="w-36 h-7"
-              onClick={() => {
-                clear();
-                router.push("/");
-              }}
+              variant="outline"
+              className="w-full h-14 text-lg font-semibold bg-white border-2 border-slate-200 text-slate-700 rounded-xl"
+              asChild
             >
-              Cancelar pedido
+              <Link href="/build">Agregar más Bebidas</Link>
             </Button>
           </div>
         </div>

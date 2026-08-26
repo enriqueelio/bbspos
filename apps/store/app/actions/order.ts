@@ -8,6 +8,7 @@ import { formatComanda, getPrinterName, printText } from "@/lib/printing";
 export async function createOrder(
   items: CartItem[],
   customerName?: string,
+  deliveryType?: "MESA" | "LLEVAR" | null,
 ): Promise<{ orderId: string; seq: number; total: number }> {
   if (items.length === 0) {
     throw new Error("El carrito está vacío");
@@ -46,6 +47,7 @@ export async function createOrder(
     return tx.order.create({
       data: {
         customerName: customerName.trim(),
+        deliveryType: deliveryType ?? undefined,
         seq,
         total,
         items: {

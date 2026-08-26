@@ -1,0 +1,21 @@
+{
+  "name": "Bubble Drink — Arma tu bubble tea",
+  "short_name": "Bubble Drink",
+  "description": "Arma tu bubble drink perfecta: elige el tamaño, sabor y tipo de boba.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#fb923c",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["food", "business"],
+  "lang": "es",
+  "dir": "ltr"
+}

@@ -1,11 +1,29 @@
-﻿import type { Metadata } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 
 export const metadata: Metadata = {
-  title: "Bubble Drink â€” Bubble Tea y bebidas con boba",
+  title: "Bubble Drink — Bubble Tea y bebidas con boba",
   description:
-    "Arma tu bubble drink: elige tamaÃ±o, sabor y tipo de boba.",
+    "Arma tu bubble drink: elige tamaño, sabor y tipo de boba.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Bubble Drink",
+  },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#ea580c",
 };
 
 export default function RootLayout({

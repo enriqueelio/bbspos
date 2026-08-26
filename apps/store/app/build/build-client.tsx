@@ -32,10 +32,22 @@ const CATEGORY_ICONS: Record<FlavorCategory, React.ReactNode> = {
   SPECIAL: <Sparkles className="h-5 w-5" />,
 };
 
-export function BuildClient({ catalog }: { catalog: Catalog }) {
+export function BuildClient({ catalog: serverCatalog }: { catalog: Catalog }) {
   const router = useRouter();
+  const [catalog, setCatalog] = useState<Catalog>(serverCatalog);
   const [step, setStep] = useState(0);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/catalog")
+      .then((r) => {
+        if (!r.ok) throw new Error("offline");
+        return r.json();
+      })
+      .then((data: Catalog) => setCatalog(data))
+      .catch(() => {});
+  }, []);
+
   const {
     category,
     flavorId,

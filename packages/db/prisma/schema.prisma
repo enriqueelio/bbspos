@@ -80,6 +80,7 @@ model Order {
   seq            Int?           @unique
   status         OrderStatus    @default(RECIBIDO)
   customerName   String?
+  deliveryType   DeliveryType?
   total          Int
   createdAt      DateTime       @default(now())
   paidAt         DateTime?
@@ -158,4 +159,9 @@ enum PaymentMethod {
   EFECTIVO
   QR
   TARJETA
+}
+
+enum DeliveryType {
+  MESA
+  LLEVAR
 }

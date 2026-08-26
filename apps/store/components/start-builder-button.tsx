@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardContent } from "@bubba/ui";
+import { Button, Card, CardContent, cn } from "@bubba/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 
-export function StartBuilderButton() {
+export function StartBuilderButton({ className }: { className?: string }) {
   const router = useRouter();
   const setCustomerName = useCartStore((s) => s.setCustomerName);
   const [open, setOpen] = useState(false);
@@ -38,7 +38,10 @@ export function StartBuilderButton() {
     <>
       <Button
         size="lg"
-        className="mt-6 bg-white text-primary hover:bg-white/90"
+        className={cn(
+          "px-8 h-16 sm:h-20 text-xl sm:text-3xl font-extrabold bg-white text-primary rounded-full shadow-2xl animate-bounce max-w-[calc(100vw-2rem)]",
+          className,
+        )}
         onClick={handleOpen}
       >
         Arma tu boba ahora

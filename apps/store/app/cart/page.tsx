@@ -172,7 +172,7 @@ export default function CartPage() {
         <div />
         <div className="space-y-4">
           <Card>
-            <CardContent className="space-y-2 p-4">
+            <CardContent className="space-y-3 p-4">
               <label
                 htmlFor="customer-name"
                 className="text-sm font-medium text-muted-foreground"
@@ -186,8 +186,24 @@ export default function CartPage() {
                 placeholder="Ej. María Pérez"
                 value={customerName ?? ""}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full rounded-lg border border-border bg-card px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
+                className="h-16 w-full text-xl rounded-xl border-2 border-slate-300 bg-slate-50 px-6 focus:border-primary focus:ring-4 focus:ring-primary/20 text-center outline-none"
               />
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  className="h-14 w-full text-lg"
+                  onClick={() => setCustomerName("Para Servirse")}
+                >
+                  Para Servirse
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-14 w-full text-lg"
+                  onClick={() => setCustomerName("Para Llevar")}
+                >
+                  Para Llevar
+                </Button>
+              </div>
             </CardContent>
           </Card>
           <CartSummary items={items} />

@@ -33,24 +33,17 @@ export default async function HomePage() {
   const slideshow = await getSlideshow();
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-3xl bg-gradient-to-br from-primary via-accent to-orange-300 p-10 text-center text-white shadow-lg shadow-primary/20">
-        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Bubble Drink
-        </h1>
-        <p className="mx-auto mt-3 max-w-xl text-lg text-white/90">
-          Arma tu bubble drink perfecta: elige el tamaño de tu vaso, tu sabor
-          favorito y el tipo de boba. Hecho al momento para ti.
-        </p>
-        <StartBuilderButton />
-      </section>
-
-      {slideshow.images.length > 0 && (
+    <div className="fixed inset-0 top-14 z-30 flex flex-col overflow-hidden bg-background">
+      <div className="flex-1 min-h-0 px-4 pt-4">
         <PhotoCarousel
           images={slideshow.images}
           intervalMs={slideshow.intervalMs}
+          className="h-full w-full object-cover rounded-2xl"
         />
-      )}
+      </div>
+      <div className="relative w-full shrink-0 flex justify-center pb-6 pt-2">
+        <StartBuilderButton />
+      </div>
     </div>
   );
 }

@@ -37,7 +37,7 @@ export function PhotoCarousel({
   return (
     <div
       className={cn(
-        "relative w-full aspect-[4/3] sm:aspect-video overflow-hidden rounded-2xl shadow-lg",
+        "relative w-full overflow-hidden rounded-2xl shadow-lg",
         className,
       )}
       onMouseEnter={() => setPaused(true)}

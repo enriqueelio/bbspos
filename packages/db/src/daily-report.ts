@@ -8,20 +8,17 @@ import { prisma } from "./index";
 
 const TIME_ZONE = process.env.TIME_ZONE || "America/La_Paz";
 
-const PAYMENT_LABEL: Record<string, string> = {
-  EFECTIVO: "Efectivo",
-  QR: "QR",
-  TARJETA: "Tarjeta",
-};
-
 export interface DailyReportStats {
   revenueTotal: number;
   deliveredOrders: number;
-  createdOrders: number;
   avgTicket: number;
   avgDeliveryMinutes: number | null;
   payment: { method: string; orders: number; revenue: number }[];
-  top: [string, number][];
+  cancellationsCount: number;
+  cancellationsLost: number;
+  discountsTotal: number;
+  toppingsRevenue: number;
+  peakHour: { hour: number; orders: number } | null;
 }
 
 function pad(n: number): string {
@@ -119,11 +116,13 @@ export function durationLabel(minutes: number): string {
   return rest > 0 ? `${h} h ${rest} min` : `${h} h`;
 }
 
-/** Métricas globales del día (todos los cajeros). */
+/** Métricas del cierre de caja del día: finanzas, operación y fugas.
+ *  Replica la lógica de agregación de lib/reports (adjustments/peak-hours/daily). */
 export async function collectReportStats(key: string): Promise<DailyReportStats> {
   const bounds = dayBounds(key);
 
-  const [delivered, createdOrders, topItems] = await Promise.all([
+  const [delivered, peakCreated, adjustments, toppingItems] = await Promise.all([
+    // FINANZAS: pedidos entregados del día (tienen método de pago y entrega).
     prisma.order.findMany({
       where: {
         status: "ENTREGADO",
@@ -138,12 +137,31 @@ export async function collectReportStats(key: string): Promise<DailyReportStats>
         deliveredAt: true,
       },
     }),
-    prisma.order.count({
+    // Hora pico: pedidos creados en el día (sin anulados), como peak-hours.ts.
+    prisma.order.findMany({
       where: {
-        status: { not: "ANULADO" },
         createdAt: { gte: bounds.gte, lt: bounds.lt },
+        status: { not: "ANULADO" },
+      },
+      select: { createdAt: true },
+    }),
+    // Fugas: anulaciones (cancelledAt) y descuentos (discountedAt), como adjustments.ts.
+    prisma.order.findMany({
+      where: {
+        OR: [
+          { status: "ANULADO", cancelledAt: { gte: bounds.gte, lt: bounds.lt } },
+          { discountedAt: { gte: bounds.gte, lt: bounds.lt } },
+        ],
+      },
+      select: {
+        status: true,
+        total: true,
+        discountAmount: true,
+        discountedAt: true,
+        cancelledAt: true,
       },
     }),
+    // Ingreso por extras: toppings de los pedidos entregados del día.
     prisma.orderItem.findMany({
       where: {
         order: {
@@ -151,7 +169,7 @@ export async function collectReportStats(key: string): Promise<DailyReportStats>
           deliveredAt: { gte: bounds.gte, lt: bounds.lt },
         },
       },
-      select: { sizeName: true, flavorName: true, bobaTypeName: true, quantity: true },
+      select: { quantity: true, toppings: { select: { unitPrice: true } } },
     }),
   ]);
 
@@ -178,58 +196,90 @@ export async function collectReportStats(key: string): Promise<DailyReportStats>
     }
   }
 
-  const byProduct = new Map<string, number>();
-  for (const item of topItems) {
-    const name = `${item.sizeName} ${item.flavorName} (${item.bobaTypeName})`;
-    byProduct.set(name, (byProduct.get(name) ?? 0) + item.quantity);
+  // Hora pico local: la hora con más pedidos creados.
+  const hourly = new Array<number>(24).fill(0);
+  for (const order of peakCreated) {
+    const hour = Math.floor(zonedMinutes(order.createdAt) / 60);
+    hourly[hour] += 1;
   }
-  const top = [...byProduct.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  let peakHour: { hour: number; orders: number } | null = null;
+  for (let hour = 0; hour < 24; hour += 1) {
+    if (hourly[hour] > 0 && (!peakHour || hourly[hour] > peakHour.orders)) {
+      peakHour = { hour, orders: hourly[hour] };
+    }
+  }
+
+  let cancellationsCount = 0;
+  let cancellationsLost = 0;
+  let discountsTotal = 0;
+  for (const order of adjustments) {
+    if (order.status === "ANULADO" && order.cancelledAt) {
+      cancellationsCount += 1;
+      cancellationsLost += order.total;
+    }
+    if ((order.discountAmount ?? 0) > 0 && order.discountedAt) {
+      discountsTotal += order.discountAmount ?? 0;
+    }
+  }
+
+  // Los toppings se cobran por unidad: Σ(Σ precio topping) × cantidad.
+  const toppingsRevenue = toppingItems.reduce(
+    (acc, item) =>
+      acc +
+      item.toppings.reduce((a, t) => a + t.unitPrice, 0) * item.quantity,
+    0,
+  );
 
   return {
     revenueTotal,
     deliveredOrders: delivered.length,
-    createdOrders,
     avgTicket:
       delivered.length > 0 ? Math.round(revenueTotal / delivered.length) : 0,
     avgDeliveryMinutes: avgDeliveryMinutes(delivered),
-    payment: [...payment.entries()]
-      .sort((a, b) => b[1].revenue - a[1].revenue)
-      .map(([method, v]) => ({ method, ...v })),
-    top,
+    payment: [...payment.entries()].map(([method, v]) => ({ method, ...v })),
+    cancellationsCount,
+    cancellationsLost,
+    discountsTotal,
+    toppingsRevenue,
+    peakHour,
   };
 }
 
 export function buildReportMessage(key: string, stats: DailyReportStats): string {
-  const lines = [
-    "📊 *Cierre de caja*",
+  const payment = new Map(stats.payment.map((p) => [p.method, p]));
+  const efectivo = payment.get("EFECTIVO")?.revenue ?? 0;
+  const qr = payment.get("QR")?.revenue ?? 0;
+  const tarjeta = payment.get("TARJETA")?.revenue ?? 0;
+
+  const horaPico = stats.peakHour
+    ? `${String(stats.peakHour.hour).padStart(2, "0")}:00 - ${String(
+        stats.peakHour.hour,
+      ).padStart(2, "0")}:59`
+    : "—";
+
+  const pagos =
+    `• Efectivo: ${efectivo} Bs | QR: ${qr} Bs` +
+    (tarjeta > 0 ? ` | Tarjeta: ${tarjeta} Bs` : "");
+
+  return [
+    "📊 *CIERRE DIARIO BIBOSI* 📊",
     `📅 ${key}`,
     "",
-    `💵 Ingresos (entregados): ${stats.revenueTotal} Bs`,
-    `🧋 Entregados: ${stats.deliveredOrders} · Creados: ${stats.createdOrders}`,
-    `🎫 Ticket promedio: ${stats.avgTicket} Bs`,
-  ];
-  if (stats.avgDeliveryMinutes !== null) {
-    lines.push(`⏱️ Entrega promedio: ${durationLabel(stats.avgDeliveryMinutes)}`);
-  }
-  lines.push("");
-  if (stats.payment.length === 0) {
-    lines.push("💳 Pagos: sin registros");
-  } else {
-    lines.push("💳 *Pagos*");
-    for (const p of stats.payment) {
-      lines.push(
-        `   • ${PAYMENT_LABEL[p.method] ?? p.method}: ${p.revenue} Bs (${p.orders})`,
-      );
-    }
-  }
-  if (stats.top.length > 0) {
-    lines.push("");
-    lines.push("🥤 *Top productos*");
-    stats.top.forEach(([name, qty], i) => {
-      lines.push(`   ${i + 1}. ${qty}x ${name}`);
-    });
-  }
-  return lines.join("\n");
+    "💰 *FINANZAS*",
+    `• Total: *${stats.revenueTotal} Bs*`,
+    `• Ticket Promedio: ${stats.avgTicket} Bs`,
+    pagos,
+    "",
+    "⏱ *OPERACIÓN*",
+    `• Pedidos Entregados: ${stats.deliveredOrders}`,
+    `• Tiempo Promedio: ${stats.avgDeliveryMinutes ?? "—"} min`,
+    `• Hora Pico: ${horaPico}`,
+    "",
+    "🚨 *FUGAS Y ALERTAS*",
+    `• Anulaciones: ${stats.cancellationsCount} (${stats.cancellationsLost} Bs)`,
+    `• Descuentos: ${stats.discountsTotal} Bs`,
+    `• Ingreso por Extras: ${stats.toppingsRevenue} Bs`,
+  ].join("\n");
 }
 
 /** Envía (una sola vez) el cierre de caja del día al bot de Telegram. */

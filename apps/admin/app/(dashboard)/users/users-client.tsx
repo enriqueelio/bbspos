@@ -74,7 +74,7 @@ export function UsersClient({
       )}
 
       {notice && (
-        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-700">
+        <p className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
           {notice}
         </p>
       )}
@@ -264,7 +264,7 @@ function UserDialog({
               <Label htmlFor="u-role">Rol</Label>
               <select
                 id="u-role"
-                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
                 value={role}
                 onChange={(e) => setRole(e.target.value as Role)}
               >

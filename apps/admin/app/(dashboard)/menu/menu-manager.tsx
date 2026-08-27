@@ -243,6 +243,16 @@ export function MenuManager({
     });
   }
 
+  function confirmDelete(action: () => Promise<void>) {
+    if (
+      window.confirm(
+        "¿Estás seguro de eliminar este elemento? Esta acción no se puede deshacer.",
+      )
+    ) {
+      run(action);
+    }
+  }
+
   function openSizeEdit(size: Size) {
     setEditingSize(size);
     setSizeEdit({ name: size.name, oz: String(size.oz) });
@@ -355,7 +365,7 @@ export function MenuManager({
                     variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
-                    onClick={() => run(() => deleteSize(size.id))}
+                    onClick={() => confirmDelete(() => deleteSize(size.id))}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -459,7 +469,7 @@ export function MenuManager({
                     variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
-                    onClick={() => run(() => deleteFlavor(flavor.id))}
+                    onClick={() => confirmDelete(() => deleteFlavor(flavor.id))}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -560,7 +570,7 @@ export function MenuManager({
                     variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
-                    onClick={() => run(() => deleteBoba(boba.id))}
+                    onClick={() => confirmDelete(() => deleteBoba(boba.id))}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -657,7 +667,7 @@ export function MenuManager({
                     variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
-                    onClick={() => run(() => deleteTopping(topping.id))}
+                    onClick={() => confirmDelete(() => deleteTopping(topping.id))}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

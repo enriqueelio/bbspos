@@ -16,10 +16,8 @@ import {
   formatPrice,
   formatOrderCode,
   PaymentMethodLabel,
-  AcceptablePayment,
   type Order,
   type OrderStatus,
-  type PaymentMethod,
 } from "@bubba/types";
 import {
   acceptOrder,
@@ -90,7 +88,6 @@ function OrderActions({ order }: { order: Order }) {
   const [panel, setPanel] = useState<"pay" | "discount" | "cancel" | null>(
     null,
   );
-  const [method, setMethod] = useState<PaymentMethod>("EFECTIVO");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [showSplit, setShowSplit] = useState(false);
@@ -107,85 +104,85 @@ function OrderActions({ order }: { order: Order }) {
   };
 
   return (
-    <div className="space-y-3 border-t pt-3">
-      <div className="flex flex-wrap justify-end gap-2">
-        {order.status === "RECIBIDO" && (
-          <>
+    <div className="space-y-3">
+      {order.status === "RECIBIDO" && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
-              size="sm"
-              variant={panel === "pay" ? "default" : "outline"}
+              className="h-14 w-full text-lg"
+              variant={panel === "pay" ? "default" : "secondary"}
               onClick={() => setPanel(panel === "pay" ? null : "pay")}
             >
               Registrar pago
             </Button>
+          </div>
+          {panel === "pay" && (
+            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-3">
+              <Button
+                className="h-12 w-full bg-success text-lg font-bold text-success-foreground hover:bg-success/90"
+                onClick={() =>
+                  runAction(async () => {
+                    await acceptOrder(order.id, "EFECTIVO");
+                    close();
+                  })
+                }
+              >
+                Efectivo
+              </Button>
+              <Button
+                className="h-12 w-full bg-success text-lg font-bold text-success-foreground hover:bg-success/90"
+                onClick={() =>
+                  runAction(async () => {
+                    await acceptOrder(order.id, "QR");
+                    close();
+                  })
+                }
+              >
+                QR
+              </Button>
+            </div>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
-              size="sm"
+              className="h-14 w-full text-lg"
               variant="secondary"
               onClick={() => setShowSplit(true)}
             >
               Cobro dividido
             </Button>
-          </>
-        )}
-        {order.status === "ACEPTADO" && (
-          <Button
-            size="sm"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white"
-            onClick={() =>
-              runAction(async () => {
-                await deliverOrder(order.id);
-              })
-            }
-          >
-            Entregar
-          </Button>
-        )}
+          </div>
+        </div>
+      )}
+
+      {order.status === "ACEPTADO" && (
+        <Button
+          className="h-14 w-full bg-success text-lg font-bold text-success-foreground hover:bg-success/90"
+          onClick={() =>
+            runAction(async () => {
+              await deliverOrder(order.id);
+            })
+          }
+        >
+          Entregar
+        </Button>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2">
         <Button
           size="sm"
-          variant={panel === "discount" ? "default" : "secondary"}
+          className="bg-warning text-warning-foreground hover:bg-warning/90"
           onClick={() => setPanel(panel === "discount" ? null : "discount")}
         >
           Descontar
         </Button>
         <Button
-          size="sm"
-          variant={panel === "cancel" ? "destructive" : "secondary"}
+          variant="destructive"
+          className="mt-2 h-12 w-full"
           onClick={() => setPanel(panel === "cancel" ? null : "cancel")}
         >
           Anular
         </Button>
       </div>
-
-      {panel === "pay" && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
-          <div className="space-y-1">
-            <Label htmlFor={`method-${order.id}`}>Método de pago</Label>
-            <select
-              id={`method-${order.id}`}
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-              value={method}
-              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-            >
-              {AcceptablePayment.map((m) => (
-                <option key={m} value={m}>
-                  {PaymentMethodLabel[m]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button
-            size="sm"
-            onClick={() =>
-              runAction(async () => {
-                await acceptOrder(order.id, method);
-                close();
-              })
-            }
-          >
-            Confirmar pago ({formatPrice(order.total)})
-          </Button>
-        </div>
-      )}
 
       {panel === "discount" && (
         <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
@@ -211,6 +208,7 @@ function OrderActions({ order }: { order: Order }) {
           </div>
           <Button
             size="sm"
+            className="bg-warning text-warning-foreground hover:bg-warning/90"
             onClick={() =>
               runAction(async () => {
                 await applyDiscount(order.id, Number(amount), reason);
@@ -274,6 +272,135 @@ function OrderActions({ order }: { order: Order }) {
   );
 }
 
+function OrderCard({
+  order,
+  statusLabels,
+}: {
+  order: Order;
+  statusLabels: Record<OrderStatus, string>;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-2xl font-black text-white">
+              Pedido #{formatOrderCode(order.seq)}
+            </CardTitle>
+            {order.customerName && (
+              <p className="text-sm font-semibold text-primary">
+                Para: {order.customerName}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">
+              {new Date(order.createdAt).toLocaleString("es-MX", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {order.paymentMethod && (
+              <Badge variant="secondary">
+                {order.paymentMethod2 && order.paymentAmount2 != null
+                  ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
+                  : PaymentMethodLabel[order.paymentMethod]}
+              </Badge>
+            )}
+            <Badge variant={statusVariant(order.status)}>
+              {statusLabels[order.status]}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {(order.cancelReason ||
+          order.discountReason ||
+          order.paidAt ||
+          order.deliveredAt) && (
+          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            {order.paidAt && (
+              <p>
+                Pago registrado:{" "}
+                {new Date(order.paidAt).toLocaleString("es-MX", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+            )}
+            {order.deliveredAt && (
+              <p>
+                Entregado:{" "}
+                {new Date(order.deliveredAt).toLocaleString("es-MX", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+            )}
+            {order.cancelledAt && order.cancelReason && (
+              <p>
+                Anulado: {order.cancelReason} ·{" "}
+                {new Date(order.cancelledAt).toLocaleString("es-MX", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </p>
+            )}
+            {(order.discountAmount ?? 0) > 0 && order.discountReason && (
+              <p>
+                Descuento aplicado: −{formatPrice(order.discountAmount ?? 0)}{" "}
+                ({order.discountReason})
+              </p>
+            )}
+          </div>
+        )}
+        <div>
+          {order.items.map((item) => (
+            <div
+              key={item.id}
+              className="mb-2 flex items-center justify-between gap-2 border-b border-slate-800 pb-2"
+            >
+              <div>
+                <p className="text-lg font-bold text-white">
+                  {item.quantity}× {item.sizeName} · {item.flavorName} ·{" "}
+                  {item.bobaTypeName}
+                </p>
+                {item.toppings.length > 0 && (
+                  <p className="pl-2 text-sm text-slate-400">
+                    Toppings:{" "}
+                    {item.toppings
+                      .map(
+                        (t) =>
+                          `${t.toppingName} (+${formatPrice(t.unitPrice)})`,
+                      )
+                      .join(", ")}
+                  </p>
+                )}
+              </div>
+              <span className="font-medium">
+                {formatPrice(
+                  (item.unitPrice +
+                    item.toppings.reduce((acc, t) => acc + t.unitPrice, 0)) *
+                    item.quantity,
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-3">
+          <div className="font-mono text-3xl font-bold text-emerald-400">
+            {formatPrice(order.total)}
+          </div>
+          <OrderActions order={order} />
+        </div>
+        <div className="flex justify-end">
+          <ReprintButton orderId={order.id} />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function OrdersClient({
   orders,
   currentStatus,
@@ -296,7 +423,7 @@ export function OrdersClient({
         {FILTERS.map((f) => (
           <Button
             key={f.value}
-            variant={currentStatus === f.value ? "default" : "outline"}
+            variant={currentStatus === f.value ? "default" : "secondary"}
             size="sm"
             asChild
           >
@@ -320,121 +447,7 @@ export function OrdersClient({
       ) : (
         <div className="space-y-3">
           {orders.map((order) => (
-            <Card key={order.id}>
-              <CardHeader className="pb-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base">
-                      Pedido #{formatOrderCode(order.seq)}
-                    </CardTitle>
-                    {order.customerName && (
-                      <p className="text-sm font-semibold text-primary">
-                        Para: {order.customerName}
-                      </p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleString("es-MX", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {order.paymentMethod && (
-                      <Badge variant="secondary">
-                        {order.paymentMethod2 && order.paymentAmount2 != null
-                          ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
-                          : PaymentMethodLabel[order.paymentMethod]}
-                      </Badge>
-                    )}
-                    <Badge variant={statusVariant(order.status)}>
-                      {statusLabels[order.status]}
-                    </Badge>
-                    <span className="font-bold">{formatPrice(order.total)}</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {(order.cancelReason ||
-                  order.discountReason ||
-                  order.paidAt ||
-                  order.deliveredAt) && (
-                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                    {order.paidAt && (
-                      <p>
-                        Pago registrado:{" "}
-                        {new Date(order.paidAt).toLocaleString("es-MX", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    )}
-                    {order.deliveredAt && (
-                      <p>
-                        Entregado:{" "}
-                        {new Date(order.deliveredAt).toLocaleString("es-MX", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    )}
-                    {order.cancelledAt && order.cancelReason && (
-                      <p>
-                        Anulado: {order.cancelReason} ·{" "}
-                        {new Date(order.cancelledAt).toLocaleString("es-MX", {
-                          dateStyle: "short",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    )}
-                    {(order.discountAmount ?? 0) > 0 && order.discountReason && (
-                      <p>
-                        Descuento aplicado: −{formatPrice(order.discountAmount ?? 0)}{" "}
-                        ({order.discountReason})
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="space-y-1">
-                  {order.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-2 text-sm"
-                    >
-                      <span className="text-muted-foreground">
-                        {item.quantity}× {item.sizeName} · {item.flavorName} ·{" "}
-                        {item.bobaTypeName}
-                        {item.toppings.length > 0 && (
-                          <span className="block pl-2 text-xs">
-                            Toppings:{" "}
-                            {item.toppings
-                              .map(
-                                (t) =>
-                                  `${t.toppingName} (+${formatPrice(t.unitPrice)})`,
-                              )
-                              .join(", ")}
-                          </span>
-                        )}
-                      </span>
-                      <span className="font-medium">
-                        {formatPrice(
-                          (item.unitPrice +
-                            item.toppings.reduce(
-                              (acc, t) => acc + t.unitPrice,
-                              0,
-                            )) *
-                            item.quantity,
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <OrderActions order={order} />
-                <div className="flex justify-end">
-                  <ReprintButton orderId={order.id} />
-                </div>
-              </CardContent>
-            </Card>
+            <OrderCard key={order.id} order={order} statusLabels={statusLabels} />
           ))}
         </div>
       )}

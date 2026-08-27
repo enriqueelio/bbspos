@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
   CardTitle,
 } from "@bubba/ui";
 
@@ -50,14 +49,17 @@ export default async function DashboardPage() {
     {
       label: "Pedidos hoy",
       value: String(todayOrders),
+      valueClass: "",
     },
     {
       label: "Pedidos por cobrar",
       value: String(pendingOrders),
+      valueClass: pendingOrders > 0 ? "text-amber-400" : "",
     },
     {
       label: "Ventas del día",
       value: formatPrice(todayRevenue._sum.total ?? 0),
+      valueClass: "text-emerald-400",
     },
   ];
 
@@ -70,15 +72,17 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
         {metrics.map((m) => (
-          <Card key={m.label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {m.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-3xl font-bold">{m.value}</CardContent>
+          <Card key={m.label} className="p-6">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {m.label}
+            </CardTitle>
+            <div
+              className={`mt-2 font-mono text-5xl font-black tracking-tighter ${m.valueClass}`}
+            >
+              {m.value}
+            </div>
           </Card>
         ))}
       </div>

@@ -350,7 +350,7 @@ export function ReportsClient({
           <Button
             key={t.key}
             size="sm"
-            variant={report === t.key ? "default" : "outline"}
+            variant={report === t.key ? "default" : "secondary"}
             onClick={() => setReport(t.key)}
           >
             {t.label}
@@ -514,7 +514,12 @@ function ReportBody({ report, data }: { report: ReportKey; data: unknown }) {
   }
 }
 
-type Column<T> = { header: string; cell: (row: T) => ReactNode };
+type Column<T> = {
+  header: string;
+  cell: (row: T) => ReactNode;
+  numeric?: boolean;
+  sortValue?: (row: T) => string | number;
+};
 
 function DataTable<T>({
   columns,
@@ -526,6 +531,34 @@ function DataTable<T>({
   emptyText: string;
 }) {
   const safeRows = rows ?? [];
+  const [sortKey, setSortKey] = useState<number | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const sortedRows = useMemo(() => {
+    const list = rows ?? [];
+    if (sortKey === null || !columns[sortKey].sortValue) return list;
+    const accessor = columns[sortKey].sortValue;
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const av = accessor(a);
+      const bv = accessor(b);
+      if (typeof av === "number" && typeof bv === "number") {
+        return (av - bv) * dir;
+      }
+      return String(av).localeCompare(String(bv), "es") * dir;
+    });
+  }, [rows, sortKey, sortDir, columns]);
+
+  function toggleSort(i: number) {
+    if (!columns[i].sortValue) return;
+    if (sortKey === i) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(i);
+      setSortDir(columns[i].numeric ? "desc" : "asc");
+    }
+  }
+
   if (safeRows.length === 0) {
     return <EmptyState text={emptyText} />;
   }
@@ -536,17 +569,36 @@ function DataTable<T>({
           <thead>
             <tr className="border-b bg-muted/40 text-left">
               {columns.map((c, i) => (
-                <th key={i} className="px-4 py-2 font-medium">
+                <th
+                  key={i}
+                  onClick={() => toggleSort(i)}
+                  className={`px-4 py-2 font-medium ${
+                    c.sortValue ? "cursor-pointer select-none" : ""
+                  } ${c.numeric ? "text-right font-mono" : ""}`}
+                >
                   {c.header}
+                  {sortKey === i && (
+                    <span className="text-muted-foreground">
+                      {sortDir === "asc" ? " ↑" : " ↓"}
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {safeRows.map((row, ri) => (
-              <tr key={ri} className="border-b last:border-b-0">
+            {sortedRows.map((row, ri) => (
+              <tr
+                key={ri}
+                className="even:bg-slate-900/50 hover:bg-slate-800 transition-colors border-b last:border-b-0"
+              >
                 {columns.map((c, ci) => (
-                  <td key={ci} className="px-4 py-2">
+                  <td
+                    key={ci}
+                    className={`px-4 py-2 ${
+                      c.numeric ? "text-right font-mono" : ""
+                    }`}
+                  >
                     {c.cell(row)}
                   </td>
                 ))}
@@ -614,9 +666,9 @@ function DailyView({ data }: { data: DailyReportData }) {
       {data.paymentBreakdown && data.paymentBreakdown.length > 0 ? (
         <DataTable
           columns={[
-            { header: "Método de pago", cell: (r) => PaymentMethodLabel[r.method] ?? r.method },
-            { header: "Órdenes", cell: (r) => r.orders },
-            { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
+            { header: "Método de pago", cell: (r) => PaymentMethodLabel[r.method] ?? r.method, sortValue: (r) => r.method },
+            { header: "Órdenes", cell: (r) => r.orders, numeric: true, sortValue: (r) => r.orders },
+            { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
           ]}
           rows={data.paymentBreakdown}
           emptyText="Sin pagos registrados."
@@ -624,10 +676,10 @@ function DailyView({ data }: { data: DailyReportData }) {
       ) : null}
       <DataTable
         columns={[
-          { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category] },
-          { header: "Órdenes", cell: (r) => r.orders },
-          { header: "Unidades", cell: (r) => r.units },
-          { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
+          { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category], sortValue: (r) => FlavorCategoryLabel[r.category] },
+          { header: "Órdenes", cell: (r) => r.orders, numeric: true, sortValue: (r) => r.orders },
+          { header: "Unidades", cell: (r) => r.units, numeric: true, sortValue: (r) => r.units },
+          { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
         ]}
         rows={data.byCategory}
         emptyText="Sin ventas en el día."
@@ -671,10 +723,10 @@ function SalesRangeView({ data }: { data: SalesRangeData }) {
       )}
       <DataTable
         columns={[
-          { header: "Periodo", cell: (r) => r.bucket },
-          { header: "Órdenes", cell: (r) => r.orders },
-          { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
-          { header: "Ticket promedio", cell: (r) => formatPrice(r.avgTicket) },
+          { header: "Periodo", cell: (r) => r.bucket, sortValue: (r) => r.bucket },
+          { header: "Órdenes", cell: (r) => r.orders, numeric: true, sortValue: (r) => r.orders },
+          { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
+          { header: "Ticket promedio", cell: (r) => formatPrice(r.avgTicket), numeric: true, sortValue: (r) => r.avgTicket },
         ]}
         rows={data.series}
         emptyText="Sin ventas en el rango."
@@ -704,9 +756,9 @@ function PeakHoursView({ data }: { data: PeakHoursData }) {
       </div>
       <DataTable
         columns={[
-          { header: "Hora", cell: (r) => `${String(r.hour).padStart(2, "0")}:00` },
-          { header: "Órdenes", cell: (r) => r.orders },
-          { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
+          { header: "Hora", cell: (r) => `${String(r.hour).padStart(2, "0")}:00`, sortValue: (r) => r.hour },
+          { header: "Órdenes", cell: (r) => r.orders, numeric: true, sortValue: (r) => r.orders },
+          { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
         ]}
         rows={data.hourly}
         emptyText="Sin datos."
@@ -719,11 +771,11 @@ function CategorySalesView({ data }: { data: CategorySalesData }) {
   return (
     <DataTable
       columns={[
-        { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category] },
-        { header: "Unidades", cell: (r) => r.unitsSold },
-        { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
-        { header: "Participación", cell: (r) => `${r.sharePct}%` },
-        { header: "Precio promedio", cell: (r) => formatPrice(r.avgTicketItem) },
+        { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category], sortValue: (r) => FlavorCategoryLabel[r.category] },
+        { header: "Unidades", cell: (r) => r.unitsSold, numeric: true, sortValue: (r) => r.unitsSold },
+        { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
+        { header: "Participación", cell: (r) => `${r.sharePct}%`, sortValue: (r) => r.sharePct },
+        { header: "Precio promedio", cell: (r) => formatPrice(r.avgTicketItem), numeric: true, sortValue: (r) => r.avgTicketItem },
       ]}
       rows={data.categories}
       emptyText="Sin ventas en el rango."
@@ -735,11 +787,11 @@ function TopProductsView({ rows }: { rows: TopProductRow[] }) {
   return (
     <DataTable
       columns={[
-        { header: "#", cell: (r) => r.rank },
-        { header: "Producto", cell: (r) => r.key },
-        { header: "Unidades", cell: (r) => r.unitsSold },
-        { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
-        { header: "Precio promedio", cell: (r) => formatPrice(r.unitPriceAvg) },
+        { header: "#", cell: (r) => r.rank, sortValue: (r) => r.rank },
+        { header: "Producto", cell: (r) => r.key, sortValue: (r) => r.key },
+        { header: "Unidades", cell: (r) => r.unitsSold, numeric: true, sortValue: (r) => r.unitsSold },
+        { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
+        { header: "Precio promedio", cell: (r) => formatPrice(r.unitPriceAvg), numeric: true, sortValue: (r) => r.unitPriceAvg },
       ]}
       rows={rows}
       emptyText="Sin ventas en el rango."
@@ -751,9 +803,9 @@ function SlowMoversView({ rows }: { rows: SlowMoverRow[] }) {
   return (
     <DataTable
       columns={[
-        { header: "Combinación", cell: (r) => r.key },
-        { header: "Unidades", cell: (r) => r.unitsSold },
-        { header: "Ingresos", cell: (r) => formatPrice(r.revenue) },
+        { header: "Combinación", cell: (r) => r.key, sortValue: (r) => r.key },
+        { header: "Unidades", cell: (r) => r.unitsSold, numeric: true, sortValue: (r) => r.unitsSold },
+        { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
         {
           header: "Disponible",
           cell: (r) => (
@@ -761,6 +813,7 @@ function SlowMoversView({ rows }: { rows: SlowMoverRow[] }) {
               {r.available ? "Sí" : "No"}
             </Badge>
           ),
+          sortValue: (r) => (r.available ? 1 : 0),
         },
       ]}
       rows={rows}
@@ -773,11 +826,11 @@ function StaffPerformanceView({ rows }: { rows: StaffPerformanceRow[] }) {
   return (
     <DataTable
       columns={[
-        { header: "Usuario", cell: (r) => r.user.name },
-        { header: "Órdenes procesadas", cell: (r) => r.ordersProcessed },
-        { header: "Recaudado", cell: (r) => formatPrice(r.revenueTotal) },
-        { header: "Ticket promedio", cell: (r) => formatPrice(r.avgTicket) },
-        { header: "Participación", cell: (r) => `${r.shareOfRevenuePct}%` },
+        { header: "Usuario", cell: (r) => r.user.name, sortValue: (r) => r.user.name },
+        { header: "Órdenes procesadas", cell: (r) => r.ordersProcessed, numeric: true, sortValue: (r) => r.ordersProcessed },
+        { header: "Recaudado", cell: (r) => formatPrice(r.revenueTotal), numeric: true, sortValue: (r) => r.revenueTotal },
+        { header: "Ticket promedio", cell: (r) => formatPrice(r.avgTicket), numeric: true, sortValue: (r) => r.avgTicket },
+        { header: "Participación", cell: (r) => `${r.shareOfRevenuePct}%`, sortValue: (r) => r.shareOfRevenuePct },
       ]}
       rows={rows}
       emptyText="Sin órdenes atribuidas en el rango."
@@ -818,11 +871,12 @@ function AdjustmentsView({ data }: { data: AdjustmentsData }) {
                 {r.type === "cancellation" ? "Anulación" : "Descuento"}
               </Badge>
             ),
+            sortValue: (r) => r.type,
           },
-          { header: "Pedido", cell: (r) => `#${String(r.orderSeq ?? 0).padStart(5, "0")}` },
-          { header: "Monto", cell: (r) => formatPrice(r.amount) },
-          { header: "Motivo", cell: (r) => r.reason || "—" },
-          { header: "Responsable", cell: (r) => r.byUser?.name ?? "—" },
+          { header: "Pedido", cell: (r) => `#${String(r.orderSeq ?? 0).padStart(5, "0")}`, sortValue: (r) => r.orderSeq ?? 0 },
+          { header: "Monto", cell: (r) => formatPrice(r.amount), numeric: true, sortValue: (r) => r.amount },
+          { header: "Motivo", cell: (r) => r.reason || "—", sortValue: (r) => r.reason ?? "" },
+          { header: "Responsable", cell: (r) => r.byUser?.name ?? "—", sortValue: (r) => r.byUser?.name ?? "" },
           {
             header: "Momento",
             cell: (r) =>
@@ -830,6 +884,7 @@ function AdjustmentsView({ data }: { data: AdjustmentsData }) {
                 dateStyle: "short",
                 timeStyle: "short",
               }),
+            sortValue: (r) => new Date(r.at).getTime(),
           },
         ]}
         rows={data.items}

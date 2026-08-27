@@ -1,7 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Download, FileSpreadsheet } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useTransition,
+  useState,
+  type ReactNode,
+} from "react";
+import { FileSpreadsheet, FileDown, Printer } from "lucide-react";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
+import {
+  printSummaryReport,
+  printDailyReport,
+} from "@/app/actions/print-report";
 import {
   Badge,
   Button,
@@ -120,6 +134,10 @@ export function ReportsClient({
   const [topOnly, setTopOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [printMsg, setPrintMsg] = useState<string | null>(null);
+  const [isPrinting, startPrintTransition] = useTransition();
+  const [isExportingPdf, setExportingPdf] = useState(false);
+  const pdfAreaRef = useRef<HTMLDivElement>(null);
 
   const tab = useMemo(
     () => REPORT_TABS.find((t) => t.key === report)!,
@@ -225,12 +243,57 @@ export function ReportsClient({
     };
   }, [report, rangeQuery, to, fetchData]);
 
-  const exportUrl =
-    report === "daily"
-      ? `/api/reports/daily?date=${to}&format=csv`
-      : report !== "dashboard" && tab.needsRange
-        ? `/api/reports/${report}?${rangeQuery}&format=csv`
-        : null;
+  const handlePrint = () => {
+    setPrintMsg(null);
+    startPrintTransition(async () => {
+      try {
+        const msg =
+          report === "daily"
+            ? await printDailyReport(to)
+            : await printSummaryReport();
+        setPrintMsg(msg);
+      } catch (e) {
+        setPrintMsg(e instanceof Error ? e.message : "No se pudo imprimir.");
+      }
+    });
+  };
+
+  const exportPdf = async () => {
+    const area = pdfAreaRef.current;
+    if (!area) return;
+    setExportingPdf(true);
+    try {
+      const canvas = await html2canvas(area, { scale: 2, backgroundColor: "#ffffff" });
+      const img = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW = pageW;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      let heightLeft = imgH;
+      let position = 0;
+      pdf.addImage(img, "PNG", 0, position, imgW, imgH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(img, "PNG", 0, position, imgW, imgH);
+        heightLeft -= pageH;
+      }
+      pdf.save(
+        report === "daily" ? `reporte-cierre-${to}.pdf` : `reporte-${report}.pdf`,
+      );
+    } catch {
+      setPrintMsg("No se pudo generar el PDF.");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const canPrint =
+    (report === "dashboard" || report === "daily") &&
+    fetched !== null &&
+    fetched.key === report;
 
   return (
     <div className="space-y-6">
@@ -241,32 +304,45 @@ export function ReportsClient({
             Métricas del negocio: ventas, producto y personal.
           </p>
         </div>
-        {exportUrl && (
-          <>
-            <Button variant="outline" size="sm" asChild>
-              <a href={exportUrl}>
-                <Download className="mr-1 h-4 w-4" /> Exportar CSV
-              </a>
-            </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {canPrint && (
             <Button
               variant="outline"
               size="sm"
-              disabled={!fetched || fetched.key !== report}
-              onClick={() => {
-                if (!fetched || fetched.key !== report) return;
-                const reportDate = report === "daily" ? to : undefined;
-                exportReportToExcel(
-                  report,
-                  fetched.payload,
-                  from,
-                  reportDate ?? to,
-                );
-              }}
+              disabled={isPrinting}
+              onClick={handlePrint}
             >
-              <FileSpreadsheet className="mr-1 h-4 w-4" /> Exportar Excel
+              <Printer className="mr-1 h-4 w-4" />
+              {isPrinting ? "Imprimiendo…" : "Imprimir"}
             </Button>
-          </>
-        )}
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!fetched || fetched.key !== report || isExportingPdf}
+            onClick={exportPdf}
+          >
+            <FileDown className="mr-1 h-4 w-4" />
+            {isExportingPdf ? "Generando…" : "Exportar PDF"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!fetched || fetched.key !== report}
+            onClick={() => {
+              if (!fetched || fetched.key !== report) return;
+              const reportDate = report === "daily" ? to : undefined;
+              exportReportToExcel(
+                report,
+                fetched.payload,
+                from,
+                reportDate ?? to,
+              );
+            }}
+          >
+            <FileSpreadsheet className="mr-1 h-4 w-4" /> Exportar Excel
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -399,8 +475,16 @@ export function ReportsClient({
       )}
 
       {!loading && !error && fetched !== null && fetched.key === report ? (
-        <ReportBody report={report} data={fetched.payload} />
+        <div ref={pdfAreaRef}>
+          <ReportBody report={report} data={fetched.payload} />
+        </div>
       ) : null}
+
+      {printMsg && (
+        <p className="rounded-md border px-3 py-2 text-sm">
+          {printMsg}
+        </p>
+      )}
     </div>
   );
 }

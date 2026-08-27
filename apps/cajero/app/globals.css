@@ -36,3 +36,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-report-area,
+  .print-report-area * {
+    visibility: visible;
+  }
+
+  .print-report-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+  }
+}

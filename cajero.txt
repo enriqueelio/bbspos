@@ -1,0 +1,418 @@
+========================================================================
+BUBBA CAJERO — DOCUMENTACIÓN COMPLETA DEL APLICATIVO (apps/cajero)
+Documento de diagnóstico generado para análisis por IA / Gemini.
+========================================================================
+
+========================================================================
+PROYECTO
+========================================================================
+Nombre: Bubba Cajero
+Paquete: apps/cajero (monorepo pnpm con workspaces)
+Descripción: Aplicación de punto de venta (POS) para el mostrador de una
+tienda de bubble tea ("Bubble Drink" / "Bubba"). El cajero ve la cola de
+pedidos del día, registra el cobro (efectivo, QR o dividido), marca las
+entregas, reimprime comandas y consulta el reporte diario de su
+rendimiento. Se conecta a una impresora térmica local mediante
+PowerShell + System.Drawing y a un backend compartido (Prisma/SQLite).
+Es una de las apps del monorepo junto a apps/admin.
+
+========================================================================
+FECHA
+========================================================================
+Generado para el contexto del proyecto (2026-08-27 según el entorno).
+El entorno real de la app usa SQLite con DATABASE_URL="file:./dev.db".
+
+========================================================================
+STACK
+========================================================================
+- Next.js 15 (App Router, Server/Client Components)
+- React 19
+- TypeScript (strict, extends tsconfig de packages/config)
+- Tailwind CSS (preset proveniente de @bubba/config/tailwind)
+- next-auth v4 (JWT strategy, Credentials provider, cookies personalizadas)
+- Prisma + SQLite (paquete compartido @bubba/db en packages/db)
+- bcryptjs (hash de contraseñas)
+- Paquete UI compartido @bubba/ui (shadcn-style: Button, Card, Input, etc.)
+- Tipos y helpers compartidos en @bubba/types
+- Impresión térmica: PowerShell + System.Drawing (spawn de powershell.exe)
+- MonoTrabajo: next/cache (revalidatePath), next/navigation (router.refresh)
+- ESLint: next/core-web-vitals + next/typescript
+- Ejecución: pnpm (pnpm-workspace.yaml con allowBuilds)
+
+Nota sobre la base de datos: aunque el stack declarativo menciona
+PostgreSQL en algunos comentarios, el datasource real (schema.prisma) es
+SQLite (provider = "sqlite"), con DATABASE_URL en .env.
+
+========================================================================
+1. DESCRIPCIÓN
+========================================================================
+Pantalla del mostrador ("Bubba Cajero — Mostrador"). Funciones clave:
+
+a) Cola de pedidos ("Dashboard", URL ?tab=preparar):
+   - Muestra los pedidos del día con estado RECIBIDO, ACEPTADO y
+     ENTREGADO, ordenados por fecha de creación descendente (el más
+     reciente arriba).
+   - Cada tarjeta muestra: # de pedido (número de secuencia formateado),
+     cliente (opcional), estado, antigüedad (desde ingreso o tiempo de
+     entrega), hora de ingreso, ítems (cantidad, sabor, tamaño, tipo de
+     boba, toppings) y total.
+   - Bandeja de acciones según estado:
+     * RECIBIDO (por cobrar): botones "Cobró Efectivo", "Cobró QR",
+       "Cobro dividido" y "Reimprimir" (comanda).
+     * ACEPTADO (pagado): botón "Marcar entregado".
+     * ENTREGADO: sin acciones (solo muestra badge "Entregado en X").
+   - Antigüedad: se resalta en rojo ("destructive") si >= 15 min (urgente)
+     o si la entrega tardó >= 10 min.
+   - Auto-refresco: reloj de antigüedad cada 30 s; router.refresh cada
+     15 s (pausado si la pestaña está oculta mediante document.hidden).
+
+b) Reporte del día ("Reporte del día", URL ?tab=reporte):
+   - KPIs globales del día (solo pedidos ENTREGADO): ingresos totales,
+     pedidos entregados, ticket promedio y tiempo promedio de entrega
+     (desde ingreso hasta entrega).
+   - Sección "Mi rendimiento": pedidos entregados por el cajero conectado
+     y su tiempo promedio propio.
+   - Sección "Métodos de pago": desglose por método (EFECTIVO/QR/TARJETA)
+     con número de pedidos e ingresos.
+   - Acciones: "Imprimir" (impresora térmica vía printDailyReport) y
+     "Guardar PDF" (window.print() con el área .print-report-area).
+
+La app está restringida a roles CAJERO y ADMIN (mira lib/session, lib/auth
+y middleware).
+
+========================================================================
+2. ARQUITECTURA Y CARPETAS
+========================================================================
+apps/cajero/
+├─ app/
+│  ├─ layout.tsx          (Root layout, metadata, lang="es")
+│  ├─ globals.css         (Tailwind + variables CSS + reglas @media print)
+│  ├─ page.tsx            (Página principal con tabs preparar/reporte)
+│  ├─ login/
+│  │  ├─ page.tsx         (Login page server, renderiza LoginForm)
+│  │  └─ login-form.tsx   (Formulario cliente: signIn credentials)
+│  └─ actions/
+│     ├─ orders.ts        (acceptOrder, deliverOrder — server actions)
+│     ├─ printing.ts      (reprintOrder, printDailyReport — server actions)
+│     └─ auth.ts          (ensureCashierRole, isAccountInactive)
+├─ components/
+│  ├─ queue-view.tsx           (Cola de pedidos, hook de reloj, tarjetas)
+│  ├─ split-payment-dialog.tsx (Diálogo de cobro dividido)
+│  ├─ report-view.tsx          (Vista de KPIs del reporte del día)
+│  └─ report-actions.tsx       (Botones Imprimir / Guardar PDF)
+├─ lib/
+│  ├─ auth.ts     (authOptions de next-auth: JWT, proveedor credenciales)
+│  ├─ session.ts  (getRequiredSession, hasCashierAccess)
+│  ├─ day.ts      (TIME_ZONE, localDayKey, todayKey, dayBounds)
+│  ├─ report.ts   (getCashierDailyData — datos del reporte)
+│  └─ printing.ts (getPrinterName, printText, formatComanda, formatReportText)
+├─ middleware.ts  (next-auth withAuth, protege rutas por rol)
+├─ next.config.mjs (transpilePackages: @bubba/db, @bubba/ui, @bubba/types)
+├─ tailwind.config.ts (presets de @bubba/config/tailwind)
+├─ postcss.config.mjs (tailwindcss + autoprefixer)
+├─ .eslintrc.cjs      (next/core-web-vitals + next/typescript)
+├─ tsconfig.json      (extends packages/config/tsconfig.next.json, @/* = ./*)
+└─ .env.example       (DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET)
+
+La estructura de árbol refleja la separación estándar de Next.js App
+Router: server pages/actions/route handlers en app/, componentes tanto
+server como client en components/ (marcados con "use client"), lógica
+reutilizable en lib/ y protección por middleware.
+
+========================================================================
+3. MODELO DE DATOS (packages/db/prisma/schema.prisma)
+========================================================================
+Base: SQLite. Enumerados y modelos clave:
+
+Usuarios:
+- User { id, email (único), name, password, role, active, createdAt,
+         orders[] }
+- enum Role { ADMIN, CAJERO }
+
+Catálogo de producto:
+- Size { id, name (único), oz, available, createdAt, drinkPrices[] }
+- Flavor { id, name (único), categories (FlavorCategoryLink[]),
+           available, createdAt }
+- FlavorCategoryLink { id, flavorId, flavor, category, createdAt,
+                       @@unique([flavorId, category]) }
+- BobaType { id, name (único), kind, available, createdAt, drinkPrices[] }
+- DrinkPrice { id, category, sizeId, bobaTypeId, price, createdAt,
+               @@unique([category, sizeId, bobaTypeId]) }
+- Topping { id, name (único), price, available, createdAt }
+- enums FlavorCategory { MILK, WATER, SPECIAL } y BobaKind { TAPIOCA, POPPING }
+
+Pedidos:
+- Order { id, seq (único, nullable), status, customerName, deliveryType,
+          total, createdAt, paidAt, deliveredAt, items[], userId, user,
+          paymentMethod, paymentMethod2, paymentAmount2, discountAmount,
+          discountReason, discountedAt, cancelledAt, cancelReason;
+          índices en [createdAt,status], [deliveredAt], [userId,status] }
+- OrderItem { id, orderId, sizeName, flavorName, flavorCategory,
+              bobaTypeName, unitPrice, quantity, toppings[];
+              índice en [orderId] }
+- OrderItemTopping { id, orderItemId, toppingName, unitPrice }
+- enums OrderStatus { RECIBIDO, ACEPTADO, ENTREGADO, ANULADO },
+         PaymentMethod { EFECTIVO, QR, TARJETA },
+         DeliveryType { MESA, LLEVAR }
+
+Configuración:
+- PaymentConfig { id, qrImage, mimeType, updatedAt } (QR de pago)
+
+Notable: los ítems de pedido y sus toppings guardan copias desnormalizadas
+de nombres y precios (sizeName, flavorName, unitPrice, toppingName), de
+modo que un cambio en el catálogo no altere pedidos históricos. Los
+precios se guardan en enteros (Bs, sin decimales).
+
+========================================================================
+4. RUTAS Y PÁGINAS
+========================================================================
+GET /  (app/page.tsx)
+  - Server component; exige sesión (getRequiredSession).
+  - searchParams.tab: "reporte" o en su defecto "preparar".
+  - Tab preparar: consulta orders del día (status in RECIBIDO/ACEPTADO/
+    ENTREGADO, createdAt dentro de dayBounds(todayKey())) incluyendo
+    items y toppings; ordena por createdAt desc y seq desc; renderiza
+    Header + QueueView.
+  - Tab reporte: consulta getCashierDailyData(user.id); renderiza Header,
+    título, ReportActions (botones de imprimir/PDF) y ReportView dentro de
+    .print-report-area.
+  - Header con logo, nombre del cajero y nav con links ?tab=preparar
+    ("Dashboard") y ?tab=reporte ("Reporte del día").
+
+GET /login  (app/login/page.tsx)
+  - Página pública de login; renderiza LoginForm con callbackUrl.
+
+Server Actions (app/actions/):
+  - orders.ts:
+    * acceptOrder(orderId, method, method2?, amount2?) — valida método
+      (solo EFECTIVO/QR vía AcceptablePayment), cambia RECIBIDO->ACEPTADO,
+      registra paymentMethod/2, paymentAmount2, paidAt y userId; valida
+      cobro dividido (métodos distintos, amount2>0 y amount2<total);
+      revalidatePath("/").
+    * deliverOrder(orderId) — valida estado (no ANULADO; RECIBIDO aún no
+      pagado; solo ACEPTADO->ENTREGADO); fija deliveredAt una sola vez;
+      revalidatePath("/").
+  - printing.ts:
+    * reprintOrder(orderId) — requiere sesión e impresora configurada;
+      busca el pedido con items+toppings; solo permite si status==RECIBIDO;
+      llama a printText con formatComanda; devuelve mensaje de éxito.
+    * printDailyReport() — requiere sesión e impresora; obtiene
+      getCashierDailyData(user.id); llama a printText con formatReportText.
+  - auth.ts:
+    * ensureCashierRole() — true si la sesión reciente tiene rol CAJERO o
+      ADMIN (usa getServerSession + hasCashierAccess).
+    * isAccountInactive(email, password) — devuelve true solo si la cuenta
+      existe, está desactivada (active=false) y la contraseña coincide;
+      no filtra información a credenciales inválidas.
+
+Middleware (middleware.ts):
+  - withAuth de next-auth con cookies de sesión personalizadas
+    (cajero.session-token(.dev)); authorized() exige token y rol
+    CAJERO o ADMIN; pages.signIn = /login.
+  - matcher excluye login|api/auth|_next/static|_next/image|favicon.ico.
+
+========================================================================
+5. COMPONENTES
+========================================================================
+queue-view.tsx (client)
+  - useQueueClock hook: now (Date.now), busyId, error, notice; setInterval
+    de 30 s para antigüedad y de 15 s para router.refresh (con pause si
+    document.hidden); función run() para ejecutar acciones con
+    confirmación opcional y manejo de error; función reprint() para
+    reimprimir comanda.
+  - AgeBadge: muestra "Entregado en X" (fijo si ENTREGADO) o
+    "Ingresado hace X" (dinámico); rojo si urgente/tardío.
+  - statusVariant: RECIBIDO->destructive, ACEPTADO->warning,
+    ENTREGADO->success.
+  - ItemsList: lista de ítems con cantidad, sabor, tamaño, boba y toppings.
+  - ReprintButton: visible solo en RECIBIDO.
+  - OrderCard: cabecera (#pedido, cliente, estado, antigüedad, hora),
+    items, total, pago (con detalle de dividido y check si pagado con un
+    solo método), y acciones según estado. Gestión de cobro dividido
+    mediante SplitPaymentDialog.
+  - EmptyQueue: estado vacío.
+  - QueueView: muestra errores/avisos y la lista de pedidos; contador de
+    pendientes (RECIBIDO+ACEPTADO) en badge.
+
+split-payment-dialog.tsx (client)
+  - Modal para cobro dividido entre EFECTIVO y QR. Elijo el primer método
+    (toggles), ingreso el monto del primero; el segundo método es el
+    restante automáticamente; el segundo monto es total - amount1.
+  - Validación: amount1>0, amount1<total, amount2>0. onConfirm(method,
+    method2, amount2). Botones Cancelar/Confirmar (busy).
+
+report-view.tsx (server)
+  - Kpi card (título, valor grande, hint opcional).
+  - Grid de 4 KPIs: ingresos del día (con fecha), pedidos entregados,
+    ticket promedio, tiempo promedio de entrega (con hint).
+  - Card "Mi rendimiento": pedidos entregados por el cajero y su tiempo
+    promedio propio.
+  - Card "Métodos de pago": tabla por método con #pedidos e ingresos
+    ("Sin pagos registrados hoy" si vacío).
+
+report-actions.tsx (client)
+  - useTransition + estado message.
+  - "Imprimir" llama a printDailyReport() (server action) y muestra el
+    mensaje devuelto o el error.
+  - "Guardar PDF" invoca window.print() (el CSS de print imprime solo el
+    área .print-report-area).
+
+LoginForm (app/login/login-form.tsx, client)
+  - Envía signIn("credentials", {email,password,redirect:false}).
+  - Si error: distingue cuenta desactivada vía isAccountInactive.
+  - Si login OK pero no tiene rol de cajero (ensureCashierRole false):
+    signOut + mensaje de permisos.
+  - router.push(callbackUrl||"/") + router.refresh().
+
+========================================================================
+6. LÓGICA DE NEGOCIO
+========================================================================
+Ciclo de vida del pedido:
+  RECIBIDO -> (cobro: Efectivo/QR/ dividido) -> ACEPTADO -> ENTREGADO
+  (o ANULADO desde la creación, campo/cancelReason).
+
+Fechas y zona horaria (lib/day.ts):
+  - TIME_ZONE = "America/La_Paz" (offset fijo -4h, sin horario de verano).
+  - localDayKey/todayKey: clave YYYY-MM-DD local vía Intl.DateTimeFormat.
+  - zonedStartOfDay: convierte medianoche local a instante UTC (deduce
+    offset sin depender del reloj del servidor).
+  - dayBounds: [inicio, fin) UTC de un día local (para queries con
+    createdAt/deliveredAt gte/lt).
+
+Reporte diario (lib/report.ts, getCashierDailyData):
+  - Solo considera pedidos ENTREGADO con deliveredAt dentro del día local.
+  - revenueTotal = suma de totales.
+  - Payment breakdown: si hay pago dividido (paymentMethod2 y
+    paymentAmount2), primer método recibe (total - amount2) y segundo
+    recibe amount2; sino, al método simple le va el total. Cada método
+    cuenta 1 pedido. Ordenado por ingresos descendente.
+  - "Mi rendimiento": filtra por userId del cajero.
+  - avgDeliveryMinutes = media de (deliveredAt - createdAt) en minutos.
+
+Pago dividido:
+  - Validación server (acceptOrder): método en [EFECTIVO, QR]; segundo
+    método distinto; amount2 entero (>0 y < total).
+  - UI (SplitPaymentDialog) garantiza que el usuario indique el monto del
+    primer método; el segundo es el resto.
+
+Impresión térmica (lib/printing.ts):
+  - getPrinterName(): lee store/printing.json (fuera de apps/cajero, en
+    ../store/printing.json) y devuelve "printerName" o null; archivo
+    gitignored (configuración local de cada máquina).
+  - printText(printerName, text): base64 + PowerShell:
+    * Add-Type System.Drawing.
+    * Decodifica UTF-8, elimina CR, divide en líneas.
+    * Calcula el ancho máximo (Consolas bold 12) para que la línea más
+      larga quepa en un rollo térmico de 80mm (búsqueda de PaperSize
+      entre 300-340 unidades; fallback "Custom80mm" 315x10000).
+    * Ajusta el tamaño de fuente para que quepa (mínimo 4pt).
+    * Imprime con PrintDocument, envolviendo en líneas paginadas.
+    * Timeout de 15 s; lanza error si PowerShell falla.
+  - toAscii: normaliza acentos/símbolos para la térmica (caracteres
+    seguros). WIDTH = 30 columnas.
+  - formatComanda: cabecera "BUBBLE DRINK", "COMANDA #", cliente, fecha,
+    ítems (cantidad x sabor, size - boba, toppings), total y pie "Presente
+    esta comanda en mostrador".
+  - formatReportText: cabecera, fecha, ingresos, entregados, ticket prom.,
+    tiempo prom., "MI RENDIMIENTO" y "METODOS DE PAGO" (con conteo de
+    pedidos por método). Moneda: "Bs X".
+
+Autenticación / autorización:
+  - next-auth JWT con cookie personalizada (cajero.session-token(.dev)),
+    httpOnly, sameSite lax, secure en producción.
+  - authorize: busca user por email, valida bcrypt, rechaza si !active.
+    Devuelve id/email/name/role.
+  - callbacks jwt/session: ponen id y role en token/sesión (role default
+    CAJERO).
+  - Acceso: middleware + getRequiredSession + hasCashierAccess exigen rol
+    CAJERO o ADMIN; login rechaza roles que no sean de cajero.
+
+Actualización/refresco en tiempo real:
+  - Server actions usan revalidatePath("/") tras aceptar/entregar.
+  - El cliente refresca la cola vía router.refresh() cada 15 s y en
+    visibilitychange, mostrando así pedidos nuevos automáticamente.
+
+========================================================================
+7. VARIABLES DE ENTORNO (.env.example)
+========================================================================
+DATABASE_URL="file:./dev.db"     (SQLite local — base compartida)
+NEXTAUTH_URL="http://localhost:3002"  (URL del app de cajero)
+NEXTAUTH_SECRET="change-me-en-produccion"  (secreto de sesión JWT)
+
+Además, la impresión térmica depende del archivo store/printing.json con
+{ "printerName": "..." } (no es variable de entorno).
+
+========================================================================
+8. COMANDOS
+========================================================================
+Monorepo (pnpm):
+- Instalar:            pnpm install
+- Dev del cajero:      pnpm --filter @bubba/cajero dev
+                       (o pnpm dev desde apps/cajero)
+- Build:               pnpm --filter @bubba/cajero build
+- Lint:                pnpm --filter @bubba/cajero lint
+- Typecheck:           pnpm --filter @bubba/cajero typecheck
+- Prisma (shared db):  desde packages/db,
+                       pnpm prisma generate / prisma migrate / prisma db seed
+
+Nota: package.json root no lleva campo "pnpm" adicional; la configuración
+de builds se maneja desde pnpm-workspace.yaml (allowBuilds, p.ej.
+core-js: true).
+
+========================================================================
+9. USUARIOS Y ROLES
+========================================================================
+Roles (enum Role):
+- ADMIN: acceso total (también puede usar el cajero).
+- CAJERO: personal de mostrador, uso principal de esta app.
+
+Restricciones:
+- El cajero SOLO ve y gestiona pedidos del día (no históricos).
+- Solo puede aceptar/entregar/reimprimir pedidos; el catálogo de producto,
+  precios, configuración de impresora y QR se administran en apps/admin.
+- El login valida que el usuario tenga rol de cajero; una cuenta
+  ADMIN también puede iniciar sesión aquí.
+- Cuentas desactivadas (active=false) no pueden autenticarse.
+
+========================================================================
+10. PUNTOS DE ATENCIÓN / DEUDA TÉCNICA
+========================================================================
+a) Impresión depende de Windows + PowerShell + System.Drawing en la
+   máquina donde corre el servidor (Node). No es portable a Linux/macOS.
+   El nombre de impresora es una ruta relativa ../store/printing.json
+   respecto a process.cwd() de apps/cajero.
+
+b) Base de datos SQLite local (file:./dev.db): sin concurrencia real entre
+   instancias; apta para un solo servidor/mostrador. El esquema y los
+   comentarios de stack mencionan PostgreSQL, pero el datasource real es
+   SQLite: convendría unificar.
+
+c) Pago dividido limitado a EFECTIVO+QR (AcceptablePayment); TARJETA solo
+   aparece en el desglose/reporte, no como opción de cobro en el cajero.
+
+d) El reporte solo cuenta pedidos ENTREGADO. Un pedido ACEPTADO (pagado)
+   pero no entregado no aporta a ingresos del reporte hasta que se
+   entrega.
+
+e) "Dashboard" sigue en URL ?tab=preparar (solo cambió la etiqueta, por
+   compatibilidad).
+
+f) Reimpresión de comanda permitida únicamente en estado RECIBIDO
+   (regla de negocio: tras el cobro ya no se reimprime).
+
+g) middlewares/cookies: la cookie personalizada debe coincidir entre
+   lib/auth.ts y middleware.ts (duplicada; mantenerlas sincronizadas).
+
+h) formatReportText y formatComanda usan ASCII seguro; moneda fija "Bs"
+   (boliviano) y fechas locales es-BO / es-MX mezcladas (p.ej. la hora de
+   ingreso usa es-MX en queue-view; comanda usa es-BO).
+
+i) Los items guardan datos desnormalizados (nombres/precios) a propósito,
+   para preservar históricos; el sync con catálogo debe hacerse en el
+   momento de crear el pedido (apps/admin).
+
+j) No hay paginación en la cola; si un día tuviera muchos pedidos, la
+   lista podría crecer (aunque solo muestra el día local).
+========================================================================
+FIN DEL DOCUMENTO
+========================================================================

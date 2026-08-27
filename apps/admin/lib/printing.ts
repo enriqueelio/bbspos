@@ -305,3 +305,124 @@ export function formatTestPage(printerName: string): string {
     "",
   ].join("\r\n");
 }
+
+const money = (n: number) => `Bs ${n}`;
+
+/** Reporte RESUMEN del día para impresora térmica. */
+export function formatSummaryReport(data: {
+  today: { revenue: number; orders: number; avgTicket: number };
+  yesterday: { revenue: number; orders: number; avgTicket: number };
+  deltaPct: { revenue: number | null; orders: number | null };
+  last7Days: { revenue: number; orders: number; avgTicket: number };
+  pendingOrders: number;
+}): string {
+  const lines: string[] = [];
+  lines.push(repeat("=", WIDTH));
+  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("RESUMEN DEL DIA"));
+  lines.push(repeat("=", WIDTH));
+  lines.push("");
+
+  lines.push(centered("HOY"));
+  lines.push(row("Ingresos:", money(data.today.revenue)));
+  lines.push(row("Pedidos:", String(data.today.orders)));
+  lines.push(row("Ticket prom.:", money(data.today.avgTicket)));
+  lines.push(
+    row(
+      "vs ayer:",
+      data.deltaPct.revenue !== null ? `${data.deltaPct.revenue}%` : "-",
+    ),
+  );
+  lines.push(repeat("-", WIDTH));
+
+  lines.push(centered("AYER"));
+  lines.push(row("Ingresos:", money(data.yesterday.revenue)));
+  lines.push(row("Pedidos:", String(data.yesterday.orders)));
+  lines.push(repeat("-", WIDTH));
+
+  lines.push(centered("ULTIMOS 7 DIAS"));
+  lines.push(row("Ingresos:", money(data.last7Days.revenue)));
+  lines.push(row("Pedidos:", String(data.last7Days.orders)));
+  lines.push(row("Ticket prom.:", money(data.last7Days.avgTicket)));
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(row("Pendientes:", String(data.pendingOrders)));
+  lines.push(repeat("=", WIDTH));
+  lines.push("");
+
+  return `${lines.join("\n")}\n`;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  MILK: "Con leche",
+  WATER: "Con agua",
+  SPECIAL: "Especiales",
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  EFECTIVO: "Efectivo",
+  QR: "QR",
+  TARJETA: "Tarjeta",
+};
+
+/** Reporte CIERRE DIARIO para impresora térmica. */
+export function formatDailyReport(data: {
+  date: string;
+  revenueTotal: number;
+  ordersTotal: number;
+  avgTicket: number;
+  itemsSold: number;
+  toppingsRevenue: number;
+  byCategory: { category: string; orders: number; units: number; revenue: number }[];
+  paymentBreakdown: { method: string; orders: number; revenue: number }[] | null;
+  discountsTotal: number | null;
+  cancellationsCount: number | null;
+}): string {
+  const lines: string[] = [];
+  lines.push(repeat("=", WIDTH));
+  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("CIERRE DIARIO"));
+  lines.push(repeat("=", WIDTH));
+  lines.push("");
+
+  lines.push(row("Fecha:", data.date));
+  lines.push(repeat("-", WIDTH));
+  lines.push(row("Ingresos:", money(data.revenueTotal)));
+  lines.push(row("Pedidos:", String(data.ordersTotal)));
+  lines.push(row("Ticket prom.:", money(data.avgTicket)));
+  lines.push(row("Bebidas:", String(data.itemsSold)));
+  lines.push(row("Toppings:", money(data.toppingsRevenue)));
+
+  if (data.discountsTotal || data.cancellationsCount) {
+    lines.push(repeat("-", WIDTH));
+    if (data.discountsTotal) {
+      lines.push(row("Descuentos:", money(data.discountsTotal)));
+    }
+    if (data.cancellationsCount) {
+      lines.push(row("Anulaciones:", String(data.cancellationsCount)));
+    }
+  }
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("POR CATEGORIA"));
+  for (const c of data.byCategory) {
+    lines.push(row(CATEGORY_LABELS[c.category] ?? c.category, money(c.revenue)));
+    lines.push(`   (${c.units} uni. / ${c.orders} pedidos)`);
+  }
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("METODOS DE PAGO"));
+  if (!data.paymentBreakdown || data.paymentBreakdown.length === 0) {
+    lines.push("Sin pagos registrados.");
+  } else {
+    for (const p of data.paymentBreakdown) {
+      lines.push(row(PAYMENT_LABELS[p.method] ?? p.method, money(p.revenue)));
+      lines.push(`   (${p.orders} pedido${p.orders !== 1 ? "s" : ""})`);
+    }
+  }
+
+  lines.push(repeat("=", WIDTH));
+  lines.push("");
+
+  return `${lines.join("\n")}\n`;
+}

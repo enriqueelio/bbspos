@@ -14,6 +14,8 @@
     "@bubba/types": "workspace:*",
     "@bubba/ui": "workspace:*",
     "bcryptjs": "^2.4.3",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "next": "^15.1.0",
     "next-auth": "^4.24.11",

@@ -6,6 +6,7 @@ import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";
 import { QueueView } from "@/components/queue-view";
 import { ReportView } from "@/components/report-view";
+import { ReportActions } from "@/components/report-actions";
 
 type Tab = "preparar" | "reporte";
 
@@ -82,7 +83,13 @@ export default async function CashierPage({
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
       <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-      <ReportView data={data} myName={session.user.name ?? ""} />
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        <h1 className="text-xl font-bold">Reporte del día</h1>
+        <ReportActions />
+      </div>
+      <div className="print-report-area">
+        <ReportView data={data} myName={session.user.name ?? ""} />
+      </div>
     </main>
   );
 }
@@ -113,7 +120,7 @@ function Header({
               : "bg-muted text-muted-foreground hover:bg-accent"
           }`}
         >
-          Preparar
+          Dashboard
         </Link>
         <Link
           href="/?tab=reporte"

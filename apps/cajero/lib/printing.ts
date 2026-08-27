@@ -1,6 +1,11 @@
 import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
+import {
+  type CashierDailyData,
+  formatDurationMinutes,
+  PaymentMethodLabel,
+} from "@bubba/types";
 
 const CONFIG_PATH = join(process.cwd(), "..", "store", "printing.json");
 
@@ -230,6 +235,64 @@ export function formatComanda(order: ComandaOrder): string {
   lines.push(repeat("=", WIDTH));
   lines.push(centered("Presente esta comanda"));
   lines.push(centered("en mostrador"));
+
+  return `${lines.join("\n")}\n`;
+}
+
+function money(n: number): string {
+  return `Bs ${n}`;
+}
+
+/** Formatea el reporte del d�a del cajero como texto para impresora de tickets. */
+export function formatReportText(
+  data: CashierDailyData,
+  myName: string,
+): string {
+  const lines: string[] = [];
+
+  lines.push(repeat("=", WIDTH));
+  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("REPORTE DEL DIA"));
+  lines.push(repeat("=", WIDTH));
+
+  lines.push(row("Fecha:", data.date));
+  lines.push(row("Ingresos:", money(data.revenueTotal)));
+  lines.push(row("Entregados:", String(data.deliveredOrders)));
+  lines.push(row("Ticket prom.:", money(data.avgTicket)));
+  lines.push(
+    row(
+      "Tiempo prom.:",
+      data.avgDeliveryMinutes !== null
+        ? formatDurationMinutes(data.avgDeliveryMinutes)
+        : "-",
+    ),
+  );
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("MI RENDIMIENTO"));
+  lines.push(row("Nombre:", truncate(myName, WIDTH - 8)));
+  lines.push(row("Entregados:", String(data.myDeliveredOrders)));
+  lines.push(
+    row(
+      "Tiempo prom.:",
+      data.myAvgDeliveryMinutes !== null
+        ? formatDurationMinutes(data.myAvgDeliveryMinutes)
+        : "-",
+    ),
+  );
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("METODOS DE PAGO"));
+  if (data.paymentBreakdown.length === 0) {
+    lines.push("Sin pagos registrados hoy.");
+  } else {
+    for (const p of data.paymentBreakdown) {
+      lines.push(row(PaymentMethodLabel[p.method] ?? p.method, money(p.revenue)));
+      lines.push(`   (${p.orders} pedido${p.orders !== 1 ? "s" : ""})`);
+    }
+  }
+
+  lines.push(repeat("=", WIDTH));
 
   return `${lines.join("\n")}\n`;
 }

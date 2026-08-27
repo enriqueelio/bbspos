@@ -2,7 +2,13 @@
 
 import { prisma } from "@bubba/db";
 import { getRequiredSession } from "@/lib/session";
-import { formatComanda, getPrinterName, printText } from "@/lib/printing";
+import { getCashierDailyData } from "@/lib/report";
+import {
+  formatComanda,
+  formatReportText,
+  getPrinterName,
+  printText,
+} from "@/lib/printing";
 
 /** Reimprime la comanda de un pedido en la impresora configurada. */
 export async function reprintOrder(orderId: string): Promise<string> {
@@ -53,4 +59,24 @@ export async function reprintOrder(orderId: string): Promise<string> {
   );
 
   return `Comanda #${String(order.seq ?? 0).padStart(5, "0")} enviada a la impresora.`;
+}
+
+/** Imprime el reporte del d�a del cajero conectado en la impresora configurada. */
+export async function printDailyReport(): Promise<string> {
+  const session = await getRequiredSession();
+
+  const printerName = getPrinterName();
+  if (!printerName) {
+    throw new Error(
+      "No hay impresora configurada. Pide al administrador que la configure.",
+    );
+  }
+
+  const data = await getCashierDailyData(session.user.id);
+  await printText(
+    printerName,
+    formatReportText(data, session.user.name ?? ""),
+  );
+
+  return `Reporte del d�a (${data.date}) enviado a la impresora.`;
 }

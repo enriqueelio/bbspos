@@ -190,7 +190,7 @@ export default function CartPage() {
         <div className="space-y-4">
           <Card>
             <CardContent className="space-y-3 p-4">
-              <div className="flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   className={`h-14 w-full bg-white text-lg font-semibold text-foreground ${deliveryType === "MESA" ? "border-primary bg-primary text-primary-foreground" : ""}`}

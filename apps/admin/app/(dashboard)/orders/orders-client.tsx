@@ -65,7 +65,7 @@ function ReprintButton({ orderId }: { orderId: string }) {
   return (
     <Button
       size="sm"
-      variant="ghost"
+      variant="secondary"
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -120,7 +120,7 @@ function OrderActions({ order }: { order: Order }) {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               onClick={() => setShowSplit(true)}
             >
               Cobro dividido
@@ -130,7 +130,7 @@ function OrderActions({ order }: { order: Order }) {
         {order.status === "ACEPTADO" && (
           <Button
             size="sm"
-            variant="default"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
             onClick={() =>
               runAction(async () => {
                 await deliverOrder(order.id);
@@ -142,14 +142,14 @@ function OrderActions({ order }: { order: Order }) {
         )}
         <Button
           size="sm"
-          variant={panel === "discount" ? "default" : "outline"}
+          variant={panel === "discount" ? "default" : "secondary"}
           onClick={() => setPanel(panel === "discount" ? null : "discount")}
         >
           Descontar
         </Button>
         <Button
           size="sm"
-          variant={panel === "cancel" ? "destructive" : "outline"}
+          variant={panel === "cancel" ? "destructive" : "secondary"}
           onClick={() => setPanel(panel === "cancel" ? null : "cancel")}
         >
           Anular

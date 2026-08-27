@@ -111,20 +111,21 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
   }
   const minutes = ageMinutes(order.createdAt, now);
   const urgent = minutes >= 15;
+  const amber = minutes > 10 && minutes < 15;
   return (
-    <Badge variant={urgent ? "destructive" : "secondary"}>
+    <Badge variant={urgent ? "destructive" : amber ? "warning" : "secondary"}>
       Ingresado hace {formatDurationMinutes(minutes)}
     </Badge>
   );
 }
 
-/** Color del estado: rojo recibido, amarillo aceptado, verde entregado. */
+/** Color del estado: azul recibido (por cobrar), verde aceptado/entregado. */
 function statusVariant(status: Order["status"]) {
   switch (status) {
     case OrderStatus.RECIBIDO:
-      return "destructive" as const;
+      return "default" as const;
     case OrderStatus.ACEPTADO:
-      return "warning" as const;
+      return "success" as const;
     case OrderStatus.ENTREGADO:
       return "success" as const;
     default:
@@ -167,7 +168,7 @@ function ReprintButton({
 }) {
   return (
     <Button
-      variant="ghost"
+      variant="secondary"
       size="sm"
       disabled={clock.busyId === order.id}
       onClick={() => clock.reprint(order.id)}
@@ -238,7 +239,7 @@ function OrderCard({
             {order.status === OrderStatus.RECIBIDO && (
               <>
                 <Button
-                  variant="outline"
+                  variant="default"
                   disabled={clock.busyId === order.id}
                   onClick={() =>
                     clock.run(order.id, async () => {
@@ -249,7 +250,7 @@ function OrderCard({
                   Cobró {PaymentMethodLabel.EFECTIVO}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="default"
                   disabled={clock.busyId === order.id}
                   onClick={() =>
                     clock.run(order.id, async () => {
@@ -271,6 +272,7 @@ function OrderCard({
             {order.status === OrderStatus.ACEPTADO && (
               <Button
                 size="lg"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
                 disabled={clock.busyId === order.id}
                 onClick={() =>
                   clock.run(

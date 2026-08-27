@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, ShoppingCart } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -45,6 +45,12 @@ export default function CartPage() {
       .then((qr) => setPaymentQr(qr?.qrImage ?? null))
       .catch(() => setPaymentQr(null));
   }, [orderId]);
+
+  useEffect(() => {
+    if (hydrated && items.length === 0 && !orderId) {
+      router.replace("/");
+    }
+  }, [hydrated, items, orderId, router]);
 
   if (!hydrated) {
     return <div className="text-muted-foreground">Cargando carrito...</div>;
@@ -110,15 +116,8 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="mx-auto max-w-md space-y-6 pt-10 text-center">
-        <ShoppingCart className="mx-auto h-16 w-16 text-muted-foreground" />
-        <h1 className="text-2xl font-bold">Tu carrito está vacío</h1>
-        <p className="text-muted-foreground">
-          Arma tu primera bubble drink y agrégala al carrito.
-        </p>
-        <Button asChild>
-          <Link href="/build">Armar mi boba</Link>
-        </Button>
+      <div className="pt-10 text-center text-muted-foreground">
+        Redirigiendo...
       </div>
     );
   }
@@ -248,6 +247,15 @@ export default function CartPage() {
           </div>
         </div>
       </div>
+
+      {placing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-background">
+          <div className="h-24 w-24 animate-spin rounded-full border-8 border-primary/20 border-t-primary" />
+          <p className="text-4xl font-extrabold text-foreground">
+            Procesando pedido...
+          </p>
+        </div>
+      )}
     </div>
   );
 }

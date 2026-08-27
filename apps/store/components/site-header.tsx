@@ -21,17 +21,17 @@ export function SiteHeader() {
           <span className="text-lg">Bubble Drink</span>
         </Link>
         <nav className="flex items-center gap-2">
-          <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" asChild>
-            <Link href="/cart" className="relative">
-              <ShoppingCart className="h-4 w-4" />
-              <span>Carrito</span>
-              {count > 0 && (
+          {count > 0 && (
+            <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" asChild>
+              <Link href="/cart" className="relative">
+                <ShoppingCart className="h-4 w-4" />
+                <span>Carrito</span>
                 <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-xs font-bold text-primary">
                   {count}
                 </span>
-              )}
-            </Link>
-          </Button>
+              </Link>
+            </Button>
+          )}
         </nav>
       </div>
     </header>

@@ -191,14 +191,14 @@ export default function CartPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   variant="outline"
-                  className={`h-14 w-full text-lg ${deliveryType === "MESA" ? "border-primary bg-primary/10" : ""}`}
+                  className={`h-14 w-full bg-white text-lg font-semibold text-foreground ${deliveryType === "MESA" ? "border-primary bg-primary text-primary-foreground" : ""}`}
                   onClick={() => setDeliveryType("MESA")}
                 >
                   Para Servirse
                 </Button>
                 <Button
                   variant="outline"
-                  className={`h-14 w-full text-lg ${deliveryType === "LLEVAR" ? "border-primary bg-primary/10" : ""}`}
+                  className={`h-14 w-full bg-white text-lg font-semibold text-foreground ${deliveryType === "LLEVAR" ? "border-primary bg-primary text-primary-foreground" : ""}`}
                   onClick={() => setDeliveryType("LLEVAR")}
                 >
                   Para Llevar

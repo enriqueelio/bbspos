@@ -1,0 +1,646 @@
+================================================================================
+  DISEÑO DE INTERFAZ — APLICACIÓN STORE (CLIENTE)
+  Bubba Boba App · apps/store
+  Análisis detallado para revisión de diseño
+  Generado: 2026-08-26
+================================================================================
+
+
+1. PALETA DE COLORES
+================================================================================
+
+1.1 Variables CSS (tema principal)
+--------------------------------------------------------------------------------
+
+  Token                   Valor HSL              Hex Aprox.     Uso
+  ─────────────────────── ──────────────────────  ─────────────  ─────────────────
+  --background            24 85% 72%              #ea8e5a        Fondo de página
+                                                  (naranja cálido)
+  --foreground            30 100% 21%             #692400        Texto general
+                                                  (marrón oscuro)
+  --card                  0 0% 100%               #ffffff        Superficies de
+                                                                  tarjetas
+  --card-foreground       30 100% 21%             #692400        Texto en tarjetas
+  --primary               24 100% 45%             #ea580c        Acciones principales
+                                                  (naranja vivo)
+  --primary-foreground    0 0% 100%               #ffffff        Texto sobre primario
+  --secondary             30 80% 92%              #fae8d4        Fondo secundario
+                                                  (melocotón claro)
+  --secondary-foreground  30 100% 21%             #692400        Texto secundario
+  --muted                 30 40% 94%              #f2e8e0        Fondo apagado
+  --muted-foreground      28 46% 43%              #8b6b50        Texto apagado
+  --accent                22 100% 60%             #ff8533        Acentos/highlights
+                                                  (naranja brillante)
+  --accent-foreground     30 100% 21%             #692400        Texto sobre acento
+  --destructive           0 84.2% 60.2%           #dc2626        Acciones destructivas
+                                                  (rojo)
+  --border                28 50% 74%              #d4a882        Bordes generales
+                                                  (tan)
+  --input                 28 50% 74%              #d4a882        Bordes de inputs
+  --ring                  24 100% 45%             #ea580c        Anillos de foco
+  --radius                0.75rem                 12px           Radio base
+
+1.2 Paleta personalizada "boba"
+--------------------------------------------------------------------------------
+
+  Token           Hex         Uso
+  ──────────────  ──────────  ──────────────────────
+  boba-milk       #f9f5ef     Leche
+  boba-cream      #efe0d0     Crema
+  boba-bubble     #d9a066     Bubble
+  boba-matcha     #8fbf72     Matcha
+  boba-taro       #c9a5dc     Taro
+  boba-boba       #6b4226     Boba (color principal)
+  boba-popping    #ff6b8a     Popping
+
+1.3 Colores de acento en botones de acción (sobrescritos con Tailwind)
+--------------------------------------------------------------------------------
+
+  Acción                  Clases Tailwind                     Color resultante
+  ──────────────────────  ──────────────────────────────────  ─────────────────
+  "Siguiente" /           bg-green-200 text-green-900         Verde claro (#bbf7d0)
+  "Agregar al carrito"    hover:bg-green-300                   Texto verde oscuro
+  "Atrás"                 bg-purple-200 text-purple-900       Púrpura claro (#e9d5ff)
+                          hover:bg-purple-300                  Texto púrpura oscuro
+  "Armar otra bebida"     bg-orange-200 text-orange-900       Naranja claro (#fed7aa)
+                          border-orange-400                    Borde naranja medio
+  "Iniciar" (CTA)         bg-white text-primary               Blanco con texto
+                          hover:bg-white/90                    naranja
+  "Confirmar pedido"      bg-green-200 text-green-900         Verde claro
+  "Cancelar pedido"       variant="destructive"               Rojo estándar
+
+1.4 Color del tema PWA
+--------------------------------------------------------------------------------
+
+  theme-color:        #ea580c (naranja primario)
+  background (manif): #fb923c (naranja más claro)
+  status bar:         black-translucent
+
+
+2. TIPOGRAFÍA
+================================================================================
+
+2.1 Fuente
+--------------------------------------------------------------------------------
+
+  Font stack: ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+              Roboto, Arial, sans-serif
+
+  NOTA: El archivo preview-theme.html carga Inter (400/500/600/700/800)
+  pero la app real NO importa ninguna fuente web. Usa fuentes del sistema.
+
+2.2 Pesos utilizados
+--------------------------------------------------------------------------------
+
+  Peso           Clase Tailwind     Uso
+  ─────────────  ─────────────────  ─────────────────────────────────────
+  Medium (500)   font-medium        Labels de formulario, badges, textos
+                                    secundarios
+  Semibold (600) font-semibold      Nombres de items, títulos de sección,
+                                    Step labels, botones
+  Bold (700)     font-bold          Títulos principales (h1, h2), precios
+                                    totales, logo
+  Extrabold (800) font-extrabold    Heading del hero, precio grande del
+                                    confirmation
+
+2.3 Tamaños de fuente
+--------------------------------------------------------------------------------
+
+  Elemento                     Tamaño       Clase
+  ──────────────────────────── ──────────── ───────────────
+  Heading hero (mobile)        36px         text-4xl
+  Heading hero (desktop)       48px         sm:text-5xl
+  Título de página (h1)        24px         text-2xl
+  Precio de confirmación       36px         text-4xl
+  Subtítulo hero               18px         text-lg
+  Precio en navegación build   24px         text-2xl
+  Títulos de tarjetas          18px (h5)    text-lg
+  Texto base                   16px (1rem)  text-base (heredado)
+  Labels de formulario         14px         text-sm
+  Descripciones                14px         text-sm
+  Texto muted                  14px         text-sm
+  Badges                       12px         text-xs
+  Notas al pie                 12px         text-xs
+  Toppings detalle             12px         text-xs
+
+
+3. LAYOUT Y ESTRUCTURA
+================================================================================
+
+3.1 Layout raíz
+--------------------------------------------------------------------------------
+
+  <html lang="es">
+  <body className="min-h-screen bg-background font-sans text-foreground antialiased">
+    <SiteHeader />                          ← sticky, full-width
+    <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6">
+      {children}                            ← max 1024px, centrado
+    </main>
+  </body>
+  </html>
+
+  - Viewport: device-width, initial-scale=1, maximum-scale=1, user-scalable=no
+    (bloquea zoom — sensación de app móvil)
+  - Main: max-w-5xl (1024px), px-4 (16px padding horizontal),
+    pt-6 (24px arriba), pb-16 (64px abajo)
+
+3.2 Breakpoints
+--------------------------------------------------------------------------------
+
+  Breakpoint  Comportamiento
+  ──────────  ──────────────────────────────────────────────────────────────
+  <640px      Layout de una columna. Step indicator solo muestra círculos.
+              Botones de navegación apilados verticalmente.
+              Carrusel aspect-ratio 4:3.
+  640px+      Step indicator muestra labels. Grid de sabores 3 columnas.
+              Grid de tamaño/boba 2 columnas. Grid toppings 2 columnas.
+              Navegación horizontal. Carrusel 16:9.
+  768px+      Cart layout 2 columnas con sidebar (1fr 320px).
+  1024px      Contenido principal max-width 1024px centrado.
+
+
+4. COMPONENTES — DETALLE POR PÁGINA
+================================================================================
+
+4.1 HEADER DEL SITIO (SiteHeader)
+--------------------------------------------------------------------------------
+
+  Estructura:
+    sticky top-0 z-40 w-full
+    └─ mx-auto flex h-14 max-w-5xl items-center justify-between px-4
+
+  Colores:
+    Fondo:    bg-gradient-to-r from-primary to-accent
+              (degradado horizontal: #ea580c → #ff8533)
+    Sombra:   shadow-lg shadow-primary/20 (naranja al 20% opacidad)
+    Altura:   56px (h-14)
+
+  Logo (izquierda):
+    - flex items-center gap-2
+    - Icono placeholder: h-6 w-6 rounded-full bg-white/20
+    - Texto: text-lg font-bold text-primary-foreground (blanco)
+
+  Botón Carrito (derecha):
+    - variant="outline" con override:
+      border-white/30 bg-white/10 text-white hover:bg-white/20
+    - Icono: ShoppingCart h-4 w-4
+    - Texto: "Carrito"
+    - Badge (count): h-5 min-w-5 rounded-full bg-white px-1.5
+                     text-xs font-bold text-primary
+                     (pill blanco con texto naranja)
+
+4.2 PÁGINA PRINCIPAL (Home)
+--------------------------------------------------------------------------------
+
+  Layout: space-y-8 (32px entre secciones)
+
+  Hero Section:
+    Contenedor:
+      rounded-3xl bg-gradient-to-br from-primary via-accent to-orange-300
+      p-10 text-center text-white shadow-lg shadow-primary/20
+      (radio 24px, gradiente diagonal, 40px padding, sombra naranja)
+
+    Heading:
+      text-4xl font-extrabold tracking-tight sm:text-5xl
+      (36px extrabold mobile, 48px desktop, interlineado apretado)
+
+    Subtítulo:
+      mx-auto mt-3 max-w-xl text-lg text-white/90
+      (18px, centrado, max 576px, blanco al 90%)
+
+    Botón CTA ("Iniciar"):
+      size="lg" → h-10 rounded-md px-8
+      bg-white text-primary hover:bg-white/90
+      mt-6 (24px arriba)
+      Blanco con texto naranja
+
+  PhotoCarousel (debajo del hero):
+    Contenedor:
+      relative w-full aspect-[4/3] sm:aspect-video overflow-hidden
+      rounded-2xl shadow-lg
+      (4:3 mobile, 16:9 desktop, radio 16px, sombra grande)
+
+    Imágenes:
+      absolute inset-0 h-full w-full object-cover
+      transition-opacity duration-700 (crossfade 700ms)
+
+    Flechas navegación:
+      absolute left-3/right-3 top-1/2 -translate-y-1/2
+      rounded-full bg-black/40 p-2 text-white backdrop-blur-sm
+      hover:bg-black/60
+      (radio completo, 40% negro con blur, 60% en hover)
+      Iconos: ChevronLeft/ChevronRight h-5 w-5
+
+    Indicadores (puntos):
+      absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2
+      Activo:   h-2 w-6 rounded-full bg-white (8x24px, blanco)
+      Inactivo: h-2 w-2 rounded-full bg-white/50 (8x8px, 50% blanco)
+      Transición: transition-all (ancho + color animado)
+
+    Auto-avance: cada 4000ms, pausa en hover
+
+4.3 PÁGINA BUILD (Constructor de Bebida)
+--------------------------------------------------------------------------------
+
+  Layout: space-y-6 (24px entre secciones)
+
+  Header:
+    flex flex-col gap-4
+    Título: text-2xl font-bold text-white
+    Subtítulo: text-white/80
+
+  StepIndicator:
+    ol flex items-center gap-2
+
+    Cada paso (li):
+      flex items-center gap-2
+      Círculo: h-8 w-8 rounded-full border text-sm font-semibold
+        Completado: border-primary bg-primary text-primary-foreground
+                    (naranja relleno, texto blanco, icono Check h-4 w-4)
+        Activo:     border-primary bg-background text-primary
+                    ring-2 ring-primary/30
+                    (borde naranja, fondo de página, anillo naranja 30%)
+        Pendiente:  border-muted text-muted-foreground
+                    (borde apagado, texto apagado)
+
+      Label (solo desktop sm+):
+        hidden text-sm font-medium sm:inline
+        Activo:     text-foreground
+        Completado: text-muted-foreground
+        Pendiente:  text-muted-foreground/60
+
+      Conectores: h-px w-8
+        Completado: bg-primary
+        Pendiente:  bg-muted
+
+  ─── PASO 0: Categoría y Sabor ───
+
+  Botones de categoría (vertical stack, flex flex-col gap-3):
+    Contenedor: space-y-3
+    Botón: w-full rounded-xl border bg-card p-4 text-left
+           transition-all hover:shadow-md focus-visible:ring-2
+    Seleccionado: border-primary bg-primary text-primary-foreground
+                  (naranja relleno, texto blanco)
+    No seleccionado: border-border (borde tan)
+    Interior: flex items-center gap-2 font-semibold
+    Iconos: Droplets, Milk, Sparkles — h-5 w-5 (20px)
+
+  FlavorPicker (dentro de categoría expandida):
+    pl-4 (16px padding izquierdo)
+    Heading: text-sm font-semibold uppercase tracking-wide
+             text-muted-foreground (14px, mayúsculas, espaciado amplio)
+    Grid: grid gap-1 sm:grid-cols-3 (4px gap, 3 columnas desktop)
+    Botón sabor: rounded-xl border px-1 py-3 text-left
+                 transition-all hover:shadow-md
+    Seleccionado: border-primary bg-primary text-primary-foreground
+    No seleccionado: border-border bg-card
+    Interior: flex items-center justify-between font-medium
+    Iconos sabores: @iconify/react h-3 w-3 (12px)
+
+  ─── PASO 1: Tamaño y Tipo de Boba ───
+
+  Grid: grid gap-3 sm:grid-cols-2 (12px gap, 2 columnas)
+  Tarjetas: rounded-xl border p-4 text-left transition-all
+            hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50
+  Seleccionado: border-primary bg-primary text-primary-foreground
+  No seleccionado: border-border bg-card
+  Interior: flex items-center justify-between gap-2
+    Nombre: font-semibold
+    Subtítulo (boba): text-sm
+      Seleccionado: text-primary-foreground/70
+      No:           text-muted-foreground
+    Precio: text-lg font-bold
+      Seleccionado: text-primary-foreground
+      No:           text-primary (naranja)
+
+  ─── PASO 2: Toppings ───
+
+  Grid: grid gap-2 sm:grid-cols-2 (8px gap, 2 columnas)
+  Botones: flex items-center justify-between gap-2 rounded-xl border
+           px-4 py-3 text-left transition-all hover:shadow-md
+  Seleccionado: border-primary bg-primary text-primary-foreground
+  No seleccionado: border-border bg-card
+  Nombre: font-medium
+  Precio: text-sm font-semibold
+    Seleccionado: text-primary-foreground
+    No:           text-primary
+
+  ─── NAVEGACIÓN INFERIOR (Build) ───
+
+  Layout: flex flex-col items-end gap-4 sm:flex-row sm:items-center
+          sm:justify-end
+
+  Precio:
+    Label: text-sm text-white/70 (14px, blanco 70%)
+    Precio: text-2xl font-bold text-white (24px)
+
+  Botones (flex gap-2):
+    "Atrás":         bg-purple-200 text-purple-900 hover:bg-purple-300
+    "Siguiente":     bg-green-200 text-green-900 hover:bg-green-300
+                     (con sabor seleccionado: ring-2 ring-white/50
+                      shadow-lg shadow-white/20 — brillo blanco)
+    "Agregar al carrito": misma verde que Siguiente con brillo permanente
+
+4.4 PÁGINA CART (Carrito)
+--------------------------------------------------------------------------------
+
+  Layout: space-y-6
+
+  Estado vacío:
+    mx-auto max-w-md space-y-6 pt-10 text-center (448px max, centrado)
+    Icono: ShoppingCart h-16 w-16 text-muted-foreground (64px, apagado)
+    Título: text-2xl font-bold
+    Botón: default variant, link a /build
+
+  Header del carrito:
+    flex items-center justify-between
+    Título: text-2xl font-bold ("Mi carrito")
+    Badge: variant="secondary" (bg-secondary text-secondary-foreground)
+
+  CartItemRow (cada item):
+    Card con p-4 (16px padding)
+    Layout: flex flex-col gap-3 sm:flex-row sm:items-center
+            sm:justify-between
+    Detalles (izquierda):
+      Nombre: font-semibold ("Size · Flavor")
+      Categoría/Boba: text-sm text-muted-foreground
+      Toppings: mt-1 text-xs text-muted-foreground
+      Precio unitario: mt-1 text-sm font-medium text-primary (naranja)
+    Controles (derecha):
+      QuantityControl + total línea + botón eliminar
+      Total línea: w-20 text-right font-bold (80px fijo, alineado derecha)
+      Eliminar: variant="ghost" size="icon" Trash2 h-4 w-4
+
+  QuantityControl:
+    flex items-center gap-2 (8px)
+    Botones +/-: variant="outline" size="icon" (36px cuadrado con borde)
+    Valor: w-8 text-center text-sm font-semibold (32px ancho)
+
+  Input nombre cliente (Card):
+    Grid: grid gap-6 md:grid-cols-[1fr_320px] (sidebar en desktop)
+    Label: text-sm font-medium text-muted-foreground
+    Input: w-full rounded-lg border border-border bg-card px-4 py-3
+           text-base outline-none focus:ring-2 focus:ring-ring
+           (radio 12px, 16px padding H, 12px padding V, 16px texto)
+
+  CartSummary (resumen):
+    Card con CardHeader + CardContent + CardFooter
+    Items: text-sm, flex justify-between, truncate en nombres
+    Toppings: pl-2 text-xs text-muted-foreground (indentado)
+    Footer: border-t pt-4, Total label text-sm font-semibold,
+            Total precio text-xl font-bold (20px)
+
+  Botones de acción (stacked, flex flex-col items-center gap-3):
+    "Confirmar pedido":     w-36 h-7 bg-green-200 text-green-900
+                            hover:bg-green-300 (144px × 28px, verde)
+    "Armar otra bebida":    variant="outline" w-36 h-7 border-orange-400
+                            bg-orange-200 text-orange-900 hover:bg-orange-300
+    "Cancelar pedido":      variant="destructive" w-36 h-7 (rojo, 144px × 28px)
+
+  ─── Confirmación de Pedido ───
+
+  mx-auto max-w-md space-y-6 pt-10 text-center (448px, centrado)
+  Icono éxito: CheckCircle2 h-16 w-16 text-emerald-500 (64px, verde esmeralda)
+  Título: text-2xl font-bold
+  Código pedido: font-semibold inline, formateado con formatOrderCode
+  Nombre cliente: font-semibold text-foreground
+
+  Tarjeta total:
+    rounded-lg border border-primary/30 bg-primary/5 px-6 py-4
+    (radio 8px, borde naranja 30%, fondo naranja 5%, 24px H / 16px V padding)
+    Label: text-sm font-medium uppercase tracking-wide text-muted-foreground
+    Monto: text-4xl font-extrabold text-foreground (36px, extra bold)
+
+  Imagen QR:
+    mx-auto h-48 w-48 rounded-lg border bg-white object-contain p-2
+    (192px × 192px, radio 8px, fondo blanco, 8px padding interno)
+
+  Botón volver: className="w-full" → default variant, full-width
+  Nota: text-xs text-muted-foreground
+
+
+5. COMPONENTES COMPARTIDOS (@bubba/ui)
+================================================================================
+
+5.1 Button
+--------------------------------------------------------------------------------
+
+  Base: inline-flex items-center justify-center gap-2 whitespace-nowrap
+        rounded-md text-sm font-medium transition-colors
+        focus-visible:outline-none focus-visible:ring-1
+        focus-visible:ring-ring disabled:pointer-events-none
+        disabled:opacity-50
+
+  Variantes:
+    default:     bg-primary text-primary-foreground shadow
+                 hover:bg-primary/90
+    destructive: bg-destructive text-destructive-foreground shadow-sm
+                 hover:bg-destructive/90
+    outline:     border border-input bg-background shadow-sm
+                 hover:bg-accent hover:text-accent-foreground
+    secondary:   bg-secondary text-secondary-foreground shadow-sm
+                 hover:bg-secondary/80
+    ghost:       hover:bg-accent hover:text-accent-foreground
+    link:        text-primary underline-offset-4 hover:underline
+
+  Tamaños:
+    default: h-9 px-4 py-2     (36px alto)
+    sm:      h-8 rounded-md px-3 text-xs  (32px, 12px texto)
+    lg:      h-10 rounded-md px-8         (40px, 32px padding)
+    icon:    h-9 w-9                      (36px cuadrado)
+
+5.2 Card
+--------------------------------------------------------------------------------
+
+  Base: rounded-xl border bg-card text-card-foreground shadow
+        (radio 12px, borde, fondo blanco, sombra)
+
+  CardHeader:    flex flex-col space-y-1.5 p-6   (24px padding, 6px gap)
+  CardTitle:     font-semibold leading-none tracking-tight
+  CardDescription: text-sm text-muted-foreground
+  CardContent:   p-6 pt-0                        (24px, sin top)
+  CardFooter:    flex items-center p-6 pt-0
+
+5.3 Badge
+--------------------------------------------------------------------------------
+
+  Base: inline-flex items-center rounded-md border px-2.5 py-0.5
+        text-xs font-semibold
+
+  Variantes:
+    default:     border-transparent bg-primary text-primary-foreground shadow
+    secondary:   border-transparent bg-secondary text-secondary-foreground
+    destructive: border-transparent bg-destructive text-destructive-foreground
+    outline:     text-foreground
+    success:     border-transparent bg-emerald-500 text-white shadow
+    warning:     border-transparent bg-amber-500 text-white shadow
+
+5.4 Input
+--------------------------------------------------------------------------------
+
+  h-9 w-full rounded-md border border-input bg-transparent px-3 py-1
+  text-sm shadow-sm transition-colors
+  focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring
+  (36px alto, fondo transparente, 14px texto, radio 12px)
+
+5.5 Dialog (Radix)
+--------------------------------------------------------------------------------
+
+  Overlay:  fixed inset-0 z-50 bg-black/80
+            animate-in/out fade-in-0 fade-out-0
+  Content:  fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg
+            translate-x-[-50%] translate-y-[-50%] gap-4 border
+            bg-background p-6 shadow-lg duration-200
+            animate-in/out fade-in-0 fade-out-0 zoom-in-95 zoom-out-95
+            slide-in-from-left-1/2 slide-in-from-top-[48%]
+  Close:    absolute right-4 top-4 rounded-sm opacity-70
+            hover:opacity-100, icono X
+  Header:   flex flex-col space-y-1.5 text-center sm:text-left
+  Footer:   flex flex-col-reverse sm:flex-row sm:justify-end
+            sm:space-x-2
+  Title:    text-lg font-semibold leading-none tracking-tight
+  Desc:     text-sm text-muted-foreground
+
+5.6 Select (Radix)
+--------------------------------------------------------------------------------
+
+  Trigger: flex h-9 w-full items-center justify-between
+           whitespace-nowrap rounded-md border border-input bg-transparent
+           px-3 py-2 text-sm shadow-sm
+  Content: relative z-50 max-h-96 min-w-[8rem] overflow-hidden
+           rounded-md border bg-popover text-popover-foreground shadow-md
+  Item:    relative flex w-full cursor-default select-none items-center
+           rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none
+           focus:bg-accent focus:text-accent-foreground
+
+
+6. ANIMACIONES Y TRANSICIONES
+================================================================================
+
+  Elemento                          Transición                Detalle
+  ────────────────────────────────  ────────────────────────  ──────────────────
+  Todos botones interactivos        transition-colors         Color en hover/focus
+  Botones selección (cat/sab/...)   transition-all            Full propiedades +
+                                  hover:shadow-md            sombra en hover
+  Imágenes carrusel                 transition-opacity        700ms crossfade
+                                    duration-700
+  Flechas carrusel                  transition                Background change
+  Puntos carrusel                   transition-all            Ancho (w-6 vs w-2)
+                                                             + color
+  Dialog overlay                    animate-in/out            fade-in-0 fade-out-0
+  Dialog content                    animate-in/out            fade + zoom-in-95 +
+                                                             slide-in-from
+  Select dropdown                   animate-in/out            fade + zoom
+  Anillos foco                      focus-visible:ring-1/2    En todos elementos
+  Botón "Siguiente" (con sabor)     ring-2 ring-white/50      Brillo blanco
+                                  shadow-lg shadow-white/20  permanente
+
+
+7. COMPORTAMIENTO RESPONSIVE
+================================================================================
+
+  Elemento              Mobile (<640px)          Desktop (640px+)
+  ────────────────────  ───────────────────────  ──────────────────────────
+  Step indicator        Solo círculos (labels    Círculos + labels de texto
+                        ocultos)
+  Categorías            Stack vertical            (se mantiene vertical)
+  Sabores               Grid 1 columna           Grid 3 columnas
+  Tamaño/Boba           Grid 1 columna           Grid 2 columnas
+  Toppings              Grid 1 columna           Grid 2 columnas
+  Navegación build      Botones apilados (col)   Botones horizontales (row)
+  Items carrito         Stack vertical            Fila horizontal
+  Layout carrito        1 columna                2 columnas (1fr 320px)
+  Carrusel fotos        Aspect-ratio 4:3         Aspect-ratio 16:9 (video)
+  Header logo           H-14 (56px) fijo         Igual
+  Contenido max         max-w-5xl (1024px)        Igual, centrado
+
+
+8. OBSERVACIONES DE DISEÑO
+================================================================================
+
+  1. PALETA COHESIVA WARM: Toda la app usa una gama cálida naranja/marrón
+     (hue 22-30). El fondo de página es naranja cálido (#ea8e5a), haciendo
+     que las tarjetas blancas "floten" encima.
+
+  2. PATRÓN DE SELECCIÓN CONSISTENTE: Todos los elementos seleccionables
+     (categorías, sabores, tamaños, boba, toppings) usan el mismo patrón:
+     rounded-xl border p-4 → selected: border-primary bg-primary text-
+     primary-foreground / unselected: border-border bg-card, con
+     hover:shadow-md y transition-all.
+
+  3. BOTONES DE ACCIÓN CON COLORES CUSTOM: El store sobrescribe colores
+     de Button extensamente con utilidades Tailwind: verde para
+     siguiente/confirmar, púrpura para retroceder, naranja para "armar
+     otra bebida", blanco sobre naranja para el CTA principal.
+
+  4. PWA MÓBILE-FIRST: Viewport bloqueado (sin zoom), display standalone,
+     orientación landscape, service worker con caché agresivo, font stack
+     del sistema para performance.
+
+  5. SIN ANIMACIONES EN TRANSICIÓN DE PÁGINAS: La navegación entre páginas
+     usa Next.js estándar. Las animaciones internas son limitadas:
+     crossfade del carrusel (700ms), apertura de dialog (200ms zoom+fade),
+     y transiciones de hover con sombra.
+
+  6. TIPOGRAFÍA MÍNIMA: Solo fuentes del sistema. El preview-theme.html
+     referencia Inter pero la app real NO la importa.
+
+  7. ESCALA DE ESPACIADO: Sigue los defaults de Tailwind:
+     gap-1/2/3/4/6/8, p-2/3/4/6/10, px-4, py-3, space-y-1/2/3/4/6/8.
+
+  8. CONTRASTE: El fondo naranja (#ea8e5a) con texto marrón oscuro
+     (#692400) puede tener problemas de contraste WCAG depending on
+     the specific combination. Las tarjetas blancas con texto marrón
+     oscuro tienen buen contraste.
+
+  9. PATRÓN DE GRADIENTES: Header usa gradiente horizontal
+     (from-primary to-accent). Hero usa gradiente diagonal
+     (from-primary via-accent to-orange-300). Ambos con sombra
+     naranja difusa.
+
+ 10. TAMAÑOS DE BOTONES PEQUEÑOS: Los botones de acción del carrito
+     (w-36 h-7 = 144px × 28px) son significativamente más pequeños
+     que el estándar de botones (h-9 = 36px). Esto podría afectar
+     la usabilidad táctil en móviles.
+
+
+9. ARCHIVOS FUENTE
+================================================================================
+
+  Páginas y Layouts:
+    apps/store/app/layout.tsx
+    apps/store/app/page.tsx
+    apps/store/app/build/page.tsx
+    apps/store/app/build/build-client.tsx
+    apps/store/app/cart/page.tsx
+    apps/store/app/globals.css
+
+  Componentes Store:
+    apps/store/components/site-header.tsx
+    apps/store/components/photo-carousel.tsx
+    apps/store/components/start-builder-button.tsx
+
+  UI Compartida (@bubba/ui):
+    packages/ui/src/components/ui/button.tsx
+    packages/ui/src/components/ui/card.tsx
+    packages/ui/src/components/ui/badge.tsx
+    packages/ui/src/components/ui/input.tsx
+    packages/ui/src/components/ui/label.tsx
+    packages/ui/src/components/ui/dialog.tsx
+    packages/ui/src/components/ui/select.tsx
+    packages/ui/src/components/builder/step-indicator.tsx
+    packages/ui/src/components/builder/flavor-picker.tsx
+    packages/ui/src/components/builder/size-selector.tsx
+    packages/ui/src/components/builder/boba-picker.tsx
+    packages/ui/src/components/cart/cart-item.tsx
+    packages/ui/src/components/cart/cart-summary.tsx
+    packages/ui/src/components/cart/quantity-control.tsx
+
+  Configuración:
+    apps/store/tailwind.config.ts
+    packages/config/src/tailwind.ts (preset boba)
+    apps/store/public/manifest.json
+
+================================================================================
+  FIN DEL DOCUMENTO
+================================================================================

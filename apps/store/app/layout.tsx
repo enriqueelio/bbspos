@@ -1,6 +1,7 @@
 ﻿import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { KioskTimeout } from "@/components/kiosk-timeout";
 
 export const metadata: Metadata = {
   title: "Bubble Drink — Bubble Tea y bebidas con boba",
@@ -38,6 +39,7 @@ export default function RootLayout({
         <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6">
           {children}
         </main>
+        <KioskTimeout />
       </body>
     </html>
   );

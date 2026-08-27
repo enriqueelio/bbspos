@@ -249,8 +249,10 @@ export function BuildClient({ catalog: serverCatalog }: { catalog: Catalog }) {
                       >
                         <span className="font-medium">{t.name}</span>
                         <span className={cn(
-                          "text-sm font-semibold",
-                          selected ? "text-primary-foreground" : "text-primary",
+                          "text-sm font-bold",
+                          selected
+                            ? "text-primary-foreground"
+                            : "rounded-full bg-amber-400 px-2 py-0.5 text-amber-950",
                         )}>
                           +{formatPrice(t.price)}
                         </span>
@@ -276,7 +278,8 @@ export function BuildClient({ catalog: serverCatalog }: { catalog: Catalog }) {
 
         <div className="flex gap-2">
           <Button
-            className="bg-purple-200 text-purple-900 hover:bg-purple-300"
+            variant="default"
+            className="bg-slate-500 text-white hover:bg-slate-600"
             disabled={step === 0}
             onClick={() => {
               if (step === 2) {
@@ -293,10 +296,8 @@ export function BuildClient({ catalog: serverCatalog }: { catalog: Catalog }) {
           </Button>
           {step < STEPS.length - 1 ? (
             <Button
-              className={cn(
-                "bg-green-200 text-green-900 hover:bg-green-300",
-                flavorId && "ring-2 ring-white/50 shadow-lg shadow-white/20",
-              )}
+              variant="default"
+              className="shadow-lg shadow-primary/30"
               disabled={!canGoNext}
               onClick={() => setStep((s) => s + 1)}
             >
@@ -304,10 +305,8 @@ export function BuildClient({ catalog: serverCatalog }: { catalog: Catalog }) {
             </Button>
           ) : (
             <Button
-              className={cn(
-                "bg-green-200 text-green-900 hover:bg-green-300",
-                "ring-2 ring-white/50 shadow-lg shadow-white/20",
-              )}
+              variant="default"
+              className="shadow-lg shadow-primary/30"
               disabled={!canFinish}
               onClick={handleAddToCart}
             >

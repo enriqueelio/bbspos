@@ -94,7 +94,10 @@ export default function CartPage() {
           </div>
         )}
         <div className="flex flex-col gap-2">
-          <Button className="w-full" asChild>
+          <Button
+            className="w-full bg-green-500 text-white hover:bg-green-600"
+            asChild
+          >
             <Link href="/">Volver al inicio</Link>
           </Button>
           <p className="text-xs text-muted-foreground">
@@ -159,9 +162,9 @@ export default function CartPage() {
             {items.reduce((acc, i) => acc + i.quantity, 0) !== 1 ? "s" : ""}
           </Badge>
           <Button
-            variant="ghost"
+            variant="destructive"
             size="sm"
-            className="text-xs text-muted-foreground h-7 px-2"
+            className="h-7 px-2 text-xs"
             onClick={() => {
               clear();
               router.push("/");

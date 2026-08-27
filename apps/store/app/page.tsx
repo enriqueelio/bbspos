@@ -33,7 +33,7 @@ export default async function HomePage() {
   const slideshow = await getSlideshow();
 
   return (
-    <div className="fixed inset-0 top-14 z-30 flex flex-col overflow-hidden bg-background">
+    <div className="fixed inset-0 top-14 z-30 flex flex-col overflow-hidden bg-[#fed7aa]">
       <div className="flex-1 min-h-0 px-4 pt-4">
         <PhotoCarousel
           images={slideshow.images}

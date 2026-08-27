@@ -133,6 +133,12 @@ model PaymentConfig {
   updatedAt DateTime @updatedAt
 }
 
+model DailyReportLog {
+  // Día (YYYY-MM-DD) cuyo cierre de caja ya se envió a Telegram.
+  date   String   @id
+  sentAt DateTime @default(now())
+}
+
 enum FlavorCategory {
   MILK
   WATER

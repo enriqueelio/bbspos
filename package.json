@@ -13,6 +13,7 @@
     "db:generate": "pnpm --filter @bubba/db generate",
     "db:migrate": "pnpm --filter @bubba/db migrate",
     "db:seed": "pnpm --filter @bubba/db seed",
+    "daily-report": "pnpm --filter @bubba/db daily-report",
     "db:sync": "scripts\\db-sync.bat"
   },
   "devDependencies": {

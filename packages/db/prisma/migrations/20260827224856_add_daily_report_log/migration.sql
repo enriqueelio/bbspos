@@ -1,0 +1,5 @@
+-- CreateTable
+CREATE TABLE "DailyReportLog" (
+    "date" TEXT NOT NULL PRIMARY KEY,
+    "sentAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

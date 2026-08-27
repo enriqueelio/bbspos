@@ -13,4 +13,7 @@ node_modules/.bin/next start -p 3001 &
 cd /app/apps/cajero
 node_modules/.bin/next start -p 3002 &
 
+cd /app/packages/db
+node scripts/daily-report-worker.mjs &
+
 wait

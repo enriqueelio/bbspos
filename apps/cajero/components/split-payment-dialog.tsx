@@ -63,6 +63,21 @@ export function SplitPaymentDialog({
     onConfirm(method1, method2, amount2);
   }
 
+  function appendDigit(d: string) {
+    setAmount1((prev) => {
+      const base = prev === "" || prev === "0" ? "" : prev;
+      const next = base + d;
+      if (parseInt(next, 10) >= total) return prev;
+      return next;
+    });
+    setError(null);
+  }
+
+  function backspace() {
+    setAmount1((prev) => prev.slice(0, -1));
+    setError(null);
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-md">
@@ -95,18 +110,38 @@ export function SplitPaymentDialog({
                 </button>
               ))}
             </div>
-            <input
-              type="number"
-              min={1}
-              max={total - 1}
-              placeholder="Monto en Bs"
-              value={amount1}
-              onChange={(e) => {
-                setAmount1(e.target.value);
-                setError(null);
-              }}
-              className="w-full rounded-lg border border-border bg-card px-4 py-3 text-base outline-none focus:ring-2 focus:ring-ring"
-            />
+            <div className="w-full text-right text-4xl font-mono p-4 bg-slate-900 rounded-lg text-emerald-400 mb-4">
+              {amount1 || "0"}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((d) => (
+                <Button
+                  key={d}
+                  type="button"
+                  variant="secondary"
+                  className="h-16 text-2xl font-bold"
+                  onClick={() => appendDigit(d)}
+                >
+                  {d}
+                </Button>
+              ))}
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-16 text-2xl font-bold"
+                onClick={() => appendDigit("0")}
+              >
+                0
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-16 text-2xl font-bold"
+                onClick={backspace}
+              >
+                Borrar
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground">

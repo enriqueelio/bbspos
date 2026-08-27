@@ -104,7 +104,7 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
     );
     const slow = minutes >= 10;
     return (
-      <Badge variant={slow ? "destructive" : "secondary"}>
+      <Badge variant={slow ? "destructive" : "secondary"} className="text-base">
         Entregado en {formatDurationMinutes(minutes)}
       </Badge>
     );
@@ -113,7 +113,10 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
   const urgent = minutes >= 15;
   const amber = minutes > 10 && minutes < 15;
   return (
-    <Badge variant={urgent ? "destructive" : amber ? "warning" : "secondary"}>
+    <Badge
+      variant={urgent ? "destructive" : amber ? "warning" : "secondary"}
+      className="text-base"
+    >
       Ingresado hace {formatDurationMinutes(minutes)}
     </Badge>
   );
@@ -135,19 +138,21 @@ function statusVariant(status: Order["status"]) {
 
 function ItemsList({ order }: { order: Order }) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 text-base">
       {order.items.map((item) => (
         <div
           key={item.id}
           className="flex items-center justify-between gap-2"
         >
-          <span className="font-medium">
-            {item.quantity}× {item.flavorName}{" "}
-            <span className="text-sm text-muted-foreground">
-              ({item.sizeName} · {item.bobaTypeName})
+          <span>
+            <span className="font-semibold text-white">
+              {item.quantity}× {item.flavorName} ({item.sizeName})
+            </span>{" "}
+            <span className="text-slate-400 font-normal">
+              · {item.bobaTypeName}
             </span>
             {item.toppings.length > 0 && (
-              <span className="block pl-4 text-xs text-muted-foreground">
+              <span className="block pl-4 text-slate-400 font-normal">
                 + {item.toppings.map((t) => t.toppingName).join(", ")}
               </span>
             )}
@@ -186,27 +191,41 @@ function OrderCard({
   clock: ReturnType<typeof useQueueClock>;
 }) {
   const [showSplit, setShowSplit] = useState(false);
+  const isFresh = order.status === OrderStatus.RECIBIDO;
+  const isPending = clock.busyId === order.id;
 
   return (
-    <Card key={order.id}>
+    <div
+      key={order.id}
+      className={`relative transition-opacity duration-200 ${
+        isPending ? "opacity-50 pointer-events-none" : ""
+      }`}
+    >
+      <Card
+        className={`animate-in fade-in slide-in-from-bottom-4 duration-200 ${
+          isFresh
+            ? "border-primary/80 animate-glow ring-1 ring-primary/60"
+            : ""
+        }`}
+      >
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-lg">
+            <CardTitle className="text-2xl font-black text-white">
               Pedido #{formatOrderCode(order.seq)}
             </CardTitle>
             {order.customerName && (
-              <p className="text-sm font-semibold text-primary">
+              <p className="text-base font-semibold text-primary">
                 Para: {order.customerName}
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 text-right">
-            <Badge variant={statusVariant(order.status)}>
+            <Badge variant={statusVariant(order.status)} className="text-base">
               {OrderStatusLabel[order.status]}
             </Badge>
             <AgeBadge order={order} now={clock.now} />
-            <span className="text-sm text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               {new Date(order.createdAt).toLocaleTimeString("es-MX", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -218,12 +237,12 @@ function OrderCard({
       <CardContent className="space-y-3">
         <ItemsList order={order} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <div className="space-y-1">
-            <span className="text-lg font-bold">
-              Total: {formatPrice(order.total)}
+          <div className="space-y-2">
+            <span className="block py-1 text-4xl font-mono font-bold text-white">
+              {formatPrice(order.total)}
             </span>
             {order.paymentMethod && (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-base text-muted-foreground">
                 Pago: {PaymentMethodLabel[order.paymentMethod]}
                 {order.paymentMethod2 &&
                   order.paymentAmount2 != null &&
@@ -305,7 +324,30 @@ function OrderCard({
           onCancel={() => setShowSplit(false)}
         />
       )}
-    </Card>
+      </Card>
+      {isPending && (
+        <svg
+          className="absolute inset-0 m-auto h-12 w-12 animate-spin text-primary"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          />
+        </svg>
+      )}
+    </div>
   );
 }
 
@@ -314,7 +356,7 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
     <Card>
       <CardContent className="p-8 text-center">
         <p className="font-semibold">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
+        <p className="mt-1 text-base text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
   );
@@ -337,12 +379,36 @@ export function QueueView({ orders }: { orders: Order[] }) {
       o.status === OrderStatus.RECIBIDO || o.status === OrderStatus.ACEPTADO,
   ).length;
 
+  const stateRank = (o: Order) =>
+    o.status === OrderStatus.RECIBIDO
+      ? 0
+      : o.status === OrderStatus.ACEPTADO
+        ? 1
+        : 2;
+
+  const ordered = [...orders].sort((a, b) => {
+    const diff = stateRank(a) - stateRank(b);
+    if (diff !== 0) return diff;
+    return (
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  });
+
   return (
     <div className="space-y-6">
       {clock.error && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {clock.error}
-        </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
+          <div className="w-full max-w-lg space-y-6 rounded-xl bg-red-600 p-6 text-center text-xl font-bold text-white shadow-2xl">
+            <p>⚠ {clock.error}</p>
+            <Button
+              size="lg"
+              className="h-14 w-full bg-white text-xl font-black text-red-600 hover:bg-slate-100"
+              onClick={() => clock.setError(null)}
+            >
+              Aceptar
+            </Button>
+          </div>
+        </div>
       )}
       {clock.notice && !clock.error && (
         <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
@@ -352,10 +418,10 @@ export function QueueView({ orders }: { orders: Order[] }) {
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-bold">
-          Pedidos del día
+          PEDIDOS EN COLA
           {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
         </h2>
-        {orders.map((order) => (
+        {ordered.map((order) => (
           <OrderCard key={order.id} order={order} clock={clock} />
         ))}
       </section>

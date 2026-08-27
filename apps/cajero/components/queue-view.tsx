@@ -169,7 +169,7 @@ function ReprintButton({
   return (
     <Button
       variant="secondary"
-      size="sm"
+      className="h-10 w-full"
       disabled={clock.busyId === order.id}
       onClick={() => clock.reprint(order.id)}
     >
@@ -234,12 +234,10 @@ function OrderCard({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {order.status === OrderStatus.RECIBIDO && (
-              <ReprintButton order={order} clock={clock} />
-            )}
-            {order.status === OrderStatus.RECIBIDO && (
-              <>
+              <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
                 <Button
                   variant="default"
+                  className="h-14 text-lg font-bold w-full"
                   disabled={clock.busyId === order.id}
                   onClick={() =>
                     clock.run(order.id, async () => {
@@ -247,10 +245,11 @@ function OrderCard({
                     })
                   }
                 >
-                  Cobró {PaymentMethodLabel.EFECTIVO}
+                  EFECTIVO
                 </Button>
                 <Button
                   variant="default"
+                  className="h-14 text-lg font-bold w-full"
                   disabled={clock.busyId === order.id}
                   onClick={() =>
                     clock.run(order.id, async () => {
@@ -258,21 +257,23 @@ function OrderCard({
                     })
                   }
                 >
-                  Cobró {PaymentMethodLabel.QR}
+                  QR
                 </Button>
                 <Button
                   variant="secondary"
+                  className="h-10 w-full"
                   disabled={clock.busyId === order.id}
                   onClick={() => setShowSplit(true)}
                 >
                   Cobro dividido
                 </Button>
-              </>
+                <ReprintButton order={order} clock={clock} />
+              </div>
             )}
             {order.status === OrderStatus.ACEPTADO && (
               <Button
                 size="lg"
-                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white w-full"
                 disabled={clock.busyId === order.id}
                 onClick={() =>
                   clock.run(

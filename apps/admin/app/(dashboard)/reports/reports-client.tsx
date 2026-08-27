@@ -100,7 +100,7 @@ function KpiCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-bold">{value}</p>
+        <p className="font-mono text-4xl font-bold tracking-tight">{value}</p>
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </CardContent>
     </Card>
@@ -137,6 +137,7 @@ export function ReportsClient({
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [isPrinting, startPrintTransition] = useTransition();
   const [isExportingPdf, setExportingPdf] = useState(false);
+  const [isExportingExcel, setExportingExcel] = useState(false);
   const pdfAreaRef = useRef<HTMLDivElement>(null);
 
   const tab = useMemo(
@@ -290,16 +291,29 @@ export function ReportsClient({
     }
   };
 
+  const exportExcel = async () => {
+    if (!fetched || fetched.key !== report) return;
+    setExportingExcel(true);
+    try {
+      const reportDate = report === "daily" ? to : undefined;
+      exportReportToExcel(report, fetched.payload, from, reportDate ?? to);
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   const canPrint =
     (report === "dashboard" || report === "daily") &&
     fetched !== null &&
     fetched.key === report;
 
+  const exporting = isExportingPdf || isExportingExcel;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-2xl font-bold">Reportes</h1>
+          <h1 className="text-xl font-bold text-white">Reportes</h1>
           <p className="text-muted-foreground">
             Métricas del negocio: ventas, producto y personal.
           </p>
@@ -319,7 +333,7 @@ export function ReportsClient({
           <Button
             variant="outline"
             size="sm"
-            disabled={!fetched || fetched.key !== report || isExportingPdf}
+            disabled={!fetched || fetched.key !== report || exporting}
             onClick={exportPdf}
           >
             <FileDown className="mr-1 h-4 w-4" />
@@ -328,19 +342,11 @@ export function ReportsClient({
           <Button
             variant="outline"
             size="sm"
-            disabled={!fetched || fetched.key !== report}
-            onClick={() => {
-              if (!fetched || fetched.key !== report) return;
-              const reportDate = report === "daily" ? to : undefined;
-              exportReportToExcel(
-                report,
-                fetched.payload,
-                from,
-                reportDate ?? to,
-              );
-            }}
+            disabled={!fetched || fetched.key !== report || exporting}
+            onClick={exportExcel}
           >
-            <FileSpreadsheet className="mr-1 h-4 w-4" /> Exportar Excel
+            <FileSpreadsheet className="mr-1 h-4 w-4" />
+            {isExportingExcel ? "Exportando…" : "Exportar Excel"}
           </Button>
         </div>
       </div>

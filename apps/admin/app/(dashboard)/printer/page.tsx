@@ -144,8 +144,8 @@ export default function PrinterPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Impresora de comandas</h1>
+      <div className="mb-6 border-b border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-white">Impresora de comandas</h1>
         <p className="text-sm text-muted-foreground">
           Elige la impresora de esta computadora (o una compartida desde otro
           equipo de la red) donde se imprimirán las comandas cuando un cliente

@@ -1,0 +1,826 @@
+================================================================================
+BUBBA ADMIN — ANÁLISIS TÉCNICO EXTREMADAMENTE DETALLADO PARA RECONSTRUCCIÓN
+================================================================================
+FECHA: 2026-08-27 (actualizado: 2026-08-26)
+ESTADO: Funcional en producción local. Pull de dependencias reciente.
+
+Este documento fue generado a partir de una lectura exhaustiva del código fuente
+real de la app de administración, con el objetivo de permitir a un modelo de IA
+RECONSTRUIR o MODIFICAR la aplicación SIN ver el código original. TODO lo que
+aquí se describe es lo que el código REAL hace hoy, no una especulación.
+
+================================================================================
+0. PROPÓSITO Y ALCANCE
+================================================================================
+El repositorio contiene un sistema completo de una franquicia de bubble tea
+("Bubble Drink"). Son TRES aplicaciones web monorepo que comparten la MISMA base
+de datos SQLite:
+
+  - apps/store   -> Tienda pública (kiosco/totem con PWA, Next.js puerto 3000).
+  - apps/cajero  -> App del cajero (pantalla táctil para registrar pedidos y
+                    cobrar, Next.js puerto 3002).
+  - apps/admin   -> Panel de administración (Next.js puerto 3001). ES EL OBJETO
+                    DE ESTE DOCUMENTO.
+
+El admin NO registra pedidos: los pedidos los crea la app CAJERO. El admin los
+visualiza, los acepta/cobra, los entrega, los anula, les aplica descuentos,
+reimprime comandas, gestiona el catálogo de bebidas y precios, configura el QR
+de pago, administra el carrusel de imágenes de la tienda, la impresora térmica,
+los usuarios y consulta 9 tipos de reportes.
+
+IMPORTANTE — DISCREPANCIA EN EL STACK:
+En versiones previas de este documento se listó PostgreSQL como base de datos.
+La REALIDAD DEL CÓDIGO es que Prisma usa `provider = "sqlite"` con
+DATABASE_URL="file:./dev.db". El proyecto corre íntegramente con SQLite local
+(archivo en packages/db/prisma/dev.db). Si se reconstruye, respetar SQLite o
+migrar explícitamente (ver sección 10).
+
+================================================================================
+1. STACK, APARIENCIA Y ESTÉTICA
+================================================================================
+STACK REAL
+  - Next.js 15.1 (App Router, server + client components), React 19, React DOM 19.
+  - TypeScript 5.6 (strict mode por defecto de Next).
+  - Tailwind CSS 3.4 + preset propio en `@bubba/config` (colores basados en CSS
+    variables HSL de shadcn/ui).
+  - Prisma 6 (`@prisma/client`) sobre SQLite.
+  - NextAuth 4.24 (estrategia JWT, provider Credentials con bcryptjs).
+  - zod 4.4 para validación de parámetros de reportes.
+  - jspdf + html2canvas para exportar PDF (cliente). xlsx (SheetJS) para Excel
+    (cliente). lucide-react para iconos.
+  - Monorepo pnpm workspaces con scripts `-r` (turbo para lint/typecheck).
+
+APARIENCIA Y ESTÉTICA (LO QUE SE VE EN PANTALLA)
+  - Tema OSCURO FIJO y SEMÁNTICO. No hay toggle de tema ni ThemeProvider.
+  - El CSS global define las variables en `:root` (no `dark:`); el `body` usa
+    `bg-background text-foreground`. Paleta acordeño:
+      background  = slate muy oscuro (hsl 222.2 47.4% 11.2%)
+      card        = casi negro azulado (hsl 222.2 84% 4.9%)
+      primary     = azul (hsl 221.2 83.2% 53.3%) con texto blanco
+      secondary   = gris azulado medio (215.3 19.3% 30.4%) con texto blanco
+      muted       = 217.2 32.6% 17.5% (fondo sutil), muted-foreground 65%
+      accent      = igual que muted
+      border/input= mismo tono que muted
+      ring        = primary
+      success     = verde (160.1 84.1% 39.4%)
+      warning     = ámbar (32.1 94.6% 43.7%)
+      destructive = rojo (346.8 77.2% 49.8%)   <-- acciones destructivas
+  - Los estilos semánticos de ACCIÓN (fuertes) que el dueño del negocio quiere:
+      SUCCESS = verde esmeralda, TEXTO BLANCO.
+      WARNING = ámbar, TEXTO BLANCO.
+      DESTRUCTIVE = rojo, TEXTO BLANCO.
+    El preset de Tailwind NO mapea `success`/`warning` (el Badge los hardcodea,
+    ver sección 5). El token `destructive` viene del preset.
+  - Como `destructive` ya produce texto blanco sobre rojo, el patrón de botón
+    para acciones peligrosas es: `<Button variant="destructive">`.
+  - El layout del dashboard es: header con logo + nombre "Bubba Admin", nav
+    horizontal (Dashboard, Menú, Carrusel, Pedidos, Pagos, Reportes,
+    Impresora, Usuarios), nombre de usuario y botón "Salir"; contenido centrado
+    en contenedor `max-w-6xl`.
+  - Tipografía: font-sans (sistema). No hay fuentes personalizadas en admin.
+  - Idioma de UI: español. Moneda: bolivianos "XX Bs". Fechas formateadas con
+    locale "es-MX" (y en impresiones "es-BO").
+
+================================================================================
+2. ARQUITECTURA Y ESTRUCTURA DEL PROYECTO
+================================================================================
+ÁRBOL DE CARPETAS (raíz del repo, resumido omitiendo node_modules/.next):
+
+bubba/
+├── package.json                # scripts root: dev, build, lint, typecheck, db:*
+├── pnpm-workspace.yaml         # workspaces: apps/*, packages/*
+├── turbo.json
+├── .env.example
+├── docs/                       # documentación del proyecto
+├── openspec/                   # cambios y specs (archivados/activos)
+├── scripts/
+│   └── db-sync.bat             # detiene dev servers (3000/3001), corre prisma, reinicia
+├── apps/
+│   ├── store/                  # tienda pública (puerto 3000) — PWA
+│   │   ├── public/             # estáticos que sirve la tienda
+│   │   │   ├── slideshow.json  # config carrusel (intervalMs + images[]) — lo ESCRIBE admin
+│   │   │   ├── images/         # imágenes del carrusel — las ESCRIBE admin
+│   │   │   ├── sw.js, workbox-*.js, manifest.json, icon.svg  # PWA
+│   │   └── printing.json       # config impresora (printerName) — compartida con cajero
+│   ├── admin/                  # <-- APP DE ESTE DOCUMENTO (puerto 3001)
+│   ├── cajero/                 # app del cajero (puerto 3002)
+└── packages/
+    ├── db/                     # @bubba/db: prisma schema, migrations, client, seed
+    │   ├── prisma/
+    │   │   ├── schema.prisma
+    │   │   ├── migrations/     # 13 migraciones (init ... split_payment, delivery_type)
+    │   │   ├── seed.ts
+    │   │   └── dev.db          # LA BASE DE DATOS SQLite única
+    │   ├── src/index.ts        # exporta PrismaClient singleton
+    │   └── scripts/            # scripts de prueba (NO COMMITEADOS)
+    ├── types/                  # @bubba/types: enums, labels, tipos de dominio
+    │   └── src/index.ts
+    ├── ui/                     # @bubba/ui: componentes shadcn (Button, Badge, Card, ...)
+    │   └── src/
+    │       ├── index.ts        # export * de components + cn()
+    │       ├── components/ui/  # badge, button, card, dialog, input, label, select
+    │       ├── components/builder/  # step-indicator, size-selector, flavor-picker,
+    │       │                       #   boba-picker (usados por store/cajero)
+    │       └── components/cart/     # quantity-control, cart-item, cart-summary
+    └── config/                 # @bubba/config: preset de Tailwind (colores + radius)
+        └── src/tailwind.ts
+
+ÁRBOL COMPLETO DE apps/admin:
+
+apps/admin/
+├── package.json                # name @bubba/admin; dev: next dev -p 3001 -H 0.0.0.0
+├── .env.example                # DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET
+├── .env                        # (existe, no commitear)
+├── .eslintrc.cjs
+├── middleware.ts               # withAuth: exige rol ADMIN; matcher (ver sección 4)
+├── next.config.mjs             # transpilePackages: @bubba/db, @bubba/ui, @bubba/types
+├── postcss.config.mjs
+├── tailwind.config.ts          # presets: [@bubba/config/tailwind]; content apps + ui pkg
+├── tsconfig.json
+├── types/
+│   └── next-auth.d.ts          # extiende Session.user {id, role} y JWT {id, role}
+├── lib/
+│   ├── auth.ts                 # authOptions NextAuth (credentials, bcrypt, JWT)
+│   ├── session.ts              # getRequiredSession() server-side
+│   ├── printing.ts             # TODO print: PowerShell, comandas, test, reportes
+│   └── reports/
+│       ├── params.ts           # schemas zod de query por reporte + assertRange
+│       ├── range.ts            # timezone America/La_Paz, bounds, claves, auxiliares
+│       ├── sales.ts            # notCancelled (status != ANULADO)
+│       ├── guard.ts            # requireSession API + hasAuditSchema()
+│       ├── response.ts         # ApiError, errorResponse, reportEnvelope, jsonOk
+│       ├── csv.ts              # buildCsv (BOM UTF-8), csvResponse
+│       └── excel.ts            # exportReportToExcel (cliente): 8 formatos xlsx
+├── components/
+│   ├── admin-nav.tsx           # navegación superior + signOut
+│   └── split-payment-dialog.tsx# diálogo cobro dividido (EFECTIVO + QR)
+└── app/
+    ├── layout.tsx              # <html lang="es"> + globals.css; meta "Bubba Admin"
+    ├── globals.css             # tokens HSL oscuros (sección 1)
+    ├── login/
+    │   ├── page.tsx            # página de login (logo B + título)
+    │   └── login-form.tsx      # cliente: signIn credentials, isAccountInactive
+    ├── (dashboard)/
+    │   ├── layout.tsx          # protege sesión (redirect /login) + AdminNav
+    │   ├── page.tsx            # Dashboard (métricas del día + últimos pedidos)
+    │   ├── menu/
+    │   │   ├── page.tsx        # server: carga catálogo completo
+    │   │   └── menu-manager.tsx# CRUD tamaños/sabores/bobas/toppings + precios
+    │   ├── slideshow/
+    │   │   └── page.tsx        # carrusel: subir/ordenar/borrar imágenes
+    │   ├── orders/
+    │   │   ├── page.tsx        # server: lista pedidos por filtro ?status=
+    │   │   └── orders-client.tsx# tarjetas + acciones de pedido
+    │   ├── payments/
+    │   │   ├── page.tsx        # server: lee PaymentConfig id "default"
+    │   │   └── payments-client.tsx # subir/eliminar QR
+    │   ├── reports/
+    │   │   ├── page.tsx        # server: ReportsClient con initialReport
+    │   │   └── reports-client.tsx # 9 pestañas de reportes + exportar PDF/Excel/imprimir
+    │   ├── printer/
+    │   │   └── page.tsx        # elegir impresora, probar, conectar por UNC
+    │   └── users/
+    │       ├── page.tsx        # server: lista usuarios
+    │       └── users-client.tsx# tabla + crear/editar/baja/reactivar
+    ├── actions/                # "use server" — server actions:
+    │   ├── auth.ts             # isAccountInactive()
+    │   ├── catalog.ts          # CRUD sizes/flavors/bobas/toppings + saveDrinkPrices
+    │   ├── orders.ts           # acceptOrder, deliverOrder, cancelOrder,
+    │   │                       #   applyDiscount, reprintOrder
+    │   ├── payment.ts          # savePaymentQr, removePaymentQr, getPaymentQr
+    │   ├── users.ts            # createUser, updateUser, setUserActive
+    │   └── print-report.ts     # printSummaryReport, printDailyReport
+    └── api/
+        ├── auth/[...nextauth]/route.ts   # handler NextAuth (GET/POST)
+        ├── reports/                       # 9 rutas GET: ver sección 4
+        │   ├── dashboard-summary/route.ts
+        │   ├── daily/route.ts
+        │   ├── sales-range/route.ts
+        │   ├── peak-hours/route.ts
+        │   ├── category-sales/route.ts
+        │   ├── top-products/route.ts
+        │   ├── slow-movers/route.ts
+        │   ├── staff-performance/route.ts
+        │   └── adjustments/route.ts
+        ├── printer/route.ts               # GET lista + config; PUT guardar
+        ├── printer/connect/route.ts       # POST Add-Printer \\EQUIPO\Impresora
+        ├── printer/test/route.ts          # POST página de prueba
+        ├── slideshow/route.ts             # GET/PUT/DELETE slideshow.json
+        ├── slideshow/upload/route.ts      # POST guarda imagen
+        └── slideshow/media/[name]/route.ts# GET sirve imagen desde apps/store/public/images
+
+RUTAS DE ARCHIVOS COMPARTIDOS (importante):
+  - Las rutas "use server" y las API de slideshow/printer usan:
+      join(process.cwd(), "..", "store", ...)
+    Como cwd de Next es apps/admin, eso resuelve a APPS/STORE/... (no a la raíz).
+  - paths: CONFIG_PATH = ../store/printing.json  -> apps/store/printing.json
+  - slideshow: STORE_PUBLIC = ../store/public     -> apps/store/public/
+    slideshow.json en apps/store/public/slideshow.json.
+    imágenes en apps/store/public/images/.
+  - En dba-sync.bat los puertos 3000/3001 se detienen en migraciones.
+
+================================================================================
+3. ESQUEMA DE LA BASE DE DATOS (Prisma/SQLite)
+================================================================================
+Datasource: provider "sqlite", url = env("DATABASE_URL")  [= file:./dev.db].
+Generador: prisma-client-js.
+Archivo BD: packages/db/prisma/dev.db (única BD compartida por las 3 apps).
+
+MODELOS (nombres de campos exactos):
+
+1) User
+   id        String  @id @default(cuid())
+   email     String  @unique
+   name      String
+   password  String              (hash bcrypt, 10 rounds)
+   role      Role    @default(CAJERO)
+   active    Boolean @default(true)
+   createdAt DateTime @default(now())
+   orders    Order[]
+   -> Relación con Order (userId opcional): el usuario que aceptó/entregó/
+      anuló/descontó el pedido.
+
+2) Size  (tamaño de vaso)
+   id, name (unique), oz Int, available Boolean @default(true), createdAt,
+   drinkPrices DrinkPrice[]
+
+3) Flavor
+   id, name (unique), categories FlavorCategoryLink[], available, createdAt
+
+4) FlavorCategoryLink
+   id, flavorId -> Flavor (onDelete: Cascade), category FlavorCategory, createdAt
+   @@unique([flavorId, category])
+   -> Un sabor puede pertenecer a varias categorías (MILK/WATER/SPECIAL).
+
+5) BobaType
+   id, name (unique), kind BobaKind, available, createdAt, drinkPrices[]
+
+6) DrinkPrice  (matriz de precios)
+   id, category FlavorCategory, sizeId -> Size (Cascade), bobaTypeId -> BobaType
+   (Cascade), price Int, createdAt
+   @@unique([category, sizeId, bobaTypeId])
+   -> Para cada categoría × tamaño × tipo de boba hay un precio exacto (Bs).
+
+7) Topping
+   id, name (unique), price Int, available, createdAt
+
+8) Order
+   id            String @id cuid
+   seq           Int?   @unique         <- número consecutivo del pedido visible
+                                        ("Pedido #00001"); lo genera el cajero
+   status        OrderStatus @default(RECIBIDO)
+   customerName  String?               <- nombre del cliente (mesa/llevar)
+   deliveryType  DeliveryType?         <- MESA | LLEVAR (nuevo, 2026-08-26)
+   total         Int                   <- total en Bs (enteros)
+   createdAt     DateTime @default(now())
+   paidAt        DateTime?
+   deliveredAt   DateTime?
+   userId        String? -> User      <- quién cobró/entregó (IK del cajero)
+   paymentMethod  PaymentMethod?
+   paymentMethod2 PaymentMethod?
+   paymentAmount2 Int?                <- monto del 2º método (pago dividido)
+   discountAmount Int @default(0)
+   discountReason String?
+   discountedAt   DateTime?
+   cancelledAt    DateTime?
+   cancelReason   String?
+   items          OrderItem[]
+   @@index([createdAt, status])
+   @@index([deliveredAt])
+   @@index([userId, status])
+
+9) OrderItem   (una bebida dentro de un pedido)
+   id, orderId -> Order (Cascade)
+   sizeName String, flavorName String, flavorCategory FlavorCategory,
+   bobaTypeName String, unitPrice Int, quantity Int,
+   toppings OrderItemTopping[]
+   @@index([orderId])
+   -> Se guardan los NOMBRES por valor (no FKs). Precio unitario congelado.
+
+10) OrderItemTopping
+   id, orderItemId -> OrderItem (Cascade), toppingName String, unitPrice Int
+
+11) PaymentConfig
+   id        String @id @default("default")   <- fila única
+   qrImage   String    (data URI base64, ej. data:image/png;base64,....)
+   mimeType  String
+   updatedAt DateTime @updatedAt
+
+ENUMS
+  FlavorCategory: MILK | WATER | SPECIAL   (Con leche / Con agua / Especiales)
+  BobaKind:       TAPIOCA | POPPING        (Tapioca / Explosivas)
+  OrderStatus:    RECIBIDO | ACEPTADO | ENTREGADO | ANULADO
+  Role:           ADMIN | CAJERO
+  PaymentMethod:  EFECTIVO | QR | TARJETA
+  DeliveryType:   MESA | LLEVAR
+
+MIGRACIONES (packages/db/prisma/migrations/): init, price matrix, categorías,
+onzas, payment_config, order_customer_name, order_seq, reports_audit_fields
+(userId/paymentMethod/ANULADO+timestamps), cashier_two_states, add_user_active,
+aceptado_three_states, add_order_indexes, add_split_payment, add_delivery_type.
+
+SEMILLA (seed.ts) — catálogo por defecto:
+  - Sizes: Grande 16oz, Extragrande 21oz.
+  - Bobas: Tapioca (TAPIOCA), Explosivas (POPPING).
+  - 18 sabores (Capuchino, Oreo, Fruticoco, Matcha, Piña colada, Limonada
+    brasilera, Frutilimon, Taro, Frutilla, Limón, Piña, Manzana, Naranja,
+    Mango, Coco, Vainilla, Chocolate, Mora) con sus categorías.
+  - Precios (Bs, matriz): SPECIAL G 20/25 EG 30/35; WATER G 16/20 EG 25/30;
+    MILK G 18/22 EG 28/32 (Tapioca/Explosivas).
+  - Toppings: "Boba de tapioca extra" 4 Bs, "Bobas explosivas extra" 5 Bs.
+  - Usuarios: admin@bubba.mx / admin123  (rol ADMIN) y
+              cajero@bubba.mx / cajero123 (rol CAJERO).
+
+================================================================================
+4. RUTAS Y PÁGINAS DE LA APP ADMIN (CON PORTAVOZ DE COMPORTAMIENTO)
+================================================================================
+AUTENTICACIÓN Y PROTECCIÓN
+  - NextAuth v4 con estrategia JWT y provider Credentials. authorize() busca
+    el usuario por email (exacto), compara bcrypt, y REVISA user.active:
+    si está desactivada NO puede iniciar sesión. Devuelve {id,email,name,role}.
+  - Callbacks jwt/session copian id y role al token y a session.user.
+    session.user.role también se usa en app - default "CAJERO" si faltase.
+  - pages.signIn = "/login".
+  - middleware.ts (raíz de apps/admin) usa withAuth con authorized() que
+    devuelve true SOLO si token.role === ADMIN (default CAJERO si no hay token).
+    Matcher: "/((?!login|api/auth|api/reports|_next/static|_next/image|favicon.ico).*)"
+    => Casi todas las rutas exigen ADMIN y redirigen a /login si no.
+    NOTA: api/reports está EXCLUIDO del middleware (las API se protegen solas
+    con requireSession → 401 JSON). api/slideshow y api/printer NO están
+    excluidas → dependen del redirect del middleware (deuda, sección 10).
+  - (dashboard)/layout.tsx: lee sesión y redirige a /login si no hay usuario.
+    Encapsula AdminNav y el contenedor max-w-6xl.
+  - app/api/auth/[...nextauth]/route.ts exporta NextAuth(authOptions) como
+    GET/POST.
+
+PÁGINAS (ruta -> comportamiento):
+
+/ (Dashboard) — SERVER
+  - 3 métricas del DÍA (hora local del servidor, setHours(0,0,0,0)):
+      "Pedidos hoy":       count orders createdAt >= hoy
+      "Pedidos por cobrar":count orders status=RECIBIDO
+      "Ventas del día":    SUM total de órdenes creadas hoy
+  - "Pedidos recientes": últimos 5 pedidos (include items), con #pedido
+    (formatOrderCode = seq padStart 5 ceros), cantidad de bebidas, hora,
+    Badge de estado y total.
+  - statusVariant: RECIBIDO->warning, ACEPTADO->default, ENTREGADO->success,
+    ANULADO->destructive.
+  - Nota de deuda: usa medianoche LOCAL del servidor, NO America/La_Paz (a
+    diferencia de los reportes). Si el servidor está en otra zona horaria, el
+    dashboard puede no coincidir con los reportes diarios.
+
+/login — page.tsx (server) + login-form.tsx (cliente)
+  - Form centrado (max-w-sm), logo circular "B" gradiente ámbar, título
+    "Bubba Admin", campo correo y contraseña, botón "Iniciar sesión".
+  - handleSubmit: signIn("credentials", {redirect:false}); si error, llama
+    isAccountInactive(email,password) para discriminar mensaje:
+      inactiva  -> "Esta cuenta está desactivada. Contacta al administrador."
+      credenciales inválidas -> "Credenciales inválidas. Verifica tu correo y
+      contraseña."
+    Si ok: router.push(callbackUrl || "/") + router.refresh().
+  - isAccountInactive (server action) solo revela "inactiva" cuando las
+    credenciales SON válidas y la cuenta está desactivada (no filtra usuarios).
+
+/menu — page.tsx (server) + MenuManager (cliente)
+  - Carga: sizes (por oz asc), flavors (con sus categories), bobaTypes,
+    toppings, drinkPrices (con size/bobaType para precios).
+  - Orden en la página:
+    1) Tamaños de vaso: crear (nombre + onzas), activar/desactivar (Badge
+       Disponible/No disponible + botón), editar (diálogo), eliminar.
+    2) Sabores: crear con CategoryToggles (3 categorías), toggle de
+       categorías en cada sabor (llama updateFlavor), activar/desactivar,
+       editar, eliminar.
+    3) Tipos de boba: crear con Select de kind (Tapioca/Explosivas), toggle,
+       editar, eliminar.
+    4) Toppings: crear (nombre+precio), toggle, editar, eliminar.
+    5) Matriz de precios: UNA tabla editable por categoría (SPECIAL, WATER,
+       MILK): filas=tamaños, columnas=bobas, celdas Input precio; botón
+       "Guardar matriz" → saveDrinkPrices (upsert transaccional).
+  - Detalle: los botones destructivos (eliminar) se pintan
+    variant="destructive" (rojo). Los toggles de disponible usan Badge
+    success/secondary. Ojo: no hay confirmación en eliminar (se elimina
+    directo; si falla se muestra error en card roja).
+
+/slideshow — page.tsx (cliente)
+  - Carga GET /api/slideshow. Muestra "Tiempo entre fotos" (intervalMs,
+    min 1000, step 500, recomendado 3000-5000) y lista de imágenes.
+  - Subir: input file multiple oculto; por cada archivo comprime en el
+    navegador (createImageBitmap -> resize a max 1600px de ancho -> canvas ->
+    JPEG calidad 0.82 con fondo blanco; si el archivo ya es JPEG < 400KB y <=
+    1600px se sube tal cual) y hace POST /api/slideshow/upload secuencialmente
+    para conservar orden; muestra progreso "Subiendo X de Y".
+  - Cada imagen: preview, Input para "alt" (guardado en vivo vía PUT
+    /api/slideshow), flechas ↑/↓ para reordenar (PUT), botón 🗑 (DELETE
+    /api/slideshow?src=...).
+  - mediaUrl: si src empieza con "/images/" lo convierte a
+    "/api/slideshow/media/{nombre}" (así el admin puede ver las imágenes que
+    sirve la tienda sin acceso directo al public de store).
+
+/orders — page.tsx (server) + OrdersClient (cliente)
+  - Lee ?status=. Filtro por tabs (Todos/Recibidos/Aceptados/Entregados/
+    Anulados) usando Links con query param. Lista ordenada por createdAt desc,
+    include items+toppings, mapea a tipo Order (ISO strings).
+  - Card de pedido (OrdersClient):
+    - Encabezado: "Pedido #NNNNN", "Para: {customerName}" (si el cliente dio
+      nombre), fecha/hora (es-MX), Badge método de pago (si hay: simple o
+      "Efectivo + QR" cuando paymentMethod2 existe), Badge estado
+      (statusVariant), total en bold.
+    - Info de auditoría (si existe): "Pago registrado: ...", "Entregado: ...",
+      "Anulado: {motivo} · {fecha}", "Descuento aplicado: −X Bs (motivo)".
+    - Items: "N× size · flavor · boba" + toppings anidados (Toppings: ...) y
+      total del ítem (unitPrice+toppings)*cantidad.
+    - OrderActions (según estado):
+        RECIBIDO -> Botón "Registrar pago" (despliega panel: select del
+          método EFECTIVO/QR + "Confirmar pago (TOTAL Bs)"), botón
+          "Cobro dividido" (abre SplitPaymentDialog).
+        ACEPTADO -> Botón verde "Entregar".
+        SIEMPRE  -> "Descontar" (panel: monto Bs + motivo + "Aplicar
+          descuento") y "Anular" (panel: motivo obligatorio + confirm()
+          "¿Anular este pedido? Esta acción es irreversible." + botón rojo
+          "Anular pedido").
+        ANULADO  -> sin acciones.
+      - Botón secundario "Reimprimir comanda" (abajo a la derecha) → action
+        reprintOrder.
+  - Manejo de errores: runAction captura y muestra alert() con el mensaje.
+
+/payments — page.tsx (server) + PaymentsClient (cliente)
+  - Lee PaymentConfig id "default"; si existe pasa initialQr={qrImage,mimeType}.
+  - Subir QR: input file (accept image/*, máx 2MB), preview local
+    (URL.createObjectURL), botón "Guardar QR" → savePaymentQr(formData) → vuelve
+    a leer getPaymentQr para refrescar. Botón "Eliminar QR" (destructive).
+  - La imagen se muestra 48x48 (h-48 w-48) con borde y fondo blanco.
+
+/reports — page.tsx (server) + ReportsClient (cliente)
+  - 9 pestañas (ReportKey): dashboard (Resumen), daily (Cierre diario),
+    sales-range (Evolución de ventas), peak-hours (Horas pico), category-sales
+    (Por categoría), top-products (Top productos), slow-movers (Baja rotación),
+    staff-performance (Personal), adjustments (Anulaciones y descuentos).
+  - Controles por pestaña: rango Desde/Hasta (date inputs; default: hace 7 días
+    a hoy, ambos en America/La_Paz), granularidad (sales-range), horas
+    (peak-hours), toggle Top 10 (top-products).
+  - Cada cambio dispara fetch a /api/reports/{endpoint} con cache no-store;
+    renderiza KPI cards + DataTable (genérica).
+  - Acciones:
+      Imprimir (solo dashboard y daily) → server action printSummaryReport() /
+        printDailyReport(to).
+      Exportar PDF → captura el área con html2canvas (scale 2, fondo blanco) y
+        genera A4 multi-página con jsPDF (recorta en páginas).
+      Exportar Excel → exportReportToExcel con el payload ya cargado
+        (clientes, usa xlsx.writeFile).
+  - Pestaña adjustments muestra resumen (descuentos, total descontado,
+    anulaciones, ingreso perdido) + tabla con tipo (Badge destructive para
+    anulación, warning para descuento), pedido #, monto, motivo, responsable,
+    momento; paginación (página X de Y · N registros).
+
+/printer — page.tsx (cliente)
+  - GET /api/printer → { printers: [{name,isWindowsDefault,workOffline}],
+    configured }. Radio por impresora; Badges "Sin conexión" (rojo),
+    "Predeterminada", "Comandas" (si es la configurada).
+  - Botones: "Guardar selección" (PUT /api/printer con printerName; la API
+    valida que la impresora siga instalada), "Probar impresión" (POST
+    /api/printer/test → imprime formatTestPage).
+  - Sección "Impresora conectada a otra computadora": Input UNC
+    (\\EQUIPO\Impresora) + "Conectar impresora de red" (POST
+    /api/printer/connect → Add-Printer). Muestra instrucciones de cómo
+    compartir la impresora en Windows.
+
+/users — page.tsx (server) + UsersClient (cliente)
+  - Lista usuarios (orderBy active desc, name asc). Session para saber quién
+    es el usuario actual (marca "(tú)").
+  - Tabla: Nombre, Correo, Rol (Badge default=Administrador / secondary=
+    Cajero), Estado (Badge success Activo / destructive Inactivo), Acciones:
+      Editar (diálogo: nombre, rol, nueva contraseña opcional).
+      "Dar de baja" (rojo; inhabilitado sobre sí mismo; confirm()) /
+      "Reactivar".
+  - Botón "Nuevo usuario" → diálogo (correo, nombre, rol, contraseña mín 6).
+  - Modal propio (fixed inset-0 bg-black/40 + Card), no usa Dialog de shadcn.
+
+API ROUTES (todas en app/api):
+
+/api/auth/[...nextauth]
+   GET/POST delegados a NextAuth(authOptions). middleware excluye api/auth.
+
+/api/reports/*  (9 rutas, TODAS GET; todas envuelven con handleReportRoute;
+  primero requireSession() -> si no hay sesión: 401 JSON errorBody UNAUTHENTICATED;
+  después parsean los query params con zod y assertRange; devuelven
+  reportEnvelope {data, meta:{report, from, to, generatedAt, currency:"BOB"}};
+  soportan format=csv salvo donde se indique. Monto en Bs enteros.)
+  - dashboard-summary: SIN parámetros. Hoy vs ayer (delta % ingresos/pedidos),
+    últimos 7 días, pendientes (RECIBIDO). Caché EN MEMORIA 30 seg (module var).
+    IMPORTANTE: proyección de "hoy" en America/La_Paz.
+  - daily?date=YYYY-MM-DD&format=: ingresos, órdenes, ticket prom., bebidas,
+    ingreso toppings, descuentos, anulaciones, breakdown por categoría y por
+    método de pago (contabiliza pagos divididos: al método1 va total - monto2,
+    al método2 va monto2). CSV con filas por categoría.
+  - sales-range?from&to&granularity=(day|week|month)&status&format=: serie por
+    bucket (day->YYYY-MM-DD, week->ISO YYYY-Www, month->YYYY-MM), mejor día,
+    comparación vs periodo anterior (delta %), agrupable por estado (si se
+    pasa status==ANULADO lo deja pasar; si no, excluye anuladas).
+  - peak-hours?from&to&weekday(0-6, lun=0)&hourFrom&hourTo: distribuye órdenes
+    por hora local (0-23); calcula hora pico y hora más tranquila (solo horas
+    con venta dentro de rango).
+  - category-sales?from&to&format=: unidades/ingresos por categoría + share %+
+    mejor categoría.
+  - top-products?from&to&groupBy=(drink|flavor|size|bobaType|topping)&metric=
+    (quantity|revenue)&limit&format=: ranking. groupBy=topping calcula desde
+    toppings. El client solo expone el toggle Top 10 (limit=10), el resto usa
+    defaults del cliente (groupBy=flavor, metric=quantity).
+  - slow-movers?from&to&limit(default 10)&includeZero(default true)&toppings&format=:
+    universo = matriz de precios vigente (categoría×tamaño×boba) o toppings;
+    una fila por combinación (aunque no se vendió); ordena ASC por unidades;
+    columna Disponible (boba y size disponibles).
+  - staff-performance?from&to&userId&format=: órdenes no anuladas atribuidas al
+    usuario (userId, userId viene del cajero/admin que cobró/entregó... según
+    acción); suma por usuario: órdenes, recaudado, ticket prom., share %.
+    Requiere hasAuditSchema() (501 si no).
+  - adjustments?from&to&type=(discount|cancellation|all)&userId&page&format=:
+    descuentos y anulaciones en el rango (timestamps discountedAt/cancelledAt);
+    por usuario opcional; paginación 50 por página; CSV lista todos los items.
+    Requiere hasAuditSchema() (501 si no).
+
+/api/printer
+  - GET: listPrinters() (PowerShell Get-CimInstance Win32_Printer → JSON) y
+    getPrinterConfig() (lee ../store/printing.json). Devuelve printers + configured.
+  - PUT {printerName}: valida que exista en la lista local, guarda printing.json.
+/api/printer/connect
+  - POST {uncPath}: valida regex UNC `^\\[^\/:*?<>|]+\...[^...]+$`, ejecuta
+    Add-Printer -ConnectionName. Errores en español.
+/api/printer/test
+  - POST {printerName?}: imprime formatTestPage(printerName) (usa config si no
+    se pasa), devuelve {ok, message}.
+
+/api/slideshow
+  - GET: devuelve apps/store/public/slideshow.json.
+  - PUT {intervalMs?, images?}: actualiza y persiste (indent 2 + \n).
+  - DELETE ?src=: filtra images y persiste.
+/api/slideshow/upload
+  - POST multipart file + alt: escribe imagen en apps/store/public/images/
+    con nombre `slide-{Date.now()}.{ext}`, src=`/images/{filename}` (¡ojo: src
+    usa /images/, no ruta absoluta), pushea a images[] y persiste. Devuelve
+    {src, alt, config}.
+/api/slideshow/media/[name]
+  - GET: valida nombre (regex ^[A-Za-z0-9._-]+$) y extensión en mapa MIME
+    (jpg/jpeg/png/webp/gif/avif), lee el archivo de apps/store/public/images,
+    Cache-Control no-store.
+
+SERVER ACTIONS (app/actions) — todas "use server":
+
+auth.ts
+  - isAccountInactive(email,password): bool.
+
+catalog.ts — todas validan sesión (getRequiredSession) y revalidan /menu:
+  - createSize/updateSize/deleteSize, createFlavor/updateFlavor/deleteFlavor,
+    createBoba/updateBoba/deleteBoba, createTopping/updateTopping/deleteTopping,
+    saveDrinkPrices (upsert en transacción; filtra precios inválidos >0).
+    Detalle: updateFlavor reemplaza categories con deleteMany+createMany;
+    updateSize/updateBoba/updateTopping también togglean available; deleteX usa
+    delete directo (si hay referencias en pedidos... los nombre se guardan por
+    valor en OrderItem, pero los delete de Size/BobaType con DrinkPrice cascade
+    pueden fallar si DrinkPrice los referencia — validar).
+
+orders.ts — acciones del ciclo de vida (todas: getRequiredSession + revalidate
+    /orders y /):
+  - acceptOrder(orderId, method, method2?, amount2?):
+      Método debe estar en AcceptablePayment (EFECTIVO|QR).
+      El pedido debe existir y estar en RECIBIDO (no ANULADO).
+      Si hay method2: también debe ser EFECTIVO|QR, distinto a method,
+      amount2 > 0 y < total. Marca ACEPTADO, paymentMethod(1/2),
+      paymentAmount2 truncado a entero, paidAt=now, userId = el de quien cobra
+      (order.userId si ya había, si no el session.id).
+  - deliverOrder(orderId): solo ACEPTADO o error; marca ENTREGADO,
+      deliveredAt = deliveredAt ?? now (una sola vez), userId si faltase.
+  - cancelOrder(orderId, reason): motivo obligatorio; no doble anulación;
+      ANULADO + cancelledAt + cancelReason + userId del que anula.
+  - applyDiscount(orderId, amountBs, reason): motivo obligatorio, amount>0,
+      amount < total; total -= amount; discountAmount += amount; discountReason/
+      discountedAt; userId.
+  - reprintOrder(orderId): requiere impresora configurada; imprime
+      formatComanda del pedido; devuelve mensaje "Comanda #NNNNN enviada a X".
+
+payment.ts:
+  - savePaymentQr(FormData): exige sesión; file debe ser imagen, no vacío, <=2MB;
+      guarda como data URI en PaymentConfig id "default" (upsert).
+  - removePaymentQr(): delete donde id="default".
+  - getPaymentQr(): devuelve {qrImage,mimeType} | null.
+
+users.ts — todas protegen con requireAdminSession (solo ADMIN):
+  - Validaciones: nombre obligatorio, email con regex simple y lowercased,
+    contraseña mín 6 (solo en create o si se cambia), rol en
+    {ADMIN,CAJERO}. No duplicar email.
+  - assertLastAdminProtection(): no puedes desactivar tu propia cuenta ni
+    quitarte tu rol ADMIN; no puedes desactivar/quitarle ADMIN al ÚLTIMO admin
+    activo del sistema (cuenta otros admins activos).
+  - createUser, updateUser (puede actualizar solo nombre/rol y opcional
+    newPassword), setUserActive(userId, active). Revalidan /users.
+
+print-report.ts:
+  - printSummaryReport(): calcula hoy/ayer/7d/pendientes (America/La_Paz) e
+    imprime formatSummaryReport en la impresora configurada.
+  - printDailyReport(date?): si date YYYY-MM-DD válida usa esa; si no "hoy";
+    calcula cierre (igual que API daily) e imprime formatDailyReport.
+  - Ambos requieren: sesión (requireSession) + impresora configurada.
+
+================================================================================
+5. COMPONENTES CLAVE (packages/ui y apps/admin/components)
+================================================================================
+Desde @bubba/ui (package exports * desde index.ts + cn()):
+  - Button: variantes default | secondary | destructive | outline | ghost |
+    link; sizes default | sm | lg | icon; soporta asChild (Radix Slot).
+  - Badge: variantes default | secondary | destructive | outline | success |
+    warning. IMPORTANTE (semántica real):
+        success   = bg-emerald-500 text-white   (NO usa el token success)
+        warning   = bg-amber-500 text-white     (NO usa el token warning)
+        destructive= usa el token destructive (bg red + white text)
+      En producción visual: ENTREGADO/Disponible/Activo = verde esmeralda;
+      RECIBIDO/Descuento = ámbar; ANULADO/Inactivo/Eliminar = rojo.
+  - Card / CardHeader / CardTitle / CardDescription / CardContent.
+  - Dialog (shadcn/Radix): DialogContent con overlay y cierre por ESC/backdrop.
+  - Input, Label, Select (SelectTrigger/Value/Content/Item).
+  - Builder/cart components (StepIndicator, SizeSelector, FlavorPicker,
+    BobaPicker, QuantityControl, CartItem, CartSummary) usados por store/cajero;
+    admin NO los usa.
+  - cn() = clsx + tailwind-merge.
+
+En apps/admin/components:
+  - AdminNav: NavLink activo (bg-primary) + enlaces + signOut({callbackUrl:
+    "/login"}).
+  - SplitPaymentDialog (cliente, usado en /orders):
+    - Props: total, onConfirm(method, method2, amount2), onCancel, busy.
+    - METHODS = [EFECTIVO, QR]. Selector de "Primer pago" (2 botones tipo
+      toggle; default EFECTIVO). Input numérico "Monto en Bs" (min 1,
+      max total-1). Debajo: "queda {total-monto}" y bloque "Segundo pago"
+      (el método contrario siempre) mostrando la diferencia con formatPrice
+      (visible solo si monto>0 y remaining>0).
+    - Validaciones: monto1 >0; monto1 < total; amount2 = total - monto1 > 0.
+    - Footer: Cancelar (outline) + "Confirmar cobro" (default; busy→
+      "Procesando…"). Al confirmar invoca acceptOrder(order.id, m1, m2, a2).
+
+================================================================================
+6. LÓGICA DE NEGOCIO CRÍTICA (reglas de oro para no romper la app)
+================================================================================
+1) CICLO DE PEDIDO:
+   RECIBIDO -> (acceptOrder, con pago) -> ACEPTADO -> (deliverOrder) ->
+   ENTREGADO. EN CUALQUIER MOMENTO -> ANULADO (con motivo). Los reportes de
+   ventas SOLO consideran órdenes NO ANULADAS (notCancelled). El dashboard
+   admin muestra "Pedidos por cobrar" = los RECIBIDO (los que el cajero aún
+   debe cobrar).
+2) TOTAL:
+   - total es entero en Bs. unitPrice y topping prices son enteros.
+   - El total de un ítem = (basePrice + sumtoppings) × quantity.
+   - El descuento se resta del total y suma a discountAmount (nunca deja
+     total <= 0).
+3) PAGO DIVIDIDO:
+   Se persisten paymentMethod (1er método), paymentMethod2 y paymentAmount2
+   (monto del 2º). El monto del 1º se INFIERE: total - paymentAmount2. Los
+   reportes que desglosan por método usan esa resta (nunca guardan monto1).
+   Ambos métodos deben ser EFECTIVO/QR (TARJETA existe en el enum pero NO es
+   aceptable en el admin/cajero actual).
+4) AUDITORÍA:
+   - paidAt al aceptar, deliveredAt al entregar (se conserva el primero),
+     discountedAt + discountReason, cancelledAt + cancelReason.
+   - userId registra quién cobró/entregó/anuló/descontó (en cobro/entrega se
+     respeta el userId ya asignado si existe).
+   - Los reportes staff-performance y adjustments dependen de estos campos
+     (hasAuditSchema los detecta en runtime por la migración reports_audit_fields).
+5) HORA Y FECHAS DE REPORTES:
+   TODO internacionalización por zona America/La_Paz (GMT-04, sin DST).
+   Utilities en lib/reports/range.ts: getZonedParts, zonedToUtc, dayBounds,
+   rangeBounds, addLocalDays, previousPeriodRange, dayKeyOf, monthKeyOf,
+   isoWeekKeyOf, hourOfDay, weekdayIndex (lun=0). Limitar rango: MAX_RANGE_DAYS
+   = 366 (si no, 422 DATE_RANGE_TOO_LARGE; si from>to, 400 INVALID_DATE_RANGE).
+   La app cajero crea pedidos con new Date() (hora real del sistema), y los
+   reportes proyectan createdAt a America/La_Paz para agrupar por día.
+6) FORMATO DE RESPUESTA DE REPORTES (convención API):
+   OK 200: { data, meta: { report, from ISO, to ISO, generatedAt ISO,
+   currency:"BOB" } }.
+   Error: { error: { code, message } } con status según ERROR_CODES:
+       400 INVALID_PARAMETER / MISSING_PARAMETER / INVALID_DATE_RANGE
+       401 UNAUTHENTICATED       404 NOT_FOUND
+       422 DATE_RANGE_TOO_LARGE  501 NOT_IMPLEMENTED_SCHEMA
+       500 INTERNAL_ERROR
+   Si el error es de zod → INVALID_PARAMETER con el campo ('param').
+7) IMPRESIÓN TÉRMICA (lib/printing.ts):
+   - Usa PowerShell ("powershell.exe" -NoProfile -NonInteractive -Command)
+     con timeout 15s. printText codifica el texto en base64 UTF-8 para
+     evitar problemas de codificación.
+   - Papel: busca PaperSize 80mm (300-340 unidades); si no, custom 315x10000;
+     márgenes 2. Fuente Consolas bold, calibra el tamaño al ancho (máx 12pt)
+     para que la línea más larga quepa.
+   - Todo el texto se pasa por toAscii() (quita tildes/ñ) ANTES de imprimir:
+     la térmica NO acepta caracteres especiales.
+   - Formatos: formatComanda (ancho 30), formatTestPage, formatSummaryReport,
+     formatDailyReport. Encabezado común: "BUBBLE DRINK" centrado.
+   - listPrinters usa Get-CimInstance Win32_Printer y ordena con la
+     predeterminada primero.
+   - getPrinterConfig/setPrinterConfig leen/graban apps/store/printing.json.
+8) CARRUSEL:
+   - La config viva está en apps/store/public/slideshow.json y las imágenes en
+     apps/store/public/images. El admin escribe ahí (ruta ../store/public
+     relativa a su cwd). La tienda (PWA) lee esas imágenes desde /images/*.
+   - intervalMs: velo del carrusel en ms. Alt: descripción.
+   - No borra archivos huérfanos si se elimina la entrada del JSON (deuda).
+9) QR DE PAGO:
+   - Una sola fila (id "default") en PaymentConfig. El cajero lo muestra al
+     cobrar por QR. El admin lo actualiza/elimina. Data URI base64 <= 2MB.
+10) USUARIOS:
+   - Contraseñas hasheadas bcrypt 10 rounds. Mín 6 caracteres.
+   - Cuentas inactivas (active=false) no pueden iniciar sesión en ninguna app.
+   - Protecciones: no auto-desactivación ni auto-downgrade; al menos un ADMIN
+     activo siempre.
+
+================================================================================
+7. VARIABLES DE ENTORNO (env) — APLICAN A apps/admin
+================================================================================
+DATABASE_URL="file:./dev.db"       # SQLite (archivo en packages/db/prisma/dev.db).
+                                   # OJO: cuando ejecutas prisma desde packages/db
+                                   # el relativo apunta a packages/db/prisma/dev.db.
+NEXTAUTH_URL="http://localhost:3001"
+NEXTAUTH_SECRET="cambiar-en-produccion"   # secreto del JWT (tests usan este)
+No hay otras variables. NO hay claves de terceros (sin SMS/pagos externos).
+
+================================================================================
+8. COMANDOS PARA CORRER / MANTENER
+================================================================================
+Desde la raíz del repo (Windows + PowerShell/cmd):
+  pnpm install                 # instala workspaces
+  pnpm dev                     # arranca store(3000)+admin(3001)+cajero(3002) con -r
+  pnpm --filter @bubba/admin dev        # solo admin (puerto 3001, bind 0.0.0.0)
+  pnpm build                   # build -r todas las apps
+  pnpm lint / pnpm typecheck   # -r
+  pnpm db:generate             # prisma generate (después de tocar schema)
+  pnpm db:migrate              # prisma migrate dev (aplica pendientes)
+  pnpm db:seed                 # seed del catálogo + usuarios
+  pnpm db:sync                 # scripts\db-sync.bat: mata dev 3000/3001,
+                               # ejecuta generate (o migrate <nombre>), y
+                               # relanza pnpm dev. Útil tras editar schema.
+En apps/...dashboard: los scripts "start" asumen build previo. En desarrollo se
+usa next dev con esos puertos. IMPORTANTE: la BD es un archivo compartido; no
+hay servidor de base de datos. SQLite no soporta concurrencia pesada.
+
+================================================================================
+9. USUARIOS Y ROLES
+================================================================================
+Roles (enum): ADMIN y CAJERO.
+  - ADMIN  -> acceso total al panel admin (middleware autoriza solo ADMIN).
+  - CAJERO -> NO puede entrar a la app admin (middleware bloquea con redirect
+    a /login, y además el cajero usa su propia app apps/cajero). En el panel
+    admin, los CAJERO no existen como usuarios gestionables por sí mismos
+    (solo ADMIN gestiona usuarios).
+Seed por defecto (¡cambiar en producción!):
+  admin@bubba.mx / admin123   (Administrador, ADMIN)
+  cajero@bubba.mx / cajero123 (Cajero Principal, CAJERO)
+Reglas de negocio de usuarios:
+  - Mínimo 6 caracteres de contraseña.
+  - El login valida contraseña Y active (una cuenta desactivada no entra).
+  - El admin que actúa queda registrado en los pedidos (userId) para los
+    reportes de personal y ajustes.
+  - No puede quedarse el sistema sin al menos un ADMIN activo; y un admin no
+    puede bajarse ni quitarse el rol a sí mismo (assertLastAdminProtection).
+
+================================================================================
+10. DEUDA TÉCNICA Y PUNTOS DE ATENCIÓN (para reconstrucción)
+================================================================================
+1) SQLite vs PostgreSQL: el stack documentado decía PostgreSQL; el código usa
+   SQLite (file). Si el negocio crece (concurrencia entre cajero+admin+store),
+   migrar a PG. Todas las queries son Prisma compatibles, pero los reportes
+   hacen agregaciones en JS (no GROUP BY SQL) — costoso con muchos pedidos.
+2) api/slideshow y api/printer NO tienen requireSession propio: dependen del
+   middleware (que hace REDIRECT en vez de 401 JSON). Funciona, pero es
+   frágil si se reestructura el matcher. api/reports SÍ devuelven 401 JSON.
+3) Dashboard del admin: "hoy" usa la medianoche local del SERVIDOR
+   (new Date().setHours(0,0,0,0)); los reportes usan America/La_Paz. Puede
+   haber desfase si el servidor no está en esa zona.
+4) El preset de Tailwind NO define tokens success/warning como colores de
+   tailwind; el Badge los hardcodea (bg-emerald-500/bg-amber-500). Cualquier
+   otro componente que use "success"/"warning" en clase NO existirá.
+5) hasAuditSchema() cachea en memoria por proceso; si la migración se aplica
+   en caliente hay que reiniciar el server para que la cache se resetee
+   (existe resetAuditSchemaCache() pero no se usa).
+6) Pedidos: customerName/deliveryType son nuevos (2026-08-26). El flujo de
+   la tienda (store PWA) y del kiosco deben convivir: hay pedidos para mesa
+   y para llevar; en el admin se muestra "Para: {cliente}" si hay nombre.
+7) Precios: integer Bs, SIN decimales (no hay manejo de centavos en ningún
+   lado; el split dialog valida montos enteros? parseInt, así que comporta
+   bien solo con enteros).
+8) Lint actual del admin pasa (0 errores) con warnings PRE-EXISTENTES en
+   slideshow (uso de <img> sin next/image, file input sin label asociado, etc.)
+   Tolerables pero pendientes.
+9) No hay tests automatizados (ni unit ni e2e). La validación es manual.
+10) Secutity: NEXTAUTH_SECRET de ejemplo; cambiar en producción. No hay
+    protección CSRF explícita más allá de la de Next server actions.
+11) Los scripts de prueba (seed-ui-test.mjs, query-debug.mjs en
+    packages/db/scripts) NO están commiteados; regenerar según necesidad.
+12) La impresora se configura desde el admin (localhost:3001) y la impresión
+    usa PowerShell del sistema donde corre el admin. La config de impresora
+    (apps/store/printing.json) es compartida con el cajero (la app cajero
+    reimprime usando la misma config).
+13) La pestaña "Impresora" vive en admin; la app cajero SOLO reimprime la
+    comanda con la impresora ya configurada (en /orders "Reimprimir comanda").
+14) El carrusel no elimina archivos de imagen del disco cuando se borra una
+    entrada — se acumulan en apps/store/public/images.
+15) Formato de precios en pantalla: "X Bs" (sin símbolo de moneda). Códigos
+    de pedido: formatOrderCode = padStart(5,"0").
+
+================================================================================
+FIN DEL ANÁLISIS
+================================================================================

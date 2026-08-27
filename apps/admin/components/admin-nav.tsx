@@ -13,10 +13,10 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
     <Link
       href={href}
       className={cn(
-        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        "rounded-md px-3 py-1.5 text-lg font-semibold transition-colors",
         active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+          ? "bg-primary text-white shadow-md"
+          : "text-slate-400 hover:bg-slate-800 hover:text-white",
       )}
     >
       {children}

@@ -21,6 +21,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  useToast,
 } from "@bubba/ui";
 import {
   BobaKind,
@@ -108,10 +109,9 @@ function PriceMatrixEditor({
     }
     return init;
   });
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   async function save() {
-    setError(null);
     try {
       const prices = sizes.flatMap((s) =>
         bobaTypes.map((b) => ({
@@ -122,7 +122,12 @@ function PriceMatrixEditor({
       );
       await saveDrinkPrices({ category, prices });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ocurrió un error.");
+      toast({
+        variant: "destructive",
+        title: "Acción Denegada",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
     }
   }
 
@@ -185,7 +190,6 @@ function PriceMatrixEditor({
             </table>
           </div>
         )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex justify-end">
           <Button
             onClick={save}
@@ -222,7 +226,7 @@ export function MenuManager({
     kind: BobaKind;
   }>({ name: "", kind: BobaKind.TAPIOCA });
   const [toppingForm, setToppingForm] = useState({ name: "", price: "" });
-  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
   const [sizeEdit, setSizeEdit] = useState({ name: "", oz: "" });
@@ -237,9 +241,13 @@ export function MenuManager({
   const [toppingEdit, setToppingEdit] = useState({ name: "", price: "" });
 
   function run(action: () => Promise<void>) {
-    setError(null);
     action().catch((e) => {
-      setError(e instanceof Error ? e.message : "Ocurrió un error.");
+      toast({
+        variant: "destructive",
+        title: "Acción Denegada",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
     });
   }
 
@@ -275,22 +283,16 @@ export function MenuManager({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Gestión del menú</h1>
+      <div className="mb-6 border-b border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-white">Gestión del menú</h1>
         <p className="text-muted-foreground">
           Administra tamaños, sabores, bobas, toppings y la matriz de precios.
         </p>
       </div>
 
-      {error && (
-        <Card>
-          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
-        </Card>
-      )}
-
       <Card>
-        <CardHeader>
-          <CardTitle>Tamaños de vaso</CardTitle>
+        <CardHeader className="border-b border-slate-800 pb-4">
+          <CardTitle className="text-xl font-bold text-white">Tamaños de vaso</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -382,8 +384,8 @@ export function MenuManager({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Sabores</CardTitle>
+        <CardHeader className="border-b border-slate-800 pb-4">
+          <CardTitle className="text-xl font-bold text-white">Sabores</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -486,8 +488,8 @@ export function MenuManager({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Tipos de boba</CardTitle>
+        <CardHeader className="border-b border-slate-800 pb-4">
+          <CardTitle className="text-xl font-bold text-white">Tipos de boba</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -587,8 +589,8 @@ export function MenuManager({
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Toppings</CardTitle>
+        <CardHeader className="border-b border-slate-800 pb-4">
+          <CardTitle className="text-xl font-bold text-white">Toppings</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">

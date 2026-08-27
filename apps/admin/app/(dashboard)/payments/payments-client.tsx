@@ -75,8 +75,8 @@ export function PaymentsClient({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Pagos</h1>
+      <div className="mb-6 border-b border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-white">Pagos</h1>
         <p className="text-muted-foreground">
           Sube el código QR de tu cuenta de pago. Se mostrará al cliente al
           confirmar su pedido.

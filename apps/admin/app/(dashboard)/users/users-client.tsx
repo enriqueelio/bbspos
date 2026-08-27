@@ -49,9 +49,9 @@ export function UsersClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-2xl font-bold">Usuarios</h1>
+          <h1 className="text-xl font-bold text-white">Usuarios</h1>
           <p className="text-muted-foreground">
             Gestión del personal: altas, bajas, roles y contraseñas.
           </p>

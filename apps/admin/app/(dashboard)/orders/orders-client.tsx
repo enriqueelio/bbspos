@@ -11,6 +11,7 @@ import {
   CardTitle,
   Input,
   Label,
+  useToast,
 } from "@bubba/ui";
 import {
   formatPrice,
@@ -51,14 +52,23 @@ function statusVariant(status: OrderStatus) {
   }
 }
 
-function runAction(fn: () => Promise<void>) {
+function runAction(
+  fn: () => Promise<void>,
+  toast: ReturnType<typeof useToast>["toast"],
+) {
   fn().catch((e) => {
-    alert(e instanceof Error ? e.message : "Ocurrió un error.");
+    toast({
+      variant: "destructive",
+      title: "Acción Denegada",
+      description: e instanceof Error ? e.message : "Ocurrió un error.",
+      duration: 100000,
+    });
   });
 }
 
 function ReprintButton({ orderId }: { orderId: string }) {
   const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
 
   return (
     <Button
@@ -69,11 +79,17 @@ function ReprintButton({ orderId }: { orderId: string }) {
         setBusy(true);
         try {
           const message = await reprintOrder(orderId);
-          alert(message);
+          toast({ title: message });
         } catch (e) {
-          alert(
-            e instanceof Error ? e.message : "No se pudo reimprimir la comanda.",
-          );
+          toast({
+            variant: "destructive",
+            title: "Acción Denegada",
+            description:
+              e instanceof Error
+                ? e.message
+                : "No se pudo reimprimir la comanda.",
+            duration: 100000,
+          });
         } finally {
           setBusy(false);
         }
@@ -92,6 +108,7 @@ function OrderActions({ order }: { order: Order }) {
   const [reason, setReason] = useState("");
   const [showSplit, setShowSplit] = useState(false);
   const [splitBusy, setSplitBusy] = useState(false);
+  const { toast } = useToast();
 
   if (order.status === "ANULADO") {
     return null;
@@ -124,7 +141,7 @@ function OrderActions({ order }: { order: Order }) {
                   runAction(async () => {
                     await acceptOrder(order.id, "EFECTIVO");
                     close();
-                  })
+                  }, toast)
                 }
               >
                 Efectivo
@@ -135,7 +152,7 @@ function OrderActions({ order }: { order: Order }) {
                   runAction(async () => {
                     await acceptOrder(order.id, "QR");
                     close();
-                  })
+                  }, toast)
                 }
               >
                 QR
@@ -160,7 +177,7 @@ function OrderActions({ order }: { order: Order }) {
           onClick={() =>
             runAction(async () => {
               await deliverOrder(order.id);
-            })
+            }, toast)
           }
         >
           Entregar
@@ -213,7 +230,7 @@ function OrderActions({ order }: { order: Order }) {
               runAction(async () => {
                 await applyDiscount(order.id, Number(amount), reason);
                 close();
-              })
+              }, toast)
             }
           >
             Aplicar descuento
@@ -245,7 +262,7 @@ function OrderActions({ order }: { order: Order }) {
               runAction(async () => {
                 await cancelOrder(order.id, reason);
                 close();
-              });
+              }, toast);
             }}
           >
             Anular pedido
@@ -263,7 +280,7 @@ function OrderActions({ order }: { order: Order }) {
               await acceptOrder(order.id, m1, m2, a2);
               setShowSplit(false);
               setSplitBusy(false);
-            });
+            }, toast);
           }}
           onCancel={() => setShowSplit(false)}
         />
@@ -412,8 +429,8 @@ export function OrdersClient({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Pedidos</h1>
+      <div className="mb-6 border-b border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-white">Pedidos</h1>
         <p className="text-muted-foreground">
           Consulta y avanza el estado de los pedidos.
         </p>

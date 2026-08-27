@@ -160,7 +160,7 @@ export default function SlideshowPage() {
   if (!config) {
     return (
       <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Carrusel de imágenes</h1>
+        <h1 className="text-xl font-bold text-white">Carrusel de imágenes</h1>
         <p className="text-muted-foreground">Cargando...</p>
       </div>
     );
@@ -168,8 +168,8 @@ export default function SlideshowPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Carrusel de imágenes</h1>
+      <div className="mb-6 border-b border-slate-800 pb-4">
+        <h1 className="text-xl font-bold text-white">Carrusel de imágenes</h1>
         <p className="text-muted-foreground">
           Administra las fotos del carrusel de la página de inicio. Puedes
           seleccionar varias a la vez; se optimizan automáticamente para carga
@@ -202,7 +202,7 @@ export default function SlideshowPage() {
       </Card>
 
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">
+        <h2 className="text-xl font-bold text-white">
           Imágenes ({config.images.length})
         </h2>
         <div>
@@ -219,14 +219,18 @@ export default function SlideshowPage() {
             disabled={uploading}
           >
             <Upload className="mr-2 h-4 w-4" />
-            {uploading && progress
-              ? `Subiendo ${progress.done} de ${progress.total}...`
-              : uploading
-                ? "Subiendo..."
-                : "Subir imágenes"}
+            {uploading ? "Subiendo..." : "Subir imágenes"}
           </Button>
         </div>
       </div>
+
+      {uploading && progress && (
+        <div className="text-center">
+          <div className="text-xl font-bold text-primary animate-pulse">
+            Subiendo imagen {progress.done} de {progress.total}...
+          </div>
+        </div>
+      )}
 
       {config.images.length === 0 ? (
         <Card>
@@ -259,7 +263,7 @@ export default function SlideshowPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    disabled={i === 0}
+                    disabled={uploading || i === 0}
                     onClick={() => moveImage(i, -1)}
                   >
                     <ChevronUp className="h-4 w-4" />
@@ -267,7 +271,7 @@ export default function SlideshowPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    disabled={i === config.images.length - 1}
+                    disabled={uploading || i === config.images.length - 1}
                     onClick={() => moveImage(i, 1)}
                   >
                     <ChevronDown className="h-4 w-4" />
@@ -276,6 +280,7 @@ export default function SlideshowPage() {
                     variant="ghost"
                     size="icon"
                     className="text-destructive"
+                    disabled={uploading}
                     onClick={() => removeImage(i)}
                   >
                     <Trash2 className="h-4 w-4" />

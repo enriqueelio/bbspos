@@ -352,7 +352,7 @@ export function MenuManager({
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
                     onClick={() => run(() => deleteSize(size.id))}
@@ -456,7 +456,7 @@ export function MenuManager({
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
                     onClick={() => run(() => deleteFlavor(flavor.id))}
@@ -557,7 +557,7 @@ export function MenuManager({
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
                     onClick={() => run(() => deleteBoba(boba.id))}
@@ -654,7 +654,7 @@ export function MenuManager({
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="icon"
                     aria-label="Eliminar"
                     onClick={() => run(() => deleteTopping(topping.id))}

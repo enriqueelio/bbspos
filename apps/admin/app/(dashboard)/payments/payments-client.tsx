@@ -127,7 +127,7 @@ export function PaymentsClient({
               {busy ? "Guardando..." : "Guardar QR"}
             </Button>
             <Button
-              variant="outline"
+              variant="destructive"
               onClick={handleRemove}
               disabled={busy || !qr}
             >

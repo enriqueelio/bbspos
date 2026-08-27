@@ -427,3 +427,27 @@ export interface DashboardSummaryData {
   last7Days: { revenue: number; orders: number; avgTicket: number };
   pendingOrders: number;
 }
+
+/** Zona horaria del negocio (acorde a lib/day.ts y al worker de cierre). */
+export const BUSINESS_TIME_ZONE = "America/La_Paz";
+
+/** Hora local (HH:MM) desde la que se habilita el envío manual del cierre de caja. */
+export const MANUAL_REPORT_CUTOFF = "23:10";
+export const MANUAL_REPORT_CUTOFF_MINUTES = 23 * 60 + 10;
+
+/** Minutos transcurridos del día en la zona horaria indicada (seguro para cliente). */
+export function zonedClockMinutes(
+  date: Date,
+  timeZone: string = BUSINESS_TIME_ZONE,
+): number {
+  const [h, m] = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .format(date)
+    .split(":")
+    .map(Number);
+  return h * 60 + m;
+}

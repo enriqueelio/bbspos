@@ -9,13 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { FileSpreadsheet, FileDown, Printer } from "lucide-react";
+import { FileSpreadsheet, FileDown, Printer, Send } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import {
   printSummaryReport,
   printDailyReport,
 } from "@/app/actions/print-report";
+import { sendDailyReportToBot } from "@/app/actions/daily-report";
 import {
   Badge,
   Button,
@@ -42,6 +43,9 @@ import {
   FlavorCategoryLabel,
   formatPrice,
   PaymentMethodLabel,
+  MANUAL_REPORT_CUTOFF,
+  MANUAL_REPORT_CUTOFF_MINUTES,
+  zonedClockMinutes,
 } from "@bubba/types";
 import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
 
@@ -136,6 +140,17 @@ export function ReportsClient({
   const [error, setError] = useState<string | null>(null);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [isPrinting, startPrintTransition] = useTransition();
+  const [cierreMsg, setCierreMsg] = useState<string | null>(null);
+  const [isSendingCierre, startCierreTransition] = useTransition();
+  const [clockNow, setClockNow] = useState(() => Date.now());
+
+  // Habilita "Cierre diario" solo a partir de las 23:10 (reloj del negocio).
+  useEffect(() => {
+    const timer = setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  const canSendCierre =
+    zonedClockMinutes(new Date(clockNow)) >= MANUAL_REPORT_CUTOFF_MINUTES;
   const [isExportingPdf, setExportingPdf] = useState(false);
   const [isExportingExcel, setExportingExcel] = useState(false);
   const pdfAreaRef = useRef<HTMLDivElement>(null);
@@ -259,6 +274,20 @@ export function ReportsClient({
     });
   };
 
+  const handleSendCierre = () => {
+    setCierreMsg(null);
+    startCierreTransition(async () => {
+      try {
+        const msg = await sendDailyReportToBot();
+        setCierreMsg(msg);
+      } catch (e) {
+        setCierreMsg(
+          e instanceof Error ? e.message : "No se pudo enviar el reporte.",
+        );
+      }
+    });
+  };
+
   const exportPdf = async () => {
     const area = pdfAreaRef.current;
     if (!area) return;
@@ -319,6 +348,20 @@ export function ReportsClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isSendingCierre || !canSendCierre}
+            onClick={handleSendCierre}
+            title={
+              canSendCierre
+                ? undefined
+                : `Disponible a partir de las ${MANUAL_REPORT_CUTOFF}`
+            }
+          >
+            <Send className="mr-1 h-4 w-4" />
+            {isSendingCierre ? "Enviando…" : "Cierre diario"}
+          </Button>
           {canPrint && (
             <Button
               variant="outline"
@@ -349,6 +392,14 @@ export function ReportsClient({
             {isExportingExcel ? "Exportando…" : "Exportar Excel"}
           </Button>
         </div>
+        {cierreMsg && (
+          <p className="basis-full text-sm text-primary">{cierreMsg}</p>
+        )}
+        {!canSendCierre && (
+          <p className="basis-full text-sm text-muted-foreground">
+            El cierre diario se habilita a partir de las {MANUAL_REPORT_CUTOFF}.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">

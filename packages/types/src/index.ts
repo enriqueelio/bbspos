@@ -212,6 +212,7 @@ export interface Order {
   discountReason?: string | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  delayNotified?: boolean;
 }
 
 export interface CashierDailyData {

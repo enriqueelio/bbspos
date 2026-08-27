@@ -96,6 +96,7 @@ model Order {
   discountedAt   DateTime?
   cancelledAt    DateTime?
   cancelReason   String?
+  delayNotified  Boolean        @default(false)
 
   @@index([createdAt, status])
   @@index([deliveredAt])

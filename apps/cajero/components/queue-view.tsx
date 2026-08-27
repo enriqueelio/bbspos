@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Badge,
@@ -21,24 +21,56 @@ import {
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
+import { notifyDelayedOrder } from "@/actions/notifications";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 
 function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
 }
 
-function useQueueClock() {
+function useQueueClock(orders: Order[]) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const notifiedRef = useRef<Set<string>>(new Set());
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
 
   // Reloj para la antigüedad de cada pedido.
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
+
+  // Alerta por Telegram para pedidos retrasados (>10 min), una sola vez.
+  // Se dispara solo con el tick del reloj (no en cada refresh de la cola).
+  // Al enviar, el id queda marcado para siempre; si el servidor reporta fallo,
+  // se libera para que el siguiente tick reintente.
+  useEffect(() => {
+    for (const order of ordersRef.current) {
+      if (
+        order.status !== OrderStatus.RECIBIDO &&
+        order.status !== OrderStatus.ACEPTADO
+      ) {
+        continue;
+      }
+      if (order.delayNotified || notifiedRef.current.has(order.id)) continue;
+      const minutes = ageMinutes(order.createdAt, now);
+      if (minutes >= 10) {
+        notifiedRef.current.add(order.id);
+        notifyDelayedOrder(order.id, order.seq ?? 0, minutes).then((ok) => {
+          if (ok) return;
+          // Falló el envío (Telegram caído, red, token…): se libera la marca
+          // local y el siguiente tick del reloj reintenta automáticamente.
+          notifiedRef.current.delete(order.id);
+        }).catch(() => {
+          notifiedRef.current.delete(order.id);
+        });
+      }
+    }
+  }, [now]);
 
   // Refresco automático de la cola; se pausa con la pestaña oculta.
   useEffect(() => {
@@ -363,7 +395,7 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
 }
 
 export function QueueView({ orders }: { orders: Order[] }) {
-  const clock = useQueueClock();
+  const clock = useQueueClock(orders);
 
   if (orders.length === 0) {
     return (

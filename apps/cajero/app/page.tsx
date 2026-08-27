@@ -18,6 +18,7 @@ function toPlainOrder(order: {
   total: number;
   createdAt: Date;
   deliveredAt: Date | null;
+  delayNotified: boolean;
   items: {
     id: string;
     sizeName: string;
@@ -37,6 +38,7 @@ function toPlainOrder(order: {
     total: order.total,
     createdAt: order.createdAt.toISOString(),
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
+    delayNotified: order.delayNotified,
     items: order.items.map((item) => ({
       ...item,
       flavorCategory: item.flavorCategory as Order["items"][number]["flavorCategory"],

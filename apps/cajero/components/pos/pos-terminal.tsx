@@ -162,7 +162,19 @@ export function PosTerminal({
         deliveryType,
       );
       cart.clear();
+      // Devuelve los selectores a su estado por defecto para no arrastrar
+      // las opciones del pedido anterior.
       setToppingIds([]);
+      setSizeId("");
+      setBobaTypeId(catalog.bobaTypes[0]?.id ?? "");
+      setSelectedFlavorId(null);
+      setActiveCategory(
+        CATEGORIES.find((c) =>
+          catalog.flavors.some(
+            (f) => f.categories.includes(c) && f.available,
+          ),
+        ) ?? FlavorCategory.MILK,
+      );
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
@@ -181,9 +193,11 @@ export function PosTerminal({
   const selectedSize: Size | undefined = size;
 
   return (
-    <div className="flex flex-col md:flex-row w-full h-[calc(100vh-5rem)] overflow-hidden bg-slate-950">
+    <div className="flex flex-col lg:flex-row w-full min-h-screen lg:h-[calc(100vh-5rem)] bg-slate-950 overflow-hidden">
       {/* ===== Izquierda: Catálogo de menú ===== */}
-      <div className="flex-1 min-h-[40vh] md:min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+        {/* Contenedor interno que centra el menú y limita su expansión en pantallas anchas */}
+        <div className="max-w-4xl mx-auto flex flex-col gap-6">
         {/* Pestañas de categorías */}
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((category) => {
@@ -210,7 +224,7 @@ export function PosTerminal({
         </div>
 
         {/* Grilla de sabores */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {flavors.map((flavor) => {
             const selected = selectedFlavorId === flavor.id;
             return (
@@ -342,98 +356,101 @@ export function PosTerminal({
             Toca un sabor para empezar tu pedido.
           </p>
         )}
+        </div>
       </div>
 
-      {/* ===== Derecha: Ticket en curso (panel fijo y separado) ===== */}
-      <aside className="w-full md:w-[340px] lg:w-[400px] h-[50vh] md:h-full flex-shrink-0 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col z-10">
-        <div className="flex-1 min-h-0 flex flex-col">
-          <h2 className="px-3 pt-3 pb-1 text-lg font-black uppercase tracking-wide text-white">
+      {/* ===== Derecha: Ticket en curso y cobro (barra lateral sólida) ===== */}
+      <div className="w-full lg:w-[420px] flex-shrink-0 bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-full z-10 shadow-2xl">
+        <div className="shrink-0 p-5 pb-0 space-y-2">
+          <h2 className="text-lg font-black uppercase tracking-wide text-white">
             Ticket en curso
           </h2>
-
           {busy && (
-            <p className="mx-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+            <p className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
               Enviando… por favor espera.
             </p>
           )}
           {notice && (
-            <p className="mx-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+            <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
               {notice}
             </p>
           )}
           {error && (
-            <p className="mx-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
               ⚠ {error}
             </p>
           )}
-
-          {/* Cuerpo del ticket: lista scrolleable */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {cart.items.length === 0 && (
-              <p className="text-base text-white">
-                Agrega bebidas tocando un sabor.
-              </p>
-            )}
-            {cart.items.map((item) => {
-              const unitWithExtras =
-                item.unitPrice +
-                item.toppings.reduce((sum, t) => sum + t.price, 0);
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
-                >
-                  <div className="min-w-0 text-base">
-                    <p className="font-bold text-white">
-                      {item.quantity}× {item.flavor.name}
-                    </p>
-                    <p className="text-white font-normal">
-                      {item.size.name} · {item.bobaType.name}
-                    </p>
-                    {item.toppings.length > 0 && (
-                      <p className="text-white font-normal">
-                        + {item.toppings.map((t) => t.name).join(", ")}
-                      </p>
-                    )}
-                    <div className="mt-1 flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
-                        onClick={() =>
-                          cart.updateQuantity(item.id, item.quantity - 1)
-                        }
-                      >
-                        −
-                      </button>
-                      <button
-                        type="button"
-                        className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
-                        onClick={() =>
-                          cart.updateQuantity(item.id, item.quantity + 1)
-                        }
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded bg-destructive px-2 py-1 text-base font-bold text-destructive-foreground hover:bg-destructive/90"
-                        onClick={() => cart.removeItem(item.id)}
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
-                  <span className="font-mono text-base font-bold text-white">
-                    {formatPrice(unitWithExtras * item.quantity)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
         </div>
 
-        {/* Pie del ticket: controles y botón de cobro */}
-        <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2">
+        {/* Cuerpo del ticket: ítems scrolleables */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {cart.items.length === 0 && (
+            <p className="text-base text-white">
+              Agrega bebidas tocando un sabor.
+            </p>
+          )}
+          {cart.items.map((item) => {
+            const unitWithExtras =
+              item.unitPrice +
+              item.toppings.reduce((sum, t) => sum + t.price, 0);
+            return (
+              <div
+                key={item.id}
+                className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
+              >
+                <div className="min-w-0 text-base">
+                  <p className="font-bold text-white">
+                    {item.quantity}× {item.flavor.name}
+                  </p>
+                  <p className="text-white font-normal">
+                    {item.size.name} · {item.bobaType.name}
+                  </p>
+                  {item.toppings.length > 0 && (
+                    <p className="text-white font-normal">
+                      + {item.toppings.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      className="h-14 w-14 rounded-lg bg-slate-700 text-white text-2xl font-bold flex items-center justify-center active:scale-95 transition-transform"
+                      onClick={() =>
+                        cart.updateQuantity(item.id, item.quantity - 1)
+                      }
+                    >
+                      −
+                    </button>
+                    <span className="text-xl font-bold w-8 text-center">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      className="h-14 w-14 rounded-lg bg-slate-700 text-white text-2xl font-bold flex items-center justify-center active:scale-95 transition-transform"
+                      onClick={() =>
+                        cart.updateQuantity(item.id, item.quantity + 1)
+                      }
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      className="h-14 px-6 rounded-lg bg-red-600 text-white text-lg font-bold active:scale-95 transition-transform"
+                      onClick={() => cart.removeItem(item.id)}
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                </div>
+                <span className="font-mono text-base font-bold text-white">
+                  {formatPrice(unitWithExtras * item.quantity)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Área de pago fija al fondo de la barra lateral */}
+        <div className="shrink-0 p-5 bg-slate-950 border-t border-slate-800 flex flex-col gap-3">
           <input
             type="text"
             value={cart.customerName}
@@ -472,7 +489,7 @@ export function PosTerminal({
             type="button"
             disabled={busy || cart.items.length === 0}
             onClick={submit}
-            className={`w-full h-16 text-xl font-black text-white rounded-xl shadow-lg mt-2 flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`w-full h-16 text-xl font-black text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
             }`}
           >
@@ -490,7 +507,7 @@ export function PosTerminal({
             )}
           </button>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }

@@ -148,7 +148,7 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
     );
     return (
       <Badge className={`text-base ${color(minutes)}`}>
-        Entregado en {formatDurationMinutes(minutes)}
+        ⏱ Tardó {formatDurationMinutes(minutes)}
       </Badge>
     );
   }
@@ -283,6 +283,8 @@ function OrderCard({
   const isFresh =
     order.status === OrderStatus.RECIBIDO ||
     (order.status === OrderStatus.ACEPTADO && !order.paidAt);
+  const isDeliveredNotPaid =
+    order.deliveredAt !== null && order.paidAt === null;
   const isPending = clock.busyId === order.id;
 
   return (
@@ -315,6 +317,11 @@ function OrderCard({
             <Badge variant={statusVariant(order.status)} className="text-base">
               {OrderStatusLabel[order.status]}
             </Badge>
+            {isDeliveredNotPaid && (
+              <Badge className="bg-red-600 text-white font-black animate-pulse px-3 py-1 uppercase text-sm border border-red-400 shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                ¡Falta Pagar!
+              </Badge>
+            )}
             <AgeBadge order={order} now={clock.now} />
             <span className="text-base text-white">
               {new Date(order.createdAt).toLocaleTimeString("es-MX", {
@@ -329,7 +336,11 @@ function OrderCard({
         <ItemsList order={order} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div className="space-y-2">
-            <span className="block py-1 text-4xl font-mono font-black text-white">
+            <span
+              className={`block py-1 text-4xl font-mono font-black ${
+                isDeliveredNotPaid ? "text-red-500" : "text-white"
+              }`}
+            >
               {formatPrice(order.total)}
             </span>
             {order.paymentMethod && (

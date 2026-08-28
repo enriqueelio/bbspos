@@ -8,6 +8,7 @@ import { QueueView } from "@/components/queue-view";
 import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
+import { SignOutButton } from "@/components/sign-out-button";
 import { getPosCatalog } from "@/actions/pos";
 
 type Tab = "preparar" | "venta" | "reporte";
@@ -152,7 +153,10 @@ function Header({
           <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700" />
           <span>Bubba Cajero</span>
         </div>
-        <span className="text-sm text-muted-foreground">{name}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">{name}</span>
+          <SignOutButton />
+        </div>
       </div>
       {/* El mesero solo toma órdenes: no muestra navegación a otras vistas. */}
       {!isMesero && (

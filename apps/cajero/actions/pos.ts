@@ -64,6 +64,13 @@ export async function createPosOrder(
     throw new Error("El carrito está vacío");
   }
 
+  // Verifica que el usuario de la sesión exista para no violar la llave
+  // foránea a la hora de asociar el pedido. Si no existe, se crea sin usuario.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+
   const orderItems = items.map((item) => ({
     sizeName: item.size.name,
     flavorName: item.flavor.name,
@@ -85,26 +92,34 @@ export async function createPosOrder(
     0,
   );
 
-  const order = await prisma.$transaction(async (tx) => {
-    const last = await tx.order.findFirst({
-      orderBy: { seq: "desc" },
-      select: { seq: true },
-    });
-    const seq = (last?.seq ?? 0) + 1;
-    return tx.order.create({
-      data: {
-        customerName: customerName?.trim() || null,
-        deliveryType: deliveryType ?? null,
-        status: OrderStatus.ACEPTADO,
-        seq,
-        total,
-        userId: session.user.id,
-        items: {
-          create: orderItems,
+  let order: Awaited<ReturnType<typeof prisma.order.create>>;
+  try {
+    order = await prisma.$transaction(async (tx) => {
+      const last = await tx.order.findFirst({
+        orderBy: { seq: "desc" },
+        select: { seq: true },
+      });
+      const seq = (last?.seq ?? 0) + 1;
+      return tx.order.create({
+        data: {
+          customerName: customerName?.trim() || null,
+          deliveryType: deliveryType ?? null,
+          status: OrderStatus.ACEPTADO,
+          seq,
+          total,
+          userId: dbUser ? dbUser.id : null,
+          items: {
+            create: orderItems,
+          },
         },
-      },
+      });
     });
-  });
+  } catch (e) {
+    console.error("No se pudo crear el pedido:", e);
+    throw new Error(
+      "No se pudo crear el pedido. Intenta de nuevo o contacta al administrador.",
+    );
+  }
 
   revalidatePath("/");
 

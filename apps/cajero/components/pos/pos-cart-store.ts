@@ -147,7 +147,7 @@ function subscribe(listener: () => void) {
 }
 
 export function usePosCart() {
-  const state = useSyncExternalStore(subscribe, () => snapshot);
+  const state = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
   return {
     ...state,
     addItem: addPosItem,

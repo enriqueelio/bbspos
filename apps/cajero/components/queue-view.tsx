@@ -184,14 +184,14 @@ function ItemsList({ order }: { order: Order }) {
           className="flex items-center justify-between gap-2"
         >
           <span>
-            <span className="font-semibold text-white">
+            <span className="font-bold text-white">
               {item.quantity}× {item.flavorName} ({item.sizeName})
             </span>{" "}
-            <span className="text-slate-400 font-normal">
+            <span className="text-white font-normal">
               · {item.bobaTypeName}
             </span>
             {item.toppings.length > 0 && (
-              <span className="block pl-4 text-slate-400 font-normal">
+              <span className="block pl-4 text-white font-normal">
                 + {item.toppings.map((t) => t.toppingName).join(", ")}
               </span>
             )}
@@ -266,7 +266,7 @@ function OrderCard({
               {OrderStatusLabel[order.status]}
             </Badge>
             <AgeBadge order={order} now={clock.now} />
-            <span className="text-base text-muted-foreground">
+            <span className="text-base text-white">
               {new Date(order.createdAt).toLocaleTimeString("es-MX", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -279,11 +279,11 @@ function OrderCard({
         <ItemsList order={order} />
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div className="space-y-2">
-            <span className="block py-1 text-4xl font-mono font-bold text-white">
+            <span className="block py-1 text-4xl font-mono font-black text-white">
               {formatPrice(order.total)}
             </span>
             {order.paymentMethod && (
-              <p className="text-base text-muted-foreground">
+              <p className="text-base text-white">
                 Pago: {PaymentMethodLabel[order.paymentMethod]}
                 {order.paymentMethod2 &&
                   order.paymentAmount2 != null &&
@@ -407,7 +407,7 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
     <Card>
       <CardContent className="p-8 text-center">
         <p className="font-semibold">{title}</p>
-        <p className="mt-1 text-base text-muted-foreground">{hint}</p>
+        <p className="mt-1 text-base text-white">{hint}</p>
       </CardContent>
     </Card>
   );

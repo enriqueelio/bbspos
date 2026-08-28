@@ -9,6 +9,7 @@ import {
   formatPrice,
   Role,
   type Catalog,
+  type Flavor,
   type FlavorCategory as FlavorCategoryType,
   type Role as RoleType,
   type Size,
@@ -55,10 +56,11 @@ export function PosTerminal({
       ),
     ) ?? FlavorCategory.MILK,
   );
-  const [sizeId, setSizeId] = useState<string>(catalog.sizes[0]?.id ?? "");
+  const [sizeId, setSizeId] = useState<string>("");
   const [bobaTypeId, setBobaTypeId] = useState<string>(
     catalog.bobaTypes[0]?.id ?? "",
   );
+  const [selectedFlavorId, setSelectedFlavorId] = useState<string | null>(null);
   const [toppingIds, setToppingIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -67,11 +69,8 @@ export function PosTerminal({
   const sizes = catalog.sizes.filter((s) => s.available);
   const bobaTypes = catalog.bobaTypes.filter((b) => b.available);
   const toppings = catalog.toppings.filter((t) => t.available);
-  const size =
-    sizes.find((s) => s.id === sizeId) ?? sizes.find((s) => s.available);
-  const bobaType =
-    bobaTypes.find((b) => b.id === bobaTypeId) ??
-    bobaTypes.find((b) => b.available);
+  const size = sizes.find((s) => s.id === sizeId);
+  const bobaType = bobaTypes.find((b) => b.id === bobaTypeId);
 
   const flavors = useMemo(
     () =>
@@ -97,10 +96,15 @@ export function PosTerminal({
     .map((id) => toppings.find((t) => t.id === id))
     .filter((t): t is Topping => Boolean(t));
 
+  const selectedFlavor =
+    flavors.find((f) => f.id === selectedFlavorId) ?? null;
+
   function switchCategory(category: FlavorCategoryType) {
     setActiveCategory(category);
-    setSizeId(catalog.sizes[0]?.id ?? "");
+    setSizeId("");
     setBobaTypeId(catalog.bobaTypes[0]?.id ?? "");
+    setSelectedFlavorId(null);
+    setToppingIds([]);
   }
 
   function toggleTopping(id: string) {
@@ -109,6 +113,38 @@ export function PosTerminal({
         ? current.filter((t) => t !== id)
         : [...current, id],
     );
+  }
+
+  // Tocar un sabor marca el producto en construcción. Si ya había otro sabor,
+  // se reinicia la selección para recomenzar el cálculo desde cero.
+  function selectFlavor(flavor: Flavor) {
+    setSelectedFlavorId((current) => {
+      if (current !== flavor.id) {
+        setToppingIds([]);
+        setSizeId("");
+      }
+      return flavor.id;
+    });
+  }
+
+  function confirmProduct() {
+    if (!selectedSize || !bobaType || !selectedFlavor) return;
+    cart.addItem({
+      size: selectedSize,
+      flavor: selectedFlavor,
+      category: activeCategory,
+      bobaType,
+      unitPrice: priceOf(),
+      toppings: selectedToppings.map((t) => ({
+        id: t.id,
+        name: t.name,
+        price: t.price,
+      })),
+    });
+    // Restablece el selector para empezar a armar otro producto.
+    setSelectedFlavorId(null);
+    setSizeId("");
+    setToppingIds([]);
   }
 
   async function submit() {
@@ -143,9 +179,9 @@ export function PosTerminal({
   const selectedSize: Size | undefined = size;
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[7fr_3fr]">
-      {/* ===== Izquierda (70%): catálogo rápido ===== */}
-      <div className="space-y-4 overflow-y-auto p-4 lg:p-6">
+    <div className="flex w-full h-[calc(100vh-4rem)] overflow-hidden">
+      {/* ===== Izquierda (Catálogo rápido) ===== */}
+      <div className="flex-1 overflow-y-auto p-4">
         <div className="flex gap-2">
           {CATEGORIES.map((category) => {
             const enabled = catalog.flavors.some(
@@ -171,86 +207,74 @@ export function PosTerminal({
         </div>
 
         <div className="grid grid-cols-3 gap-4">
-          {flavors.map((flavor) => (
-            <button
-              key={flavor.id}
-              type="button"
-              disabled={!selectedSize || !bobaType}
-              onClick={() =>
-                cart.addItem({
-                  size: selectedSize!,
-                  flavor,
-                  category: activeCategory,
-                  bobaType: bobaType!,
-                  unitPrice: priceOf(),
-                  toppings: selectedToppings.map((t) => ({
-                    id: t.id,
-                    name: t.name,
-                    price: t.price,
-                  })),
-                })
-              }
-              className="h-20 w-full rounded-xl border border-border bg-card px-3 text-xl font-bold whitespace-normal text-white leading-tight transition-transform active:scale-95 hover:border-primary hover:bg-primary/10 disabled:opacity-40"
-            >
-              <span className="block leading-tight">{flavor.name}</span>
-              <span className="block text-sm font-semibold text-primary">
-                {priceOf()
-                  ? formatPrice(priceOf())
-                  : "\u00a0"}
-              </span>
-            </button>
-          ))}
+          {flavors.map((flavor) => {
+            const selected = selectedFlavorId === flavor.id;
+            return (
+              <button
+                key={flavor.id}
+                type="button"
+                onClick={() => selectFlavor(flavor)}
+                className={`h-20 w-full rounded-xl border px-3 text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                  selected
+                    ? "border-primary bg-primary/15 text-white"
+                    : "border-border bg-card text-white hover:border-primary hover:bg-primary/10"
+                }`}
+              >
+                <span className="block leading-tight">{flavor.name}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Tamaño
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              {sizes.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSizeId(s.id)}
-                  className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
-                    s.id === sizeId
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-card hover:border-primary/60"
-                  }`}
-                >
-                  {s.name} · {s.oz} oz
-                </button>
-              ))}
-            </div>
-          </section>
+        {/* Tamaño */}
+        <section className="mt-4">
+          <h3 className="text-base font-bold uppercase tracking-wide text-white">
+            Tamaño
+          </h3>
+          <div className="mt-2 grid grid-cols-2 gap-4">
+            {sizes.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSizeId(s.id)}
+                className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                  s.id === sizeId
+                    ? "border-primary bg-primary text-white"
+                    : "border-border bg-card hover:border-primary/60"
+                }`}
+              >
+                {s.name} · {s.oz} oz
+              </button>
+            ))}
+          </div>
+        </section>
 
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Tipo de boba
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              {bobaTypes.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => setBobaTypeId(b.id)}
-                  className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
-                    b.id === bobaTypeId
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-card hover:border-primary/60"
-                  }`}
-                >
-                  {b.name}
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
+        {/* Tipo de boba (debajo de tamaño) */}
+        <section className="mt-4">
+          <h3 className="text-base font-bold uppercase tracking-wide text-white">
+            Tipo de boba
+          </h3>
+          <div className="mt-2 grid grid-cols-2 gap-4">
+            {bobaTypes.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => setBobaTypeId(b.id)}
+                className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                  b.id === bobaTypeId
+                    ? "border-primary bg-primary text-white"
+                    : "border-border bg-card hover:border-primary/60"
+                }`}
+              >
+                {b.name}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {toppings.length > 0 && (
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <section className="mt-4 space-y-2">
+            <h3 className="text-base font-bold uppercase tracking-wide text-white">
               Extras
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -274,10 +298,50 @@ export function PosTerminal({
             </div>
           </section>
         )}
+
+        {/* Preticket: producto en construcción */}
+        {selectedFlavor ? (
+          <section className="mt-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+            <h3 className="text-base font-bold uppercase tracking-wide text-white">
+              Producto en curso
+            </h3>
+            <div className="mt-2 space-y-1 text-base text-white">
+              <p className="font-bold">{selectedFlavor.name}</p>
+              <p className="font-normal">
+                {size?.name ? `${size.name} · ${bobaType?.name ?? ""}` : "Elige un tamaño"}
+              </p>
+              {selectedToppings.length > 0 && (
+                <p className="font-normal">
+                  + {selectedToppings.map((t) => t.name).join(", ")}
+                </p>
+              )}
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-base font-semibold uppercase tracking-wide text-white">
+                Subtotal
+              </span>
+              <span className="font-mono text-2xl font-black text-white">
+                {selectedSize && bobaType ? formatPrice(priceOf()) : "—"}
+              </span>
+            </div>
+            <button
+              type="button"
+              disabled={!selectedSize || !selectedFlavor}
+              onClick={confirmProduct}
+              className="mt-3 h-16 w-full rounded-xl bg-emerald-600 text-2xl font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Confirmar producto
+            </button>
+          </section>
+        ) : (
+          <p className="mt-4 text-base text-white">
+            Toca un sabor para empezar tu pedido.
+          </p>
+        )}
       </div>
 
-      {/* ===== Derecha (30%): ticket en curso ===== */}
-      <aside className="sticky top-0 flex h-screen flex-col bg-slate-900 p-4">
+      {/* ===== Derecha (Ticket en curso) ===== */}
+      <aside className="w-[400px] flex-shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col">
         <h2 className="pb-3 text-lg font-black uppercase tracking-wide text-white">
           Ticket en curso
         </h2>
@@ -300,7 +364,7 @@ export function PosTerminal({
 
         <ul className="flex-1 space-y-1 overflow-y-auto py-2">
           {cart.items.length === 0 && (
-            <li className="text-sm text-slate-500">
+            <li className="text-base text-white">
               Agrega bebidas tocando un sabor.
             </li>
           )}
@@ -313,22 +377,22 @@ export function PosTerminal({
                 key={item.id}
                 className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
               >
-                <div className="min-w-0 text-sm">
+                <div className="min-w-0 text-base">
                   <p className="font-bold text-white">
                     {item.quantity}× {item.flavor.name}
                   </p>
-                  <p className="text-slate-400">
+                  <p className="text-white font-normal">
                     {item.size.name} · {item.bobaType.name}
                   </p>
                   {item.toppings.length > 0 && (
-                    <p className="text-slate-400">
+                    <p className="text-white font-normal">
                       + {item.toppings.map((t) => t.name).join(", ")}
                     </p>
                   )}
                   <div className="mt-1 flex items-center gap-2">
                     <button
                       type="button"
-                      className="h-6 w-6 rounded bg-slate-700 text-sm font-black text-white hover:bg-slate-600"
+                      className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
                       onClick={() =>
                         cart.updateQuantity(item.id, item.quantity - 1)
                       }
@@ -337,7 +401,7 @@ export function PosTerminal({
                     </button>
                     <button
                       type="button"
-                      className="h-6 w-6 rounded bg-slate-700 text-sm font-black text-white hover:bg-slate-600"
+                      className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
                       onClick={() =>
                         cart.updateQuantity(item.id, item.quantity + 1)
                       }
@@ -346,7 +410,7 @@ export function PosTerminal({
                     </button>
                     <button
                       type="button"
-                      className="rounded bg-destructive px-2 py-1 text-xs font-bold text-destructive-foreground hover:bg-destructive/90"
+                      className="rounded bg-destructive px-2 py-1 text-base font-bold text-destructive-foreground hover:bg-destructive/90"
                       onClick={() => cart.removeItem(item.id)}
                     >
                       Quitar
@@ -387,7 +451,7 @@ export function PosTerminal({
         </div>
 
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <span className="text-base font-bold uppercase tracking-wide text-white">
             Total
           </span>
           <span className="font-mono text-2xl font-black text-white">
@@ -399,15 +463,24 @@ export function PosTerminal({
           type="button"
           disabled={busy || cart.items.length === 0}
           onClick={submit}
-          className={`mt-3 h-20 w-full rounded-xl px-4 text-xl font-bold text-white transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`mt-auto flex flex-col items-center justify-center gap-1 h-24 w-full rounded-xl px-4 text-2xl font-bold text-white transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 ${
             isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
           }`}
         >
-          {busy
-            ? "Enviando…"
-            : isBilling
-              ? `Enviar y Cobrar (Total: ${formatPrice(totalOfItems(cart.items))})`
-              : "Enviar a Caja"}
+          {busy ? (
+            "Enviando…"
+          ) : isBilling ? (
+            <>
+              <span className="text-lg font-bold uppercase tracking-wide">
+                Enviar y Cobrar
+              </span>
+              <span className="font-mono text-4xl font-black">
+                {formatPrice(totalOfItems(cart.items))}
+              </span>
+            </>
+          ) : (
+            "Enviar a Caja"
+          )}
         </button>
       </aside>
     </div>

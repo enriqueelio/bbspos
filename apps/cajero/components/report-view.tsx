@@ -15,13 +15,13 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="text-sm font-medium text-white">
           {label}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-2xl font-bold">{value}</p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+        {hint && <p className="text-xs text-white">{hint}</p>}
       </CardContent>
     </Card>
   );
@@ -60,13 +60,13 @@ export function ReportView({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-white">
               Pedidos entregados por {myName}
             </p>
             <p className="text-3xl font-bold">{data.myDeliveredOrders}</p>
           </div>
           <div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-white">
               Mi tiempo promedio de entrega
             </p>
             <p className="text-3xl font-bold">
@@ -84,7 +84,7 @@ export function ReportView({
         </CardHeader>
         <CardContent className="space-y-1">
           {data.paymentBreakdown.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-4 text-center text-sm text-white">
               Sin pagos registrados hoy.
             </p>
           ) : (
@@ -94,7 +94,7 @@ export function ReportView({
                 className="flex items-center justify-between border-b py-2 last:border-b-0"
               >
                 <span>{PaymentMethodLabel[row.method] ?? row.method}</span>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-white">
                   {row.orders} pedido{row.orders !== 1 ? "s" : ""}
                 </span>
                 <span className="font-medium">{formatPrice(row.revenue)}</span>

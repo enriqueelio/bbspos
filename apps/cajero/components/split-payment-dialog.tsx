@@ -87,7 +87,7 @@ export function SplitPaymentDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">
+            <label className="text-base font-bold text-white">
               Primer pago
             </label>
             <div className="flex gap-2">
@@ -144,14 +144,14 @@ export function SplitPaymentDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-base text-white">
             <div className="h-px flex-1 bg-border" />
             <span>queda {formatPrice(Math.max(0, remaining))}</span>
             <div className="h-px flex-1 bg-border" />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">
+            <label className="text-base font-bold text-white">
               Segundo pago
             </label>
             <div className="rounded-lg border border-border bg-muted/50 px-4 py-3">

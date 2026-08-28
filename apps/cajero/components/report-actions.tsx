@@ -75,7 +75,7 @@ export function ReportActions() {
         {telegramPending ? "Enviando..." : "Enviar a Telegram"}
       </Button>
       {!canSendTelegram && (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm text-white">
           Disponible a partir de las {MANUAL_REPORT_CUTOFF}.
         </span>
       )}

@@ -383,7 +383,7 @@ export function PosTerminal({
         </div>
 
         {/* Cuerpo del ticket: ítems scrolleables */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3 max-h-[70vh]">
           {cart.items.length === 0 && (
             <p className="text-base text-white">
               Agrega bebidas tocando un sabor.

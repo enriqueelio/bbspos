@@ -7,8 +7,10 @@ import { getCashierDailyData } from "@/lib/report";
 import { QueueView } from "@/components/queue-view";
 import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
+import { PosTerminal } from "@/components/pos/pos-terminal";
+import { getPosCatalog } from "@/actions/pos";
 
-type Tab = "preparar" | "reporte";
+type Tab = "preparar" | "venta" | "reporte";
 
 function toPlainOrder(order: {
   id: string;
@@ -54,7 +56,27 @@ export default async function CashierPage({
 }) {
   const session = await getRequiredSession();
   const { tab: tabParam } = await searchParams;
-  const tab: Tab = tabParam === "reporte" ? "reporte" : "preparar";
+  const tab: Tab =
+    tabParam === "reporte" ? "reporte" : tabParam === "venta" ? "venta" : "preparar";
+
+  if (tab === "venta") {
+    const catalog = await getPosCatalog();
+
+    return (
+      <main className="min-h-screen">
+        <div className="mx-auto w-full max-w-7xl px-4 pt-6">
+          <Header
+            name={session.user.name ?? ""}
+            role={session.user.role}
+            tab={tab}
+          />
+        </div>
+        <div className="mt-4">
+          <PosTerminal catalog={catalog} />
+        </div>
+      </main>
+    );
+  }
 
   if (tab === "preparar") {
     const bounds = dayBounds(todayKey());
@@ -123,6 +145,16 @@ function Header({
           }`}
         >
           Dashboard
+        </Link>
+        <Link
+          href="/?tab=venta"
+          className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
+            tab === "venta"
+              ? "bg-primary text-white"
+              : "bg-primary text-white opacity-80 hover:opacity-100"
+          }`}
+        >
+          Nueva Venta
         </Link>
         <Link
           href="/?tab=reporte"

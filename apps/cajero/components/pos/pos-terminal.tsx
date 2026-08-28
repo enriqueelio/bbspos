@@ -119,7 +119,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
-      router.refresh();
+      router.push("/?tab=preparar");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudo enviar el pedido.",

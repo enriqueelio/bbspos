@@ -66,8 +66,15 @@ export default async function CashierPage({
 }) {
   const session = await getRequiredSession();
   const { tab: tabParam } = await searchParams;
-  const tab: Tab =
-    tabParam === "reporte" ? "reporte" : tabParam === "venta" ? "venta" : "preparar";
+  const isMesero = session.user.role === "MESERO";
+  // El mesero solo toma órdenes: siempre aterriza en Nueva Venta.
+  const tab: Tab = isMesero
+    ? "venta"
+    : tabParam === "reporte"
+      ? "reporte"
+      : tabParam === "venta"
+        ? "venta"
+        : "preparar";
 
   if (tab === "venta") {
     const catalog = await getPosCatalog();
@@ -130,12 +137,14 @@ export default async function CashierPage({
 
 function Header({
   name,
+  role,
   tab,
 }: {
   name: string;
   role: string;
   tab: Tab;
 }) {
+  const isMesero = role === "MESERO";
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
@@ -145,38 +154,41 @@ function Header({
         </div>
         <span className="text-sm text-muted-foreground">{name}</span>
       </div>
-      <nav className="flex gap-2">
-        <Link
-          href="/?tab=preparar"
-          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "preparar"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-accent"
-          }`}
-        >
-          Dashboard
-        </Link>
-        <Link
-          href="/?tab=venta"
-          className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
-            tab === "venta"
-              ? "bg-primary text-white"
-              : "bg-primary text-white opacity-80 hover:opacity-100"
-          }`}
-        >
-          Nueva Venta
-        </Link>
-        <Link
-          href="/?tab=reporte"
-          className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-            tab === "reporte"
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-accent"
-          }`}
-        >
-          Reporte del día
-        </Link>
-      </nav>
+      {/* El mesero solo toma órdenes: no muestra navegación a otras vistas. */}
+      {!isMesero && (
+        <nav className="flex gap-2">
+          <Link
+            href="/?tab=preparar"
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              tab === "preparar"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/?tab=venta"
+            className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
+              tab === "venta"
+                ? "bg-primary text-white"
+                : "bg-primary text-white opacity-80 hover:opacity-100"
+            }`}
+          >
+            Nueva Venta
+          </Link>
+          <Link
+            href="/?tab=reporte"
+            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+              tab === "reporte"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Reporte del día
+          </Link>
+        </nav>
+      )}
     </>
   );
 }

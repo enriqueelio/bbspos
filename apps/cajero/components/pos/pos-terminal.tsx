@@ -166,7 +166,9 @@ export function PosTerminal({
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
-      router.push("/?tab=preparar");
+      // El mesero se queda en Nueva Venta para seguir tomando órdenes;
+      // el cajero/admin va a la cola para registrar pagos/entregas.
+      router.push(isBilling ? "/?tab=preparar" : "/?tab=venta");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudo enviar el pedido.",

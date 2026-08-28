@@ -92,30 +92,32 @@ async function assertLastAdminProtection(options: {
 
 export async function createUser(input: {
   name: string;
-  email: string;
+  username: string;
   password: string;
   role: string;
 }) {
   await requireAdminSession();
 
   const name = validateName(input.name);
-  const email = input.email.trim().toLowerCase();
+  const username = input.username.trim().toLowerCase();
   const password = validatePassword(input.password);
   const role = parseRole(input.role);
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("El correo no tiene un formato válido.");
+  if (!/^[a-z0-9_]+$/.test(username)) {
+    throw new Error(
+      "El usuario solo puede contener letras, números y guiones bajos.",
+    );
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { username } });
   if (existing) {
-    throw new Error("Ese correo ya está registrado.");
+    throw new Error("Ese usuario ya está registrado.");
   }
 
   await prisma.user.create({
     data: {
       name,
-      email,
+      username,
       password: await hash(password, 10),
       role,
       active: true,

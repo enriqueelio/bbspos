@@ -150,10 +150,10 @@ async function main() {
   const adminPassword = await hash("admin123", 10);
 
   await prisma.user.upsert({
-    where: { email: "admin@bubba.mx" },
+    where: { username: "admin" },
     update: { role: "ADMIN" },
     create: {
-      email: "admin@bubba.mx",
+      username: "admin",
       name: "Administrador",
       password: adminPassword,
       role: "ADMIN",
@@ -163,10 +163,10 @@ async function main() {
   const cajeroPassword = await hash("cajero123", 10);
 
   await prisma.user.upsert({
-    where: { email: "cajero@bubba.mx" },
+    where: { username: "cajero" },
     update: {},
     create: {
-      email: "cajero@bubba.mx",
+      username: "cajero",
       name: "Cajero Principal",
       password: cajeroPassword,
       role: "CAJERO",
@@ -176,10 +176,10 @@ async function main() {
   const meseroPassword = await hash("mesero123", 10);
 
   await prisma.user.upsert({
-    where: { email: "mesero@bubba.mx" },
+    where: { username: "mesero" },
     update: {},
     create: {
-      email: "mesero@bubba.mx",
+      username: "mesero",
       name: "Mesero de Turno",
       password: meseroPassword,
       role: "MESERO",

@@ -140,7 +140,7 @@ export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO, Role.MESERO];
 
 export interface StaffUser {
   id: string;
-  email: string;
+  username: string;
   name: string;
   role: Role;
   active: boolean;

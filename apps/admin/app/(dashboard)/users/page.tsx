@@ -13,7 +13,7 @@ export default async function UsersPage() {
       orderBy: [{ active: "desc" }, { name: "asc" }],
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         role: true,
         active: true,

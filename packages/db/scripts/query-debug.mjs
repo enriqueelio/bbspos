@@ -11,7 +11,7 @@ async function main() {
   const todayOrders = await prisma.order.findMany({ orderBy: { createdAt: "desc" } });
   const maxSeq = await prisma.order.aggregate({ _max: { seq: true } });
 
-  console.log("USUARIOS:", JSON.stringify(users.map((u) => ({ email: u.email, name: u.name, role: u.role, active: u.active }))));
+  console.log("USUARIOS:", JSON.stringify(users.map((u) => ({ username: u.username, name: u.name, role: u.role, active: u.active }))));
   console.log("SIZES:", sizes.map((s) => `${s.name}(${s.oz}oz)`));
   console.log("BOBA:", bobaTypes.map((b) => `${b.name}[${b.kind}]`));
   console.log("TOPPINGS:", toppings.map((t) => `${t.name}=${t.price}`));

@@ -8,7 +8,7 @@ import { ensureCashierRole, isAccountInactive } from "@/app/actions/auth";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,17 +19,17 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
     setError(null);
 
     const res = await signIn("credentials", {
-      email,
+      username,
       password,
       redirect: false,
     });
 
     if (res?.error) {
-      const inactive = await isAccountInactive(email, password);
+      const inactive = await isAccountInactive(username, password);
       setError(
         inactive
           ? "Esta cuenta está desactivada. Contacta al administrador."
-          : "Credenciales inválidas. Verifica tu correo y contraseña.",
+          : "Credenciales inválidas. Verifica tu usuario y contraseña.",
       );
       setLoading(false);
       return;
@@ -52,15 +52,15 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="email">Correo</Label>
+        <Label htmlFor="username">Usuario</Label>
         <Input
-          id="email"
-          type="email"
-          autoComplete="email"
+          id="username"
+          type="text"
+          autoComplete="username"
           required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="cajero@bubba.mx"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="cajero"
         />
       </div>
       <div className="space-y-2">

@@ -10,7 +10,7 @@ async function main() {
   const sizes = await prisma.size.findMany();
   const bobaTypes = await prisma.bobaType.findMany();
   const topping = await prisma.topping.findFirst({ where: { name: "Boba de tapioca extra" } });
-  const bartender = await prisma.user.findUnique({ where: { email: "cajero@bubba.mx" } });
+  const bartender = await prisma.user.findUnique({ where: { username: "cajero" } });
 
   if (!topping) throw new Error("falta topping");
   const sizeG = sizes.find((s) => s.name === "Grande");

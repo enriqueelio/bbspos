@@ -6,9 +6,9 @@ const prisma = new PrismaClient();
 const HASH = readFileSync("C:/Users/PC-ENRIQUE/AppData/Local/Temp/opencode/hash.txt", "utf-8").trim();
 
 const CAJEROS = [
-  { email: "cajero@bubba.mx", name: "Cajero Uno" }, // ya existe
-  { email: "cajero2@bubba.mx", name: "Ana Mamani" },
-  { email: "cajero3@bubba.mx", name: "Luis Torrez" },
+  { username: "cajero", name: "Cajero Uno" }, // ya existe
+  { username: "cajero2", name: "Ana Mamani" },
+  { username: "cajero3", name: "Luis Torrez" },
 ];
 
 const CUSTOMERS = [
@@ -39,9 +39,9 @@ async function main() {
   const users = [];
   for (const c of CAJEROS) {
     const u = await prisma.user.upsert({
-      where: { email: c.email },
+      where: { username: c.username },
       update: { name: c.name, role: "CAJERO", active: true },
-      create: { email: c.email, name: c.name, password: HASH, role: "CAJERO", active: true },
+      create: { username: c.username, name: c.name, password: HASH, role: "CAJERO", active: true },
     });
     users.push(u);
   }

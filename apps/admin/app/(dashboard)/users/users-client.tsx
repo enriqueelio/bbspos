@@ -85,7 +85,7 @@ export function UsersClient({
             <thead>
               <tr className="border-b bg-muted/40 text-left">
                 <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">Correo</th>
+                <th className="px-4 py-2 font-medium">Usuario</th>
                 <th className="px-4 py-2 font-medium">Rol</th>
                 <th className="px-4 py-2 font-medium">Estado</th>
                 <th className="px-4 py-2 font-medium text-right">Acciones</th>
@@ -100,7 +100,7 @@ export function UsersClient({
                       <span className="ml-2 text-xs text-muted-foreground">(tú)</span>
                     )}
                   </td>
-                  <td className="px-4 py-2">{user.email}</td>
+                  <td className="px-4 py-2">{user.username}</td>
                   <td className="px-4 py-2">
                     <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>
                       {RoleLabel[user.role]}
@@ -193,7 +193,7 @@ function UserDialog({
   const target = isEdit ? dialog.user : null;
 
   const [name, setName] = useState(target?.name ?? "");
-  const [email, setEmail] = useState(target?.email ?? "");
+  const [username, setUsername] = useState(target?.username ?? "");
   const [role, setRole] = useState<Role>(target?.role ?? "CAJERO");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -213,7 +213,7 @@ function UserDialog({
           newPassword: newPassword || undefined,
         });
       } else {
-        await createUser({ name, email, password, role });
+        await createUser({ name, username, password, role });
       }
       onClose();
     }, (msg) => {
@@ -238,13 +238,15 @@ function UserDialog({
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isEdit && (
               <div className="space-y-1">
-                <Label htmlFor="u-email">Correo</Label>
+                <Label htmlFor="u-username">Usuario</Label>
                 <Input
-                  id="u-email"
-                  type="email"
+                  id="u-username"
+                  type="text"
+                  autoComplete="off"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="ej. cajero_turno1"
                 />
               </div>
             )}

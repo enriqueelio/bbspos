@@ -5,12 +5,12 @@ import { prisma } from "@bubba/db";
 
 /**
  * Indica si unas credenciales correctas pertenecen a una cuenta desactivada.
- * Devuelve false cuando el correo no existe, la contraseña es incorrecta
+ * Devuelve false cuando el usuario no existe, la contraseña es incorrecta
  * o la cuenta está activa: solo revela el estado a quien tiene acceso válido.
  */
-export async function isAccountInactive(email: string, password: string) {
+export async function isAccountInactive(username: string, password: string) {
   const user = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
+    where: { username: username.trim().toLowerCase() },
   });
 
   if (!user || user.active) return false;

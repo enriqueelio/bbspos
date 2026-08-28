@@ -1,0 +1,1 @@
+Modifica `apps/cajero/components/pos/pos-cart-store.ts`. Envuelve la lógica de tu store actual para que se inicialice leyendo de `window.localStorage.getItem('bubba-pos-cart')`. Cada vez que se ejecute `addPosItem`, `updatePosQuantity`, o `removePosItem`, guarda el estado serializado del carrito en el `localStorage`. En `clearPosCart`, elimina la llave del storage.

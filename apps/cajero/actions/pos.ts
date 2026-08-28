@@ -9,6 +9,7 @@ import {
   type Catalog,
 } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
+import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 
 /** Catálogo activo para el punto de venta: tamaños, sabores, tipos de boba,
  *  la matriz de precios y los toppings disponibles. */
@@ -104,6 +105,42 @@ export async function createPosOrder(
   });
 
   revalidatePath("/");
+
+  // Impresión automática de la comanda al crear el pedido.
+  // No bloquea la respuesta de la UI: si la impresora falla, solo se loguea.
+  try {
+    const printerName = getPrinterName();
+    if (printerName) {
+      const printed = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: { items: { include: { toppings: true } } },
+      });
+      if (printed) {
+        await printText(
+          printerName,
+          formatComanda({
+            seq: printed.seq,
+            customerName: printed.customerName,
+            createdAt: printed.createdAt,
+            total: printed.total,
+            items: printed.items.map((item) => ({
+              sizeName: item.sizeName,
+              flavorName: item.flavorName,
+              bobaTypeName: item.bobaTypeName,
+              unitPrice: item.unitPrice,
+              quantity: item.quantity,
+              toppings: item.toppings.map((t) => ({
+                toppingName: t.toppingName,
+                unitPrice: t.unitPrice,
+              })),
+            })),
+          }),
+        );
+      }
+    }
+  } catch (e) {
+    console.error("No se pudo imprimir la comanda al crear el pedido:", e);
+  }
 
   return { orderId: order.id, seq: order.seq ?? 0, total };
 }

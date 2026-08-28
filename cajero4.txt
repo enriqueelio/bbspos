@@ -1,0 +1,379 @@
+============================================================
+PROYECTO: BUBBA CAJERO (Sistema de Punto de Venta de una tienda de Bubble Tea)
+FECHA: 2026-08-28
+STACK: Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Prisma ORM, SQLite, NextAuth v4 (JWT), Turbo (monorepo con pnpm)
+============================================================
+
+------------------------------------------------------------
+1. DESCRIPCION GENERAL
+------------------------------------------------------------
+
+El sistema es el módulo "cajero" (punto de venta de mostrador) de una tienda de bebidas Bubble Tea (bubble drink). Permite al personal de mostrador registrar ventas de bebidas, cobrarlas, seguir su preparación hasta la entrega, y consultar un reporte diario de su rendimiento. Todo se agrupa en un monorepo donde existen además un módulo de administración (backoffice) y una tienda web, pero este documento describe exclusivamente la aplicación "cajero", que corre en el puerto 3002.
+
+El flujo principal de una venta tiene tres fases. Primero, en la pestaña "Nueva Venta", el cajero arma un carrito tocando sabores: elige tamaño, tipo de boba, categoría de bebida y extras; el sistema calcula el precio unitario automáticamente a partir de una matriz de precios. Puede poner hasta dos métodos de pago (dividido) y un nombre de cliente opcional, y al confirmar se crea un pedido en estado "Recibido" y se muestra en la cola. Segundo, en la pestaña "Dashboard", el pedido aparece en cola con su número (secuencia), artículos, total y antigüedad; el cajero registra el cobro (Efectivo, QR, o dividido) lo que pasa el pedido a "Aceptado", y luego lo marca como "Entregado" cuando sale. Tercero, en la pestaña "Reporte del día", se ven los KPI del día (ingresos, pedidos entregados, ticket promedio, tiempos) y el rendimiento individual del cajero, que puede imprimirse en ticket o enviarse a Telegram al cierre.
+
+La aplicación usa autenticación exclusiva para el personal: solo usuarios con rol CAJERO o ADMIN pueden entrar. El resto de la lógica (impresión de comandas en impresora térmica de 80mm, alertas por Telegram cuando un pedido se retrasa más de 10 minutos, y el cierre de caja automático) se apoya en la base de datos SQLite del paquete @bubba/db.
+
+------------------------------------------------------------
+2. ARQUITECTURA Y CARPETAS
+------------------------------------------------------------
+
+La app cajero vive dentro de un monorepo con pnpm workspaces. Las rutas con "@bubba/..." apuntan a paquetes internos.
+
+Arbol de carpetas de la app cajero:
+
+apps/cajero/
+  .env.example            Variables de entorno de ejemplo (copiar a .env)
+  package.json            Nombre @bubba/cajero, scripts (dev en puerto 3002)
+  next.config.mjs         Transpila paquetes internos (@bubba/db, @bubba/ui, @bubba/types)
+  middleware.ts           Protege rutas: exige sesion con rol CAJERO o ADMIN
+  tsconfig.json           Configuracion TypeScript (alias @/ -> raiz de la app)
+  actions/
+    notifications.ts      Envia alerta por Telegram cuando un pedido se retrasa (>10 min)
+    pos.ts                Server Actions del punto de venta: catalogo y crear pedido
+  app/
+    layout.tsx            Layout raiz (fondo oscuro, metadata, idioma es)
+    page.tsx              Pagina principal con 3 pestanas: preparar / venta / reporte
+    globals.css           Estilos globales Tailwind
+    actions/
+      auth.ts             Comprueba rol de cajero y si una cuenta esta desactivada
+      orders.ts           Aceptar pedido (cobrar) y marcar entregado
+      printing.ts         Reimprimir comanda y imprimir reporte diario
+      report.ts           Enviar cierre de caja manual a Telegram
+    api/auth/[...nextauth]/route.ts   Ruta de NextAuth para el login
+    login/
+      page.tsx            Pagina de inicio de sesion
+      login-form.tsx      Formulario de login (cliente), usa next-auth
+  components/
+    queue-view.tsx        Vista de cola (dashboard) de pedidos
+    report-view.tsx       Vista de KPIs del reporte del dia
+    report-actions.tsx    Botones imprimir / PDF / enviar a Telegram
+    split-payment-dialog.tsx  Dialogo de cobro dividido (2 metodos)
+    pos/
+      pos-terminal.tsx    Pantalla principal "Nueva Venta"
+      pos-cart-store.ts   Estado global del carrito (libreria externa de React)
+  lib/
+    auth.ts               Configuracion de NextAuth (credenciales, JWT)
+    session.ts            Helper para leer la sesion (getRequiredSession)
+    day.ts                Utilidades de zona horaria America/La_Paz (boundaries del dia)
+    printing.ts           Impresion a impresora termica 80mm (PowerShell + System.Drawing)
+    report.ts             Calcula los datos del reporte diario del cajero
+  types/
+    next-auth.d.ts        Extiende los tipos de la sesion (role, id)
+
+Paquetes compartidos del monorepo (en packages/):
+  @bubba/db    Cliente Prisma + schema + semilla + reportes diarios (SQLite)
+  @bubba/types Tipos y constantes compartidas (Catalog, Order, enums, helpers)
+  @bubba/ui    Componentes de UI reutilizables (Button, Card, Badge, Dialog...)
+  @bubba/config Config de Tailwind y TypeScript compartida
+
+------------------------------------------------------------
+3. MODELO DE DATOS / PRISMA SCHEMA
+------------------------------------------------------------
+
+Base: SQLite. Archivo del schema: packages/db/prisma/schema.prisma. Cliente exportado como "prisma" desde @bubba/db.
+
+TABLAS:
+
+1) USER (empleados)
+   - id: string (cuid, PK)
+   - email: string unico (inicia sesion)
+   - name: string (nombre mostrado)
+   - password: string (hash con bcrypt)
+   - role: enum (ADMIN | CAJERO), default CAJERO
+   - active: boolean default true (cuenta desactivada no puede entrar)
+   - createdAt: fecha
+   - orders: relacion -> muchos Order
+
+2) SIZE (tamanos de vaso)
+   - id: string (cuid, PK)
+   - name: string unico (ej. Grande)
+   - oz: entero (capacidad en onzas, ej. 16)
+   - available: boolean default true
+   - drinkPrices: relacion -> muchos DrinkPrice
+
+3) FLAVOR (sabores/bebidas)
+   - id: string (cuid, PK)
+   - name: string unico (ej. Capuchino, Frutilla, Mango)
+   - available: boolean default true
+   - categories: relacion muchos a muchos con FlavorCategory via FlavorCategoryLink
+
+4) FLAVORCATEGORYLINK (tabla puente sabor <-> categoria)
+   - id, flavorId (FK Flavor, borrado en cascada), category (enum), createdAt
+   - Unico por (flavorId, category): un sabor puede pertenecer a varias categorias
+
+5) BOBATYPE (tipo de boba/perla)
+   - id: string (cuid, PK)
+   - name: string unico (ej. Tapioca, Explosivas)
+   - kind: enum (TAPIOCA | POPPING)
+   - available: boolean default true
+   - drinkPrices: relacion -> muchos DrinkPrice
+
+6) DRINKPRICE (matriz de precios)
+   - id: string (cuid, PK)
+   - category: enum (MILK | WATER | SPECIAL)
+   - sizeId: FK Size (cascada)
+   - bobaTypeId: FK BobaType (cascada)
+   - price: entero (precio en Bs)
+   - Unico por (category, sizeId, bobaTypeId): define el precio base de cada combinacion
+
+7) TOPPING (extras)
+   - id: string (cuid, PK)
+   - name: string unico (ej. "Boba de tapioca extra")
+   - price: entero (precio extra en Bs)
+   - available: boolean default true
+
+8) ORDER (pedido)
+   - id: string (cuid, PK)
+   - seq: entero unico nullable (numero de pedido correlativo visible)
+   - status: enum default RECIBIDO (RECIBIDO | ACEPTADO | ENTREGADO | ANULADO)
+   - customerName: string nullable (nombre del cliente, opcional)
+   - deliveryType: enum nullable (MESA | LLEVAR)
+   - total: entero (total a pagar en Bs)
+   - createdAt: fecha default ahora
+   - paidAt: fecha nullable (cuando se cobro)
+   - deliveredAt: fecha nullable (cuando se entrego)
+   - userId: FK User nullable (quien atiende)
+   - paymentMethod: enum nullable (EFECTIVO | QR | TARJETA) - primer metodo
+   - paymentMethod2: enum nullable - segundo metodo (pago dividido)
+   - paymentAmount2: entero nullable - monto pagado por el segundo metodo
+   - discountAmount: entero default 0
+   - discountReason: string nullable
+   - discountedAt: fecha nullable
+   - cancelledAt, cancelReason: fecha/string nullable (anulacion)
+   - delayNotified: boolean default false (si ya se aviso el retraso por Telegram)
+   - items: relacion -> muchos OrderItem
+   - Indices sobre (createdAt+status), (deliveredAt), (userId+status)
+
+9) ORDERITEM (linea de un pedido)
+   - id: string (cuid, PK)
+   - orderId: FK Order (cascada)
+   - sizeName: string (nombre copiado, no referencia viva)
+   - flavorName: string
+   - flavorCategory: enum
+   - bobaTypeName: string
+   - unitPrice: entero (precio base sin toppings)
+   - quantity: entero
+   - toppings: relacion -> muchos OrderItemTopping
+
+10) ORDERITEMTOPPING (extra de una linea)
+    - id: string (cuid, PK)
+    - orderItemId: FK OrderItem (cascada)
+    - toppingName: string
+    - unitPrice: entero
+
+11) PAYMENTCONFIG (configuracion de QR de pago)
+    - id: string default "default"
+    - qrImage: string (imagen base64 del QR)
+    - mimeType: string
+    - updatedAt: fecha
+
+12) DAILYREPORTLOG (control de cierres diarios enviados a Telegram)
+    - date: string PK (YYYY-MM-DD del dia ya cerrado)
+    - sentAt: fecha
+
+ENUMS:
+- FlavorCategory: MILK (con leche) | WATER (con agua) | SPECIAL (especiales)
+- BobaKind: TAPIOCA | POPPING
+- OrderStatus: RECIBIDO | ACEPTADO | ENTREGADO | ANULADO
+- Role: ADMIN | CAJERO
+- PaymentMethod: EFECTIVO | QR | TARJETA
+- DeliveryType: MESA | LLEVAR
+
+RELACIONES CLAVE:
+- User 1-N Order
+- Size 1-N DrinkPrice;  BobaType 1-N DrinkPrice
+- Flavor N-N FlavorCategory (via FlavorCategoryLink)
+- Order 1-N OrderItem 1-N OrderItemTopping  (las lineas guardan nombres copiados, no IDs, para preservar el historico)
+
+CATALOGO DE EJEMPLO (semilla seed.ts):
+- Tamanos: Grande (16oz), Extragrande (21oz)
+- Tipos de boba: Tapioca, Explosivas
+- Sabores: 8 "especiales" (Capuchino, Oreo, Fruticoco, Matcha, Piña colada, Limonada brasilera, Frutilimon, Taro), 6 "con agua" (Frutilla, Limón, Piña, Manzana, Naranja, Mango), 5 "con leche" (Frutilla, Coco, Vainilla, Chocolate, Mora)
+- Precios (Bs), Grande/Extragrande: SPECIAL 20/30 (Tapioca) y 25/35 (Explosivas); WATER 16/25 y 20/30; MILK 18/28 y 22/32
+- Toppings: tapioca extra (4Bs), explosivas extra (5Bs)
+- Usuarios: admin@bubba.mx / admin123 (ADMIN); cajero@bubba.mx / cajero123 (CAJERO)
+
+------------------------------------------------------------
+4. RUTAS Y PAGINAS
+------------------------------------------------------------
+
+RUTA: /login  (app/login/page.tsx)
+  Pagina de inicio de sesion. Muestra el formulario LoginForm. Solo se llega aqui sin sesion.
+  LoginForm (cliente): envia credenciales con signIn("credentials",...). Si falla, consulta isAccountInactive para dar un mensaje distinto si la cuenta esta desactivada. Despues valida ensureCashierRole (debe ser CAJERO o ADMIN); si no tiene rol, cierra sesion. Logrado, redirige a "/" (o callbackUrl).
+
+RUTA: / (app/page.tsx)  [pestanas segun ?tab=...]
+  Componente servidor. Exige sesion (getRequiredSession). Define el tab:
+    - Sin parametro o cualquier otro -> "preparar"
+    - ?tab=venta    -> "venta" (Pantalla Nueva Venta)
+    - ?tab=reporte  -> "reporte" (Reporte del dia)
+  Contiene el Header (logotipo "Bubba Cajero", nombre del usuario y nav con 3 enlaces).
+
+  Tab "preparar" (Dashboard):
+    Consulta los pedidos del dia actual (dayBounds de hoy) cuyo status este en
+    RECIBIDO, ACEPTADO o ENTREGADO, ordenados por createdAt desc / seq desc.
+    Convierte las filas a objeto Order plano (toPlainOrder) y renderiza <QueueView>.
+
+  Tab "venta" (Nueva Venta):
+    Llama getPosCatalog() (Server Action) para obtener tamanos, sabores, tipos de
+    boba, matriz de precios y toppings disponibles, y renderiza <PosTerminal>.
+    No usa paginacion: el catalogo llega completo por Server Action/RPC.
+
+  Tab "reporte" (Reporte del dia):
+    Llama getCashierDailyData(session.user.id) y renderiza <ReportView> con
+    <ReportActions> (imprimir, PDF, enviar a Telegram).
+
+OTRAS RUTAS:
+  /api/auth/[...nextauth]  Ruta de NextAuth (handlers).
+  La API es minima: todo el trabajo se hace con Server Actions y llamadas a Prisma.
+
+------------------------------------------------------------
+5. COMPONENTES CLAVE
+------------------------------------------------------------
+
+PosTerminal (components/pos/pos-terminal.tsx) - LA PANTALLA "NUEVA VENTA"
+  Props: { catalog: Catalog }
+  Es la estrella del sistema. Divide la pantalla en dos columnas (70% izquierda catalogo, 30% derecha ticket).
+  Estado local: activeCategory, sizeId, bobaTypeId, toppingIds[], busy, notice, error.
+  - Pestañas de categoria (Especiales, Con agua, Con leche): solo se habilitan si hay al menos un sabor disponible de esa categoria.
+  - Grilla de sabores: cada boton agrega la bebida al carrito con el precio calculado.
+  - Selector de tamano y tipo de boba (solo items disponibles).
+  - Selector de toppings (extras) con su precio.
+  - Panel derecho "Ticket en curso": lista de items con cantidad (+/-), quitar, monto parcial; input de nombre de cliente opcional; selector MESA/LLEVAR; total; y boton "Enviar y Cobrar".
+  - Al "Enviar y Cobrar": valida que el carrito no este vacio, llama createPosOrder(), limpia el carrito, muestra aviso "Pedido #X creado" y redirige a ?tab=preparar.
+  - Calculo de precio: busca en catalog.drinkPrices la fila que coincida con (categoria activa, tamano seleccionado, tipo de boba seleccionado) -> priceOf(). El total de cada item = (unitPrice + suma de toppings) * cantidad.
+
+PosCartStore (components/pos/pos-cart-store.ts)
+  Estado global del carrito, implementado manualmente con useSyncExternalStore (no usa Redux/Zustand). Modulos: addPosItem, updatePosQuantity, removePosItem, setPosCustomerName, setPosDeliveryType, clearPosCart y hook usePosCart().
+  Cada item tiene un "id" compuesto por categoria-tamano-sabor-boba-toppings ordenados, de modo que agregar la misma combinacion incrementa la cantidad en vez de duplicar la linea.
+  Tipos de entrega: PosDeliveryType = "MESA" | "LLEVAR" (default MESA).
+  Vive fuera del componente (modulo) para sobrevivir a cambios de ruta.
+
+QueueView (components/queue-view.tsx) [dashboard/preparar]
+  Props: { orders: Order[] }
+  Muestra la cola de pedidos. Reloj interno que refresca cada 30s (antiguedad) y cada 15s hace router.refresh() (recarga servidor) mientras la pestana este visible.
+  - Cluster de pedidos por estado: RECIBIDO primero, luego ACEPTADO, luego ENTREGADO.
+  - Por cada pedido una OrderCard: numero (formato 00001), nombre cliente, estado, antiguedad ("Ingresado hace X" o "Entregado en X"), articulos, total, metodo de pago.
+  - Para RECIBIDO: botones EFECTIVO, QR, Cobro dividido (abre SplitPaymentDialog) y Reimprimir (comanda). Al cobrar, acceptOrder pasa a ACEPTADO.
+  - Para ACEPTADO: boton "Marcar entregado" (deliverOrder, con confirmacion) -> ENTREGADO.
+  - Alerta Telegram: cuando un pedido en RECIBIDO/ACEPTADO supera 10 min de antiguedad, llama notifyDelayedOrder una sola vez (flag delayNotified).
+  - Muestra avisos de error (modal rojo) y de exito (banner verde).
+
+ReportView (components/report-view.tsx)
+  Props: { data: CashierDailyData, myName: string }. Sin logica; despliega KPIs.
+
+ReportActions (components/report-actions.tsx)
+  Botones: Imprimir (printDailyReport), Guardar PDF (window.print), Enviar a Telegram (sendDailyReportToBot, habilitado solo desde las 23:10 hora local).
+
+SplitPaymentDialog (components/split-payment-dialog.tsx)
+  Props: { total, onConfirm(method, method2, amount2), onCancel, busy }.
+  Dialogo con teclado numerico para dividir el cobro entre EFECTIVO y QR. El segundo metodo es el opuesto del primero. Validaciones: primer monto > 0, < total; segundo monto = total - primero > 0. Al confirmar llama acceptOrder(orderId, method1, method2, amount2).
+
+------------------------------------------------------------
+6. LOGICA DE NEGOCIO CRITICA
+------------------------------------------------------------
+
+COMO SE CREA UN PEDIDO (createPosOrder, en actions/pos.ts):
+  1. Exige sesion (getRequiredSession).
+  2. Valida que el carrito no este vacio (items.length > 0) o lanza error.
+  3. Convierte cada CartItem en OrderItem: guarda NOMBRES copiados (sizeName, flavorName, bobaTypeName), la categoria, unitPrice, quantity y sus toppings (create anidado). No guarda IDs referenciales para preservar el historico aunque el catalogo cambie.
+  4. Calcula el total = sumatoria de (unitPrice + suma de precios de toppings) * quantity. Esto se recalcula en el servidor (no confia en el valor enviado).
+  5. Dentro de una transaccion: calcula el proximo numero de pedido (seq = max(seq) + 1) y crea el Order con status RECIBIDO, deliveryType (MESA/LLEVAR o null), total, userId.
+  6. Llama revalidatePath("/") para que la cola se actualice.
+  7. Devuelve { orderId, seq, total }.
+
+CALCULO DE PRECIO:
+  - Precio base: se busca en la matriz de precios (DrinkPrice) la combinacion exacta (categoria, tamano, tipo de boba). En la UI lo hace priceOf(); en Backend se usa la funcion computeItemPrice(basePrice, toppings) = base + suma de toppings.
+  - El precio unitario del item NO incluye toppings; esos se suman por separado. El total de una linea = (base + toppings) * cantidad.
+  - El cliente nunca escribe el precio: siempre sale de la base de datos.
+
+COMO FUNCIONA EL COBRO (acceptOrder, en actions/orders.ts):
+  - Solo aplica a pedidos en estado RECIBIDO y no anulados.
+  - Metodo de pago valido solo EFECTIVO o QR (constante AcceptablePayment; TARJETA se registra pero no es un metodo aceptable del cajero).
+  - Pago simple: se registra paymentMethod y paidAt = ahora, pasa a ACEPTADO.
+  - Pago dividido (opcional): method2 + amount2. Validaciones: metodo2 distinto de metodo1, ambos EFECTIVO/QR, amount2 > 0 y amount2 < total. se registran paymentMethod2 y paymentAmount2. El primer metodo cubre (total - amount2) y el segundo amount2.
+  - El usuario de la orden se setea al del cajero si aun no tenia (userId).
+
+COMO SE ENTREGA (deliverOrder, en actions/orders.ts):
+  - Solo desde ACEPTADO. Si esta RECIBIDO lanza error ("aun no esta pagado"). Si ENTREGADO, error "ya fue entregado". Si ANULADO, error.
+  - Pasa a ENTREGADO y fija deliveredAt (una sola vez: usa el existente si ya lo tenia).
+
+COMO SALE LA COMANDA (impresion en lib/printing.ts + actions/printing.ts):
+  - La impresora se obtiene de un archivo de configuracion compartido: ../store/printing.json (campo printerName). Si no hay impresora, error "Pide al administrador que la configure".
+  - formatear comanda: texto plano de ancho 30 caracteres, con encabezado "BUBBLE DRINK", "COMANDA #XXXXX", cliente, fecha, cada item (cantidad x sabor, tamano - boba, + toppings) y TOTAL. Sin acentos (version ASCII segura para la termica).
+  - La impresion usa PowerShell + System.Drawing: ajusta el tamano de letra (Consolas bold) para que la linea mas larga quepa en un rollo termico de 80mm (315 unidades de ancho). Timeout de 15s.
+  - IMPORTANTE: al crear el pedido desde Nueva Venta NO se imprime automaticamente la comanda en el codigo actual. La comanda se imprime de forma MANUAL con el boton "Reimprimir" desde la cola (reprintOrder), y solo mientras el pedido siga en RECIBIDO (no aceptado).
+
+REPORTE DIARIO (lib/report.ts):
+  - Solo considera pedidos ENTREGADOS del dia (deliveredAt dentro de los limites del dia local).
+  - KPIs: revenueTotal (suma total), deliveredOrders (cantidad), avgTicket (total/cantidad), avgDeliveryMinutes (promedio desde createdAt hasta deliveredAt), y desglose por metodo de pago. Para pagos divididos reparte: metodo1 recibe (total - amount2), metodo2 recibe amount2; ambos cuentan 1 pedido.
+  - Rendimiento del usuario conectado (mine): filtra por userId.
+
+ALERTA DE RETRASO (notifications.ts):
+  - Un pedido en RECIBIDO/ACEPTADO con mas de 10 min dispara una notificacion en Telegram. Reclamo atomico de flag delayNotified (updateMany con condicion) para evitar duplicados entre pestanas. Si el envio falla, libera el flag para reintentar en el siguiente tick.
+
+CIERRE DE CAJA (app/actions/report.ts + @bubba/db daily-report):
+  - sendDailyReportToBot envia el cierre del dia a Telegram, pero solo se habilita a partir de las 23:10 hora local (MANUAL_REPORT_CUTOFF). Envios anteriores lanzan error.
+  - Tambien existe DAILY_REPORT_HOUR (23:20) para el cierre automatico via worker.
+
+------------------------------------------------------------
+7. VARIABLES DE ENTORNO (.env.example)
+------------------------------------------------------------
+
+DATABASE_URL="file:./dev.db"
+  Ruta del archivo SQLite que usa Prisma. En este proyecto SQLite es el motor.
+
+NEXTAUTH_URL="http://localhost:3002"
+  Base URL publica de la app, usada por NextAuth (debe apuntar al puerto del cajero).
+
+NEXTAUTH_SECRET="change-me-en-produccion"
+  Secreto para firmar las sesiones JWT. CAMBIAR en produccion.
+
+TELEGRAM_BOT_TOKEN="8813738803:AAEDFTfmlFdBhY8cdjxTXcKkgPCLGZo79jE"
+  Token del bot de Telegram usado para alertas de retraso y cierres de caja.
+  IMPORTANTE: Este valor sensible NO debe subirse a un repositorio publico.
+
+TELEGRAM_CHAT_ID="799049998"
+  ID del chat/grupo de Telegram al que se envian las alertas y reportes.
+
+DAILY_REPORT_HOUR="23:20"
+  Hora local del cierre de caja automatico diario.
+
+MANUAL_REPORT_HOUR="23:10"
+  Hora local desde la que se habilita el envio manual del cierre (el codigo usa MANUAL_REPORT_CUTOFF=23:10).
+
+(Ademas, la app lee ../store/printing.json para el nombre de la impresora termica.)
+
+------------------------------------------------------------
+8. COMANDOS PARA EJECUTAR
+------------------------------------------------------------
+
+pnpm install          Instala dependencias de todo el monorepo (pnpm workspaces).
+pnpm dev              Corre TODAS las apps en paralelo (admin 3001, cajero 3002, store 3000).
+pnpm --filter @bubba/cajero dev      Solo el cajero en el puerto 3002.
+pnpm --filter @bubba/db generate     Genera el cliente Prisma.
+pnpm --filter @bubba/db migrate      Aplica migraciones de la base de datos.
+pnpm --filter @bubba/db seed         Sembrar catalogo, matriz de precios, admin y cajero.
+pnpm --filter @bubba/db daily-report Ejecuta el cierre de caja diario (worker).
+pnpm build / pnpm lint / pnpm typecheck   Build, lint y typecheck de todo el monorepo.
+
+Nota: Next.js 15 con App Router. El paquete usa npm/yarn/pnpm pero el monorepo esta hecho con pnpm.
+
+------------------------------------------------------------
+9. PUNTOS DE ATENCION / DEUDA TECNICA
+------------------------------------------------------------
+
+- La comanda NO se imprime automaticamente al crear una venta desde "Nueva Venta": el cajero debe presionar "Reimprimir" en la cola para sacarla en papel. Si se espera impresion automatica al cobrar, es una funcionalidad pendiente.
+- La impresion depende de una configuracion externa (store/printing.json) y de Windows PowerShell + System.Drawing; no funciona en entornos Linux/servidor (tipico de entornos con impresora local conectada al cajero).
+- El nombre de la impresora se lee desde la carpeta de OTRA app (store). No hay una UI en el cajero para configurarla; eso lo hace el administrador.
+- Los precios, sabores, tamanos y toppings los administra el backoffice (app de admin); el cajero solo lee el catalogo con getPosCatalog(). No hay pantalla de administracion en esta app.
+- El total se recalcula en el servidor (buena practica), pero no hay validacion de que el carrito enviado no haya sido manipulado para cambiar unitPrice: el servidor usa el unitPrice que viene en cada item. Idealmente el backend deberia recalcular cada unitPrice desde DrinkPrice.
+- Pago "dividido": el desglose de revenue en el reporte asume que el metodo 1 cubre (total - amount2) y el metodo 2 cubre amount2. El dialog de split solo permite EFECTIVO+QR (TARJETA no aparece como metodo aceptable del cajero, aunque existe como enum).
+- El numero de pedido (seq) se calcula como max(seq)+1 dentro de una transaccion. Con SQLite y unicidad en seq, no deberia haber choques, pero en alta concurrencia extrema conviene revisar.
+- El catalogo se carga completo en memoria en cada apertura de la pestana venta: para catalogos muy grandes habria que paginar.
+- Estado del carrito (PosCartStore) global en memoria: si el cajero recarga la pagina, el carrito se pierde (no persiste en localStorage).
+- No hay sistema de devoluciones/reembolsos en el cajero: los estados solo van RECIBIDO -> ACEPTADO -> ENTREGADO (o ANULADO, aunque en el cajero no se expone boton de anulacion; eso parece venir del admin).
+- El .env.example contiene un token y chat real de Telegram: si este archivo se comparte, debe rotarse el token.
+- La app usa SQLite (dev/pilot); para produccion con multiples cajeros convendria migrar a PostgreSQL (el stack original lo contempla).
+- No hay tests automatizados visibles en la app cajero.
+============================================================

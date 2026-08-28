@@ -7,8 +7,10 @@ import {
   FlavorCategoryList,
   FlavorCategoryLabel,
   formatPrice,
+  Role,
   type Catalog,
   type FlavorCategory as FlavorCategoryType,
+  type Role as RoleType,
   type Size,
   type Topping,
 } from "@bubba/types";
@@ -36,9 +38,16 @@ function deliveryLabel(type: PosDeliveryType) {
   return type === "MESA" ? "Para mesa" : "Para llevar";
 }
 
-export function PosTerminal({ catalog }: { catalog: Catalog }) {
+export function PosTerminal({
+  catalog,
+  role,
+}: {
+  catalog: Catalog;
+  role: RoleType;
+}) {
   const router = useRouter();
   const cart = usePosCart();
+  const isBilling = role === Role.CAJERO || role === Role.ADMIN;
   const [activeCategory, setActiveCategory] = useState<FlavorCategoryType>(
     CATEGORIES.find((c) =>
       catalog.flavors.some(
@@ -109,10 +118,12 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setNotice(null);
     try {
       const trimmedName = cart.customerName.trim();
+      // El mesero solo toma pedidos en mesa: se fuerza MESA.
+      const deliveryType = isBilling ? cart.deliveryType : "MESA";
       const result = await createPosOrder(
         cart.items,
         trimmedName === "" ? undefined : trimmedName,
-        cart.deliveryType,
+        deliveryType,
       );
       cart.clear();
       setToppingIds([]);
@@ -149,8 +160,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                 onClick={() => switchCategory(category)}
                 className={`h-12 flex-1 rounded-xl border text-lg font-bold transition-colors disabled:opacity-30 ${
                   selected
-                    ? "border-primary bg-primary text-white"
-                    : "border-border bg-card hover:border-primary/60"
+                    ? "border-secondary bg-secondary text-secondary-foreground"
+                    : "border-border bg-slate-600 text-white hover:border-primary/60"
                 }`}
               >
                 {FlavorCategoryLabel[category]}
@@ -159,7 +170,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
           })}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-4">
           {flavors.map((flavor) => (
             <button
               key={flavor.id}
@@ -179,7 +190,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                   })),
                 })
               }
-              className="h-16 rounded-xl border border-border bg-card px-3 text-lg font-bold text-white transition-all hover:border-primary hover:bg-primary/10 disabled:opacity-40"
+              className="h-20 w-full rounded-xl border border-border bg-card px-3 text-xl font-bold whitespace-normal text-white leading-tight transition-transform active:scale-95 hover:border-primary hover:bg-primary/10 disabled:opacity-40"
             >
               <span className="block leading-tight">{flavor.name}</span>
               <span className="block text-sm font-semibold text-primary">
@@ -196,13 +207,13 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Tamaño
             </h3>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-4">
               {sizes.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   onClick={() => setSizeId(s.id)}
-                  className={`h-12 rounded-xl border text-base font-bold transition-colors ${
+                  className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
                     s.id === sizeId
                       ? "border-primary bg-primary text-white"
                       : "border-border bg-card hover:border-primary/60"
@@ -218,13 +229,13 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Tipo de boba
             </h3>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-4">
               {bobaTypes.map((b) => (
                 <button
                   key={b.id}
                   type="button"
                   onClick={() => setBobaTypeId(b.id)}
-                  className={`h-12 rounded-xl border text-base font-bold transition-colors ${
+                  className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
                     b.id === bobaTypeId
                       ? "border-primary bg-primary text-white"
                       : "border-border bg-card hover:border-primary/60"
@@ -335,7 +346,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                     </button>
                     <button
                       type="button"
-                      className="text-sm font-bold text-red-400 hover:text-red-300"
+                      className="rounded bg-destructive px-2 py-1 text-xs font-bold text-destructive-foreground hover:bg-destructive/90"
                       onClick={() => cart.removeItem(item.id)}
                     >
                       Quitar
@@ -388,11 +399,15 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
           type="button"
           disabled={busy || cart.items.length === 0}
           onClick={submit}
-          className="mt-3 h-20 w-full rounded-xl bg-primary px-4 text-xl font-bold text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`mt-3 h-20 w-full rounded-xl px-4 text-xl font-bold text-white transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 ${
+            isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
+          }`}
         >
           {busy
             ? "Enviando…"
-            : `Enviar y Cobrar (Total: ${formatPrice(totalOfItems(cart.items))})`}
+            : isBilling
+              ? `Enviar y Cobrar (Total: ${formatPrice(totalOfItems(cart.items))})`
+              : "Enviar a Caja"}
         </button>
       </aside>
     </div>

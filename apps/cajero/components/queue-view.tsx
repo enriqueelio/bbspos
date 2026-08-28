@@ -17,7 +17,9 @@ import {
   PaymentMethodLabel,
   OrderStatus,
   OrderStatusLabel,
+  Role,
   type Order,
+  type Role as RoleType,
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
@@ -124,6 +126,16 @@ function useQueueClock(orders: Order[]) {
 }
 
 function AgeBadge({ order, now }: { order: Order; now: number }) {
+  // Semáforo de demora basado en los minutos transcurridos desde createdAt:
+  //  >= 10 min -> rojo pulsante (crítico)
+  //  >= 7 min  -> ámbar (precaución)
+  //  < 7 min   -> gris pizarra (normal)
+  const color = (minutes: number) => {
+    if (minutes >= 10) return "bg-red-600 text-white animate-pulse";
+    if (minutes >= 7) return "bg-amber-500 text-white";
+    return "bg-slate-700 text-slate-300";
+  };
+
   // Entregado: tiempo fijo desde el ingreso hasta la entrega.
   if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
     const minutes = Math.max(
@@ -134,21 +146,16 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
           60_000,
       ),
     );
-    const slow = minutes >= 10;
     return (
-      <Badge variant={slow ? "destructive" : "secondary"} className="text-base">
+      <Badge className={`text-base ${color(minutes)}`}>
         Entregado en {formatDurationMinutes(minutes)}
       </Badge>
     );
   }
+
   const minutes = ageMinutes(order.createdAt, now);
-  const urgent = minutes >= 15;
-  const amber = minutes > 10 && minutes < 15;
   return (
-    <Badge
-      variant={urgent ? "destructive" : amber ? "warning" : "secondary"}
-      className="text-base"
-    >
+    <Badge className={`text-base ${color(minutes)}`}>
       Ingresado hace {formatDurationMinutes(minutes)}
     </Badge>
   );
@@ -218,9 +225,11 @@ function ReprintButton({
 function OrderCard({
   order,
   clock,
+  billing,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
+  billing: boolean;
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const isFresh = order.status === OrderStatus.RECIBIDO;
@@ -284,43 +293,53 @@ function OrderCard({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {order.status === OrderStatus.RECIBIDO && (
-              <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-                <Button
-                  variant="default"
-                  className="h-14 text-lg font-bold w-full"
-                  disabled={clock.busyId === order.id}
-                  onClick={() =>
-                    clock.run(order.id, async () => {
-                      await acceptOrder(order.id, "EFECTIVO");
-                    })
-                  }
-                >
-                  EFECTIVO
-                </Button>
-                <Button
-                  variant="default"
-                  className="h-14 text-lg font-bold w-full"
-                  disabled={clock.busyId === order.id}
-                  onClick={() =>
-                    clock.run(order.id, async () => {
-                      await acceptOrder(order.id, "QR");
-                    })
-                  }
-                >
-                  QR
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="h-10 w-full"
-                  disabled={clock.busyId === order.id}
-                  onClick={() => setShowSplit(true)}
-                >
-                  Cobro dividido
-                </Button>
-                <ReprintButton order={order} clock={clock} />
-              </div>
-            )}
+            {order.status === OrderStatus.RECIBIDO &&
+              (billing ? (
+                <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
+                  <Button
+                    variant="default"
+                    className="h-14 text-lg font-bold w-full"
+                    disabled={clock.busyId === order.id}
+                    onClick={() =>
+                      clock.run(order.id, async () => {
+                        await acceptOrder(order.id, "EFECTIVO");
+                      })
+                    }
+                  >
+                    EFECTIVO
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="h-14 text-lg font-bold w-full"
+                    disabled={clock.busyId === order.id}
+                    onClick={() =>
+                      clock.run(order.id, async () => {
+                        await acceptOrder(order.id, "QR");
+                      })
+                    }
+                  >
+                    QR
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="h-10 w-full"
+                    disabled={clock.busyId === order.id}
+                    onClick={() => setShowSplit(true)}
+                  >
+                    Cobro dividido
+                  </Button>
+                  <ReprintButton order={order} clock={clock} />
+                </div>
+              ) : (
+                <div className="flex w-full justify-center py-3">
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500 text-amber-500"
+                  >
+                    Esperando pago en caja...
+                  </Badge>
+                </div>
+              ))}
             {order.status === OrderStatus.ACEPTADO && (
               <Button
                 size="lg"
@@ -394,8 +413,15 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-export function QueueView({ orders }: { orders: Order[] }) {
+export function QueueView({
+  orders,
+  role,
+}: {
+  orders: Order[];
+  role: RoleType;
+}) {
   const clock = useQueueClock(orders);
+  const billing = role === Role.CAJERO || role === Role.ADMIN;
 
   if (orders.length === 0) {
     return (
@@ -454,7 +480,7 @@ export function QueueView({ orders }: { orders: Order[] }) {
           {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
         </h2>
         {ordered.map((order) => (
-          <OrderCard key={order.id} order={order} clock={clock} />
+          <OrderCard key={order.id} order={order} clock={clock} billing={billing} />
         ))}
       </section>
     </div>

@@ -173,8 +173,21 @@ async function main() {
     },
   });
 
+  const meseroPassword = await hash("mesero123", 10);
+
+  await prisma.user.upsert({
+    where: { email: "mesero@bubba.mx" },
+    update: {},
+    create: {
+      email: "mesero@bubba.mx",
+      name: "Mesero de Turno",
+      password: meseroPassword,
+      role: "MESERO",
+    },
+  });
+
   console.log(
-    "Catálogo, matriz de precios, admin y cajero sembrados correctamente.",
+    "Catálogo, matriz de precios, admin, cajero y mesero sembrados correctamente.",
   );
 }
 

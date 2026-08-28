@@ -1,0 +1,1 @@
+Modifica `apps/cajero/components/pos/pos-terminal.tsx`. En la grilla de sabores y selectores (Tamaño, Boba), ajusta las clases de Tailwind de los botones (`Button`). Usa `className="h-20 w-full text-xl font-bold whitespace-normal leading-tight active:scale-95 transition-transform"`. Asegúrate de que el grid tenga un espaciado amplio: `grid grid-cols-3 gap-4`.

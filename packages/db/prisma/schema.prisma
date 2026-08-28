@@ -160,6 +160,7 @@ enum OrderStatus {
 enum Role {
   ADMIN
   CAJERO
+  MESERO
 }
 
 enum PaymentMethod {

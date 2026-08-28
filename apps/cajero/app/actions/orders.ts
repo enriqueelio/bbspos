@@ -5,9 +5,11 @@ import { prisma } from "@bubba/db";
 import {
   AcceptablePayment,
   OrderStatus,
+  Role,
   type PaymentMethod as PaymentMethodType,
 } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
+import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 
 /** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO.
  *  Soporta pago simple (un método) o dividido (dos métodos con montos). */
@@ -19,12 +21,17 @@ export async function acceptOrder(
 ) {
   const session = await getRequiredSession();
 
+  if (session.user.role === Role.MESERO) {
+    throw new Error("No autorizado. Los meseros no pueden registrar pagos.");
+  }
+
   if (!AcceptablePayment.includes(method as PaymentMethodType)) {
     throw new Error("Selecciona un método de pago válido: Efectivo o QR.");
   }
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
+    include: { items: { include: { toppings: true } } },
   });
 
   if (!order) {
@@ -72,6 +79,36 @@ export async function acceptOrder(
       userId: order.userId ?? session.user.id,
     },
   });
+
+  // Impresión automática de la comanda al cobrar el pedido.
+  // No bloquea la respuesta de la UI: si la impresora falla, solo se loguea.
+  try {
+    const printerName = getPrinterName();
+    if (printerName) {
+      await printText(
+        printerName,
+        formatComanda({
+          seq: order.seq,
+          customerName: order.customerName,
+          createdAt: order.createdAt,
+          total: order.total,
+          items: order.items.map((item) => ({
+            sizeName: item.sizeName,
+            flavorName: item.flavorName,
+            bobaTypeName: item.bobaTypeName,
+            unitPrice: item.unitPrice,
+            quantity: item.quantity,
+            toppings: item.toppings.map((t) => ({
+              toppingName: t.toppingName,
+              unitPrice: t.unitPrice,
+            })),
+          })),
+        }),
+      );
+    }
+  } catch (e) {
+    console.error("No se pudo imprimir la comanda al cobrar:", e);
+  }
 
   revalidatePath("/");
 }

@@ -13,3 +13,8 @@ export async function getRequiredSession() {
 export function hasCashierAccess(role: RoleType): boolean {
   return role === Role.CAJERO || role === Role.ADMIN;
 }
+
+/** Acceso a funciones de cobro (registrar pagos): solo cajero y admin. */
+export function hasBillingAccess(role: RoleType): boolean {
+  return role === Role.CAJERO || role === Role.ADMIN;
+}

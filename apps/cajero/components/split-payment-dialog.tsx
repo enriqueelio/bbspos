@@ -63,7 +63,7 @@ export function SplitPaymentDialog({
     onConfirm(method1, method2, amount2);
   }
 
-  function appendDigit(d: string) {
+  function handleNumpad(d: string) {
     setAmount1((prev) => {
       const base = prev === "" || prev === "0" ? "" : prev;
       const next = base + d;
@@ -110,17 +110,17 @@ export function SplitPaymentDialog({
                 </button>
               ))}
             </div>
-            <div className="w-full text-right text-4xl font-mono p-4 bg-slate-900 rounded-lg text-emerald-400 mb-4">
+            <div className="w-full text-4xl font-mono text-emerald-400 p-4 bg-slate-900 rounded-lg text-right">
               {amount1 || "0"}
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 mt-4">
               {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((d) => (
                 <Button
                   key={d}
                   type="button"
                   variant="secondary"
                   className="h-16 text-2xl font-bold"
-                  onClick={() => appendDigit(d)}
+                  onClick={() => handleNumpad(d)}
                 >
                   {d}
                 </Button>
@@ -129,7 +129,7 @@ export function SplitPaymentDialog({
                 type="button"
                 variant="secondary"
                 className="h-16 text-2xl font-bold"
-                onClick={() => appendDigit("0")}
+                onClick={() => handleNumpad("0")}
               >
                 0
               </Button>

@@ -125,6 +125,7 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
 export const Role = {
   ADMIN: "ADMIN",
   CAJERO: "CAJERO",
+  MESERO: "MESERO",
 } as const;
 
 export type Role = (typeof Role)[keyof typeof Role];
@@ -132,9 +133,10 @@ export type Role = (typeof Role)[keyof typeof Role];
 export const RoleLabel: Record<Role, string> = {
   ADMIN: "Administrador",
   CAJERO: "Cajero",
+  MESERO: "Mesero",
 };
 
-export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO];
+export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO, Role.MESERO];
 
 export interface StaffUser {
   id: string;

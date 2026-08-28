@@ -1,0 +1,29 @@
+Implementa un sistema de control de roles (RBAC) para separar las capacidades de un CAJERO (toma pedido y cobra) y un MESERO (toma pedido en mesa, pero no cobra).
+
+**1. Actualización de Base de Datos (Prisma)**
+Abre `packages/db/prisma/schema.prisma`.
+- Modifica el enum `Role` para incluir el nuevo rol: `enum Role { ADMIN \n CAJERO \n MESERO }`
+- Ejecuta la migración (indica en tus pasos que debo correr `pnpm db:migrate` y generar el cliente Prisma).
+
+**2. Autenticación y Middleware**
+Abre `apps/cajero/middleware.ts` y `apps/cajero/lib/session.ts` (o `lib/auth.ts`).
+- Asegúrate de que el middleware permita el acceso a la app a usuarios con rol `MESERO` (actualmente solo deja a CAJERO y ADMIN).
+- En `lib/session.ts`, crea un helper `hasBillingAccess(role)` que devuelva true solo para `ADMIN` y `CAJERO`.
+
+**3. UI del Punto de Venta (PosTerminal)**
+Abre `apps/cajero/components/pos/pos-terminal.tsx`.
+- Pasa el rol del usuario actual (`session.user.role`) como prop al componente.
+- Modifica el botón gigante de la derecha:
+  - Si el rol es `CAJERO` o `ADMIN`: El texto debe decir "Enviar y Cobrar" (flujo normal).
+  - Si el rol es `MESERO`: El texto debe decir "Enviar a Caja" y usar el color secundario (`bg-slate-700 text-white`). Al presionarlo, crea el pedido con `deliveryType = MESA` por defecto y redirige al dashboard.
+
+**4. UI de la Cola de Pedidos (QueueView)**
+Abre `apps/cajero/components/queue-view.tsx`.
+- Pasa el rol del usuario actual como prop.
+- En la sección donde se renderizan las acciones para los pedidos en estado `RECIBIDO` (botones de "Cobrar Efectivo", "Cobrar QR", "Cobro dividido"):
+  - Envuelve estos botones en una condición: solo deben renderizarse si el rol es `CAJERO` o `ADMIN`.
+  - Si el rol es `MESERO`, en lugar de los botones de cobro, muestra un texto informativo o un Badge deshabilitado que diga: `<Badge variant="outline" className="text-amber-500 border-amber-500">Esperando pago en caja...</Badge>`.
+
+**5. Seguridad en Server Actions**
+Abre `apps/cajero/actions/orders.ts`.
+- En la función `acceptOrder` (la que registra el pago), añade una validación estricta al principio: verifica la sesión y si `session.user.role === 'MESERO'`, lanza un error `throw new Error("No autorizado. Los meseros no pueden registrar pagos.")`.

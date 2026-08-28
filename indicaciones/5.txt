@@ -1,0 +1,29 @@
+Modifica el sistema de diseño de la aplicación del cajero (apps/cajero) para implementar un modo oscuro de alto contraste y una paleta semántica estricta. El objetivo es que el cajero opere usando visión periférica: el azul guía la venta, el verde el despacho y el ámbar previene cuellos de botella.
+
+**1. Variables Globales (shadcn/ui CSS)**
+Abre `apps/cajero/app/globals.css` (y revisa `packages/config/src/tailwind.ts` si aplica). Convierte los siguientes colores HEX a HSL y aplícalos en la capa `:root` para forzar el modo oscuro semántico:
+- `--background`: #0F172A (Negro Profundo).
+- `--foreground`: #F8FAFC (Blanco Nieve).
+- `--primary`: #2563EB (Azul Cobalto).
+- `--primary-foreground`: #FFFFFF.
+- `--secondary`: #475569 (Gris Pizarra).
+- `--secondary-foreground`: #FFFFFF.
+- `--destructive`: #E11D48 (Rojo Carmesí).
+- `--destructive-foreground`: #FFFFFF.
+- Añade variables personalizadas si no existen:
+  - `--success`: #10B981 (Verde Esmeralda).
+  - `--success-foreground`: #FFFFFF.
+  - `--warning`: #F59E0B (Ámbar).
+  - `--warning-foreground`: #FFFFFF.
+
+**2. Aplicación en Nueva Venta (PosTerminal)**
+Abre `apps/cajero/components/pos/pos-terminal.tsx`[cite: 4]:
+- **Botón "Enviar y Cobrar":** Debe usar `variant="default"` o la clase directa `bg-blue-600 hover:bg-blue-700 text-white` para destacar como la acción principal[cite: 4].
+- **Pestañas de Categorías:** (Con agua, Con leche, Especiales) deben usar `variant="secondary"` o `bg-slate-600 text-white` para no competir con el botón de cobro[cite: 4].
+- **Quitar Ítem:** El botón para eliminar una línea del carrito debe usar estrictamente `variant="destructive"` (Rojo Carmesí)[cite: 4].
+
+**3. Aplicación en la Cola de Pedidos (QueueView)**
+Abre `apps/cajero/components/queue-view.tsx`[cite: 4]:
+- **Acciones de Cobro (Estado RECIBIDO):** Botones como "Cobrar Efectivo" o "Cobrar QR" deben usar Azul Cobalto (`variant="default"`)[cite: 4].
+- **Acciones de Despacho (Estado ACEPTADO):** El botón "Marcar entregado" y el badge del estado deben usar el Verde Esmeralda (`bg-emerald-500 text-white`)[cite: 4].
+- **Semáforo de Demora (AgeBadge):** Modifica la lógica de los tiempos. Si el pedido supera los 10 minutos, el badge debe usar el color Ámbar (`bg-amber-500 text-white`) para advertir del retraso antes de que intervenga Telegram[cite: 4]. Si hay errores críticos o cancelaciones, usa Rojo Carmesí.

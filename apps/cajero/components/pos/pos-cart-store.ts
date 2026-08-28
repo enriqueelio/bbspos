@@ -29,9 +29,35 @@ export interface PosCartSnapshot {
 
 const listeners = new Set<() => void>();
 
-let items: CartItem[] = [];
-let customerName = "";
-let deliveryType: PosDeliveryType = "MESA";
+const STORAGE_KEY = "bubba-pos-cart";
+
+function loadFromStorage(): Partial<PosCartSnapshot> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Partial<PosCartSnapshot>;
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function persistState() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Almacenamiento no disponible: se ignora.
+  }
+}
+
+const stored = loadFromStorage();
+let items: CartItem[] = Array.isArray(stored.items) ? stored.items : [];
+let customerName =
+  typeof stored.customerName === "string" ? stored.customerName : "";
+let deliveryType: PosDeliveryType =
+  stored.deliveryType === "LLEVAR" ? "LLEVAR" : "MESA";
 let snapshot: PosCartSnapshot = { items, customerName, deliveryType };
 
 function emit() {
@@ -70,6 +96,7 @@ export function addPosItem(input: AddPosItemInput) {
     items = [...items, item];
   }
   emit();
+  persistState();
 }
 
 export function updatePosQuantity(id: string, quantity: number) {
@@ -77,21 +104,25 @@ export function updatePosQuantity(id: string, quantity: number) {
     i.id === id ? { ...i, quantity: Math.max(1, quantity) } : i,
   );
   emit();
+  persistState();
 }
 
 export function removePosItem(id: string) {
   items = items.filter((i) => i.id !== id);
   emit();
+  persistState();
 }
 
 export function setPosCustomerName(name: string) {
   customerName = name;
   emit();
+  persistState();
 }
 
 export function setPosDeliveryType(type: PosDeliveryType) {
   deliveryType = type;
   emit();
+  persistState();
 }
 
 export function clearPosCart() {
@@ -99,6 +130,13 @@ export function clearPosCart() {
   customerName = "";
   deliveryType = "MESA";
   emit();
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Almacenamiento no disponible: se ignora.
+    }
+  }
 }
 
 function subscribe(listener: () => void) {

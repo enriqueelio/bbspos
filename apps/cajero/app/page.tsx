@@ -72,7 +72,7 @@ export default async function CashierPage({
           />
         </div>
         <div className="mt-4">
-          <PosTerminal catalog={catalog} />
+          <PosTerminal catalog={catalog} role={session.user.role} />
         </div>
       </main>
     );
@@ -97,7 +97,7 @@ export default async function CashierPage({
     return (
       <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
         <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-        <QueueView orders={rows.map(toPlainOrder)} />
+        <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} />
       </main>
     );
   }

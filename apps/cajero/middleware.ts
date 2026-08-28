@@ -24,7 +24,11 @@ export default withAuth({
     authorized({ token }) {
       if (!token) return false;
       const role = token.role ?? Role.CAJERO;
-      return role === Role.CAJERO || role === Role.ADMIN;
+      return (
+        role === Role.CAJERO ||
+        role === Role.ADMIN ||
+        role === Role.MESERO
+      );
     },
   },
   pages: {

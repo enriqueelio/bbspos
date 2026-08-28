@@ -179,10 +179,11 @@ export function PosTerminal({
   const selectedSize: Size | undefined = size;
 
   return (
-    <div className="flex w-full h-[calc(100vh-4rem)] overflow-hidden">
-      {/* ===== Izquierda (Catálogo rápido) ===== */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="flex gap-2">
+    <div className="flex flex-col md:flex-row w-full h-[calc(100vh-5rem)] overflow-hidden bg-slate-950">
+      {/* ===== Izquierda: Catálogo de menú ===== */}
+      <div className="flex-1 min-h-[40vh] md:min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+        {/* Pestañas de categorías */}
+        <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((category) => {
             const enabled = catalog.flavors.some(
               (f) => f.categories.includes(category) && f.available,
@@ -194,7 +195,7 @@ export function PosTerminal({
                 type="button"
                 disabled={!enabled}
                 onClick={() => switchCategory(category)}
-                className={`h-12 flex-1 rounded-xl border text-lg font-bold transition-colors disabled:opacity-30 ${
+                className={`h-12 px-4 rounded-xl border text-base font-bold transition-colors disabled:opacity-30 ${
                   selected
                     ? "border-secondary bg-secondary text-secondary-foreground"
                     : "border-border bg-slate-600 text-white hover:border-primary/60"
@@ -206,7 +207,8 @@ export function PosTerminal({
           })}
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        {/* Grilla de sabores */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
           {flavors.map((flavor) => {
             const selected = selectedFlavorId === flavor.id;
             return (
@@ -214,30 +216,30 @@ export function PosTerminal({
                 key={flavor.id}
                 type="button"
                 onClick={() => selectFlavor(flavor)}
-                className={`h-20 w-full rounded-xl border px-3 text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   selected
                     ? "border-primary bg-primary/15 text-white"
                     : "border-border bg-card text-white hover:border-primary hover:bg-primary/10"
                 }`}
               >
-                <span className="block leading-tight">{flavor.name}</span>
+                {flavor.name}
               </button>
             );
           })}
         </div>
 
         {/* Tamaño */}
-        <section className="mt-4">
+        <section className="space-y-2">
           <h3 className="text-base font-bold uppercase tracking-wide text-white">
             Tamaño
           </h3>
-          <div className="mt-2 grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             {sizes.map((s) => (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => setSizeId(s.id)}
-                className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   s.id === sizeId
                     ? "border-primary bg-primary text-white"
                     : "border-border bg-card hover:border-primary/60"
@@ -250,17 +252,17 @@ export function PosTerminal({
         </section>
 
         {/* Tipo de boba (debajo de tamaño) */}
-        <section className="mt-4">
+        <section className="space-y-2">
           <h3 className="text-base font-bold uppercase tracking-wide text-white">
             Tipo de boba
           </h3>
-          <div className="mt-2 grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-2">
             {bobaTypes.map((b) => (
               <button
                 key={b.id}
                 type="button"
                 onClick={() => setBobaTypeId(b.id)}
-                className={`h-20 w-full rounded-xl border text-xl font-bold whitespace-normal leading-tight transition-transform active:scale-95 ${
+                className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   b.id === bobaTypeId
                     ? "border-primary bg-primary text-white"
                     : "border-border bg-card hover:border-primary/60"
@@ -273,7 +275,7 @@ export function PosTerminal({
         </section>
 
         {toppings.length > 0 && (
-          <section className="mt-4 space-y-2">
+          <section className="space-y-2">
             <h3 className="text-base font-bold uppercase tracking-wide text-white">
               Extras
             </h3>
@@ -301,7 +303,7 @@ export function PosTerminal({
 
         {/* Preticket: producto en construcción */}
         {selectedFlavor ? (
-          <section className="mt-4 rounded-xl border border-slate-700 bg-slate-800 p-4">
+          <section className="rounded-xl border border-slate-700 bg-slate-800 p-4">
             <h3 className="text-base font-bold uppercase tracking-wide text-white">
               Producto en curso
             </h3>
@@ -334,154 +336,158 @@ export function PosTerminal({
             </button>
           </section>
         ) : (
-          <p className="mt-4 text-base text-white">
+          <p className="text-base text-white">
             Toca un sabor para empezar tu pedido.
           </p>
         )}
       </div>
 
-      {/* ===== Derecha (Ticket en curso) ===== */}
-      <aside className="w-[400px] flex-shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col">
-        <h2 className="pb-3 text-lg font-black uppercase tracking-wide text-white">
-          Ticket en curso
-        </h2>
+      {/* ===== Derecha: Ticket en curso (panel fijo y separado) ===== */}
+      <aside className="w-full md:w-[340px] lg:w-[400px] h-[50vh] md:h-full flex-shrink-0 bg-slate-900 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col z-10">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <h2 className="px-3 pt-3 pb-1 text-lg font-black uppercase tracking-wide text-white">
+            Ticket en curso
+          </h2>
 
-        {busy && (
-          <p className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
-            Enviando… por favor espera.
-          </p>
-        )}
-        {notice && (
-          <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
-            {notice}
-          </p>
-        )}
-        {error && (
-          <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-            ⚠ {error}
-          </p>
-        )}
-
-        <ul className="flex-1 space-y-1 overflow-y-auto py-2">
-          {cart.items.length === 0 && (
-            <li className="text-base text-white">
-              Agrega bebidas tocando un sabor.
-            </li>
+          {busy && (
+            <p className="mx-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+              Enviando… por favor espera.
+            </p>
           )}
-          {cart.items.map((item) => {
-            const unitWithExtras =
-              item.unitPrice +
-              item.toppings.reduce((sum, t) => sum + t.price, 0);
-            return (
-              <li
-                key={item.id}
-                className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
-              >
-                <div className="min-w-0 text-base">
-                  <p className="font-bold text-white">
-                    {item.quantity}× {item.flavor.name}
-                  </p>
-                  <p className="text-white font-normal">
-                    {item.size.name} · {item.bobaType.name}
-                  </p>
-                  {item.toppings.length > 0 && (
-                    <p className="text-white font-normal">
-                      + {item.toppings.map((t) => t.name).join(", ")}
+          {notice && (
+            <p className="mx-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+              {notice}
+            </p>
+          )}
+          {error && (
+            <p className="mx-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              ⚠ {error}
+            </p>
+          )}
+
+          {/* Cuerpo del ticket: lista scrolleable */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {cart.items.length === 0 && (
+              <p className="text-base text-white">
+                Agrega bebidas tocando un sabor.
+              </p>
+            )}
+            {cart.items.map((item) => {
+              const unitWithExtras =
+                item.unitPrice +
+                item.toppings.reduce((sum, t) => sum + t.price, 0);
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
+                >
+                  <div className="min-w-0 text-base">
+                    <p className="font-bold text-white">
+                      {item.quantity}× {item.flavor.name}
                     </p>
-                  )}
-                  <div className="mt-1 flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity - 1)
-                      }
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity + 1)
-                      }
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded bg-destructive px-2 py-1 text-base font-bold text-destructive-foreground hover:bg-destructive/90"
-                      onClick={() => cart.removeItem(item.id)}
-                    >
-                      Quitar
-                    </button>
+                    <p className="text-white font-normal">
+                      {item.size.name} · {item.bobaType.name}
+                    </p>
+                    {item.toppings.length > 0 && (
+                      <p className="text-white font-normal">
+                        + {item.toppings.map((t) => t.name).join(", ")}
+                      </p>
+                    )}
+                    <div className="mt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
+                        onClick={() =>
+                          cart.updateQuantity(item.id, item.quantity - 1)
+                        }
+                      >
+                        −
+                      </button>
+                      <button
+                        type="button"
+                        className="h-6 w-6 rounded bg-slate-700 text-lg font-black text-white hover:bg-slate-600"
+                        onClick={() =>
+                          cart.updateQuantity(item.id, item.quantity + 1)
+                        }
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded bg-destructive px-2 py-1 text-base font-bold text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => cart.removeItem(item.id)}
+                      >
+                        Quitar
+                      </button>
+                    </div>
                   </div>
+                  <span className="font-mono text-base font-bold text-white">
+                    {formatPrice(unitWithExtras * item.quantity)}
+                  </span>
                 </div>
-                <span className="font-mono text-base font-bold text-white">
-                  {formatPrice(unitWithExtras * item.quantity)}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pie del ticket: controles y botón de cobro */}
+        <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2">
+          <input
+            type="text"
+            value={cart.customerName}
+            onChange={(e) => cart.setCustomerName(e.target.value)}
+            placeholder="Nombre del cliente (opcional)"
+            className="h-11 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 text-base text-white placeholder:text-slate-500 focus:border-primary focus:outline-none"
+          />
+
+          <div className="grid grid-cols-2 gap-2">
+            {(["MESA", "LLEVAR"] as PosDeliveryType[]).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => cart.setDeliveryType(type)}
+                className={`h-11 rounded-lg border text-base font-bold transition-colors ${
+                  cart.deliveryType === type
+                    ? "border-primary bg-primary text-white"
+                    : "border-slate-700 bg-slate-800 text-slate-300 hover:border-primary/60"
+                }`}
+              >
+                {deliveryLabel(type)}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-base font-bold uppercase tracking-wide text-white">
+              Total
+            </span>
+            <span className="font-mono text-2xl font-black text-white">
+              {formatPrice(totalOfItems(cart.items))}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            disabled={busy || cart.items.length === 0}
+            onClick={submit}
+            className={`w-full h-16 text-xl font-black text-white rounded-xl shadow-lg mt-2 flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
+            }`}
+          >
+            {busy ? (
+              "Enviando…"
+            ) : isBilling ? (
+              <>
+                <span className="text-xl font-black">Enviar y Cobrar</span>
+                <span className="font-mono text-2xl font-black">
+                  {formatPrice(totalOfItems(cart.items))}
                 </span>
-              </li>
-            );
-          })}
-        </ul>
-
-        <input
-          type="text"
-          value={cart.customerName}
-          onChange={(e) => cart.setCustomerName(e.target.value)}
-          placeholder="Nombre del cliente (opcional)"
-          className="mt-2 h-11 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 text-base text-white placeholder:text-slate-500 focus:border-primary focus:outline-none"
-        />
-
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {(["MESA", "LLEVAR"] as PosDeliveryType[]).map((type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => cart.setDeliveryType(type)}
-              className={`h-11 rounded-lg border text-base font-bold transition-colors ${
-                cart.deliveryType === type
-                  ? "border-primary bg-primary text-white"
-                  : "border-slate-700 bg-slate-800 text-slate-300 hover:border-primary/60"
-              }`}
-            >
-              {deliveryLabel(type)}
-            </button>
-          ))}
+              </>
+            ) : (
+              "Enviar a Caja"
+            )}
+          </button>
         </div>
-
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-base font-bold uppercase tracking-wide text-white">
-            Total
-          </span>
-          <span className="font-mono text-2xl font-black text-white">
-            {formatPrice(totalOfItems(cart.items))}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          disabled={busy || cart.items.length === 0}
-          onClick={submit}
-          className={`mt-auto flex flex-col items-center justify-center gap-1 h-24 w-full rounded-xl px-4 text-2xl font-bold text-white transition-colors hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-40 ${
-            isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
-          }`}
-        >
-          {busy ? (
-            "Enviando…"
-          ) : isBilling ? (
-            <>
-              <span className="text-lg font-bold uppercase tracking-wide">
-                Enviar y Cobrar
-              </span>
-              <span className="font-mono text-4xl font-black">
-                {formatPrice(totalOfItems(cart.items))}
-              </span>
-            </>
-          ) : (
-            "Enviar a Caja"
-          )}
-        </button>
       </aside>
     </div>
   );

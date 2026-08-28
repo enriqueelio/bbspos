@@ -21,6 +21,10 @@ function toPlainOrder(order: {
   createdAt: Date;
   deliveredAt: Date | null;
   delayNotified: boolean;
+  paidAt: Date | null;
+  paymentMethod: string | null;
+  paymentMethod2: string | null;
+  paymentAmount2: number | null;
   items: {
     id: string;
     sizeName: string;
@@ -41,6 +45,12 @@ function toPlainOrder(order: {
     createdAt: order.createdAt.toISOString(),
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
     delayNotified: order.delayNotified,
+    paidAt: order.paidAt?.toISOString() ?? null,
+    paymentMethod:
+      (order.paymentMethod as Order["paymentMethod"]) ?? null,
+    paymentMethod2:
+      (order.paymentMethod2 as Order["paymentMethod2"]) ?? null,
+    paymentAmount2: order.paymentAmount2,
     items: order.items.map((item) => ({
       ...item,
       flavorCategory: item.flavorCategory as Order["items"][number]["flavorCategory"],

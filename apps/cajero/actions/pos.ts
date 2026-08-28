@@ -50,7 +50,9 @@ export async function getPosCatalog(): Promise<Catalog> {
 }
 
 /** Crea un pedido de venta manual (POS): carrito, cliente y tipo de entrega.
- *  Asigna el seq (número de pedido), lo deja en RECIBIDO y calcula el total. */
+ *  Asigna el seq (número de pedido), lo deja en ACEPTADO (pendiente de cobro)
+ *  y calcula el total. El pago se registra después por el cajero, incluso tras
+ *  la entrega. La comanda se imprime una sola vez, al crear el pedido. */
 export async function createPosOrder(
   items: CartItem[],
   customerName?: string,
@@ -93,7 +95,7 @@ export async function createPosOrder(
       data: {
         customerName: customerName?.trim() || null,
         deliveryType: deliveryType ?? null,
-        status: OrderStatus.RECIBIDO,
+        status: OrderStatus.ACEPTADO,
         seq,
         total,
         userId: session.user.id,

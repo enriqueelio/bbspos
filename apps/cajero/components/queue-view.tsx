@@ -222,6 +222,54 @@ function ReprintButton({
   );
 }
 
+function ChargeGrid({
+  order,
+  clock,
+  onSplit,
+}: {
+  order: Order;
+  clock: ReturnType<typeof useQueueClock>;
+  onSplit: () => void;
+}) {
+  return (
+    <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
+      <Button
+        variant="default"
+        className="h-14 text-lg font-bold w-full"
+        disabled={clock.busyId === order.id}
+        onClick={() =>
+          clock.run(order.id, async () => {
+            await acceptOrder(order.id, "EFECTIVO");
+          })
+        }
+      >
+        EFECTIVO
+      </Button>
+      <Button
+        variant="default"
+        className="h-14 text-lg font-bold w-full"
+        disabled={clock.busyId === order.id}
+        onClick={() =>
+          clock.run(order.id, async () => {
+            await acceptOrder(order.id, "QR");
+          })
+        }
+      >
+        QR
+      </Button>
+      <Button
+        variant="secondary"
+        className="h-10 w-full"
+        disabled={clock.busyId === order.id}
+        onClick={onSplit}
+      >
+        Cobro dividido
+      </Button>
+      <ReprintButton order={order} clock={clock} />
+    </div>
+  );
+}
+
 function OrderCard({
   order,
   clock,
@@ -232,7 +280,9 @@ function OrderCard({
   billing: boolean;
 }) {
   const [showSplit, setShowSplit] = useState(false);
-  const isFresh = order.status === OrderStatus.RECIBIDO;
+  const isFresh =
+    order.status === OrderStatus.RECIBIDO ||
+    (order.status === OrderStatus.ACEPTADO && !order.paidAt);
   const isPending = clock.busyId === order.id;
 
   return (
@@ -292,46 +342,17 @@ function OrderCard({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-col gap-3">
+            {/* Pedido en RECIBIDO (legado de pedidos web/store): se cobra y se acepta */}
             {order.status === OrderStatus.RECIBIDO &&
               (billing ? (
-                <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
-                  <Button
-                    variant="default"
-                    className="h-14 text-lg font-bold w-full"
-                    disabled={clock.busyId === order.id}
-                    onClick={() =>
-                      clock.run(order.id, async () => {
-                        await acceptOrder(order.id, "EFECTIVO");
-                      })
-                    }
-                  >
-                    EFECTIVO
-                  </Button>
-                  <Button
-                    variant="default"
-                    className="h-14 text-lg font-bold w-full"
-                    disabled={clock.busyId === order.id}
-                    onClick={() =>
-                      clock.run(order.id, async () => {
-                        await acceptOrder(order.id, "QR");
-                      })
-                    }
-                  >
-                    QR
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="h-10 w-full"
-                    disabled={clock.busyId === order.id}
-                    onClick={() => setShowSplit(true)}
-                  >
-                    Cobro dividido
-                  </Button>
-                  <ReprintButton order={order} clock={clock} />
-                </div>
+                <ChargeGrid
+                  order={order}
+                  clock={clock}
+                  onSplit={() => setShowSplit(true)}
+                />
               ) : (
-                <div className="flex w-full justify-center py-3">
+                <div className="flex w-full justify-center py-1">
                   <Badge
                     variant="outline"
                     className="border-amber-500 text-amber-500"
@@ -340,6 +361,41 @@ function OrderCard({
                   </Badge>
                 </div>
               ))}
+
+            {/* ACEPTADO sin cobrar: el cajero puede registrar el pago después */}
+            {order.status === OrderStatus.ACEPTADO &&
+              !order.paidAt &&
+              (billing ? (
+                <ChargeGrid
+                  order={order}
+                  clock={clock}
+                  onSplit={() => setShowSplit(true)}
+                />
+              ) : (
+                <div className="flex w-full justify-center py-1">
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500 text-amber-500"
+                  >
+                    Pendiente de pago
+                  </Badge>
+                </div>
+              ))}
+
+            {/* ENTREGADO sin cobrar (el cliente pagó después de recibir):
+                el cajero puede registrar el pago en cualquier momento */}
+            {order.status === OrderStatus.ENTREGADO &&
+              !order.paidAt &&
+              billing && (
+                <ChargeGrid
+                  order={order}
+                  clock={clock}
+                  onSplit={() => setShowSplit(true)}
+                />
+              )}
+
+            {/* Pedido ACEPTADO: siempre se puede marcar como entregado,
+                pague el cliente antes o después de la entrega */}
             {order.status === OrderStatus.ACEPTADO && (
               <Button
                 size="lg"

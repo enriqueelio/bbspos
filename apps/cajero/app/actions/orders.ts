@@ -9,10 +9,11 @@ import {
   type PaymentMethod as PaymentMethodType,
 } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
-import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 
-/** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO.
- *  Soporta pago simple (un método) o dividido (dos métodos con montos). */
+/** Registra el pago de un pedido. Al cobrar un pedido RECIBIDO (proveniente
+ *  de la tienda web) lo pasa a ACEPTADO; los pedidos ya ACEPTADO o ENTREGADO
+ *  (tomados en el POS) se cobran sin cambiar su estado, pues el cliente puede
+ *  pagar después, incluso tras la entrega. La comanda ya se imprimió al crear. */
 export async function acceptOrder(
   orderId: string,
   method: string,
@@ -42,10 +43,16 @@ export async function acceptOrder(
     throw new Error("El pedido está anulado.");
   }
 
-  if (order.status !== OrderStatus.RECIBIDO) {
-    throw new Error(
-      "Solo los pedidos en estado Recibido pueden aceptarse con pago.",
-    );
+  if (
+    order.status !== OrderStatus.RECIBIDO &&
+    order.status !== OrderStatus.ACEPTADO &&
+    order.status !== OrderStatus.ENTREGADO
+  ) {
+    throw new Error("No se puede registrar el pago de este pedido.");
+  }
+
+  if (order.paidAt) {
+    throw new Error("Este pedido ya fue cobrado.");
   }
 
   let paymentMethod2: PaymentMethodType | null = null;
@@ -71,7 +78,11 @@ export async function acceptOrder(
   await prisma.order.update({
     where: { id: orderId },
     data: {
-      status: OrderStatus.ACEPTADO,
+      // Un pedido en RECIBIDO (web/store) se acepta al cobrarlo; los que ya
+      // están ACEPTADO o ENTREGADO conservan su estado (el cobro es aparte).
+      ...(order.status === OrderStatus.RECIBIDO
+        ? { status: OrderStatus.ACEPTADO }
+        : {}),
       paymentMethod: method as PaymentMethodType,
       paymentMethod2,
       paymentAmount2,
@@ -80,39 +91,11 @@ export async function acceptOrder(
     },
   });
 
-  // Impresión automática de la comanda al cobrar el pedido.
-  // No bloquea la respuesta de la UI: si la impresora falla, solo se loguea.
-  try {
-    const printerName = getPrinterName();
-    if (printerName) {
-      await printText(
-        printerName,
-        formatComanda({
-          seq: order.seq,
-          customerName: order.customerName,
-          createdAt: order.createdAt,
-          total: order.total,
-          items: order.items.map((item) => ({
-            sizeName: item.sizeName,
-            flavorName: item.flavorName,
-            bobaTypeName: item.bobaTypeName,
-            unitPrice: item.unitPrice,
-            quantity: item.quantity,
-            toppings: item.toppings.map((t) => ({
-              toppingName: t.toppingName,
-              unitPrice: t.unitPrice,
-            })),
-          })),
-        }),
-      );
-    }
-  } catch (e) {
-    console.error("No se pudo imprimir la comanda al cobrar:", e);
-  }
-
   revalidatePath("/");
 }
 
+/** Marca un pedido ACEPTADO como ENTREGADO. La entrega es independiente del
+ *  cobro: el cliente puede pagar después, incluso tras la entrega. */
 export async function deliverOrder(orderId: string) {
   const session = await getRequiredSession();
 
@@ -126,12 +109,6 @@ export async function deliverOrder(orderId: string) {
 
   if (order.status === OrderStatus.ANULADO) {
     throw new Error("El pedido está anulado.");
-  }
-
-  if (order.status === OrderStatus.RECIBIDO) {
-    throw new Error(
-      "El pedido aún no está pagado: registra el pago antes de entregarlo.",
-    );
   }
 
   if (order.status !== OrderStatus.ACEPTADO) {

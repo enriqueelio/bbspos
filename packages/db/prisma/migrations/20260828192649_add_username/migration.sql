@@ -17,7 +17,7 @@ CREATE TABLE "new_User" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT INTO "new_User" ("active", "createdAt", "id", "name", "password", "role") SELECT "active", "createdAt", "id", "name", "password", "role" FROM "User";
+INSERT INTO "new_User" ("active", "createdAt", "id", "name", "password", "role", "username") SELECT "active", "createdAt", "id", "name", "password", "role", COALESCE(NULLIF(email, ''), LOWER(REPLACE(name, ' ', '_')), 'usuario') FROM "User";
 DROP TABLE "User";
 ALTER TABLE "new_User" RENAME TO "User";
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");

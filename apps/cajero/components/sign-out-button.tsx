@@ -10,7 +10,11 @@ export function SignOutButton() {
     if (busy) return;
     setBusy(true);
     try {
-      await signOut({ redirect: true, callbackUrl: "/login" });
+      // Borra la sesión sin navegar y luego redirige con una carga completa.
+      // window.location garantiza que el middleware vea la cookie eliminada
+      // y que se llegue al login aunque falte el redirect de next-auth.
+      await signOut({ redirect: false });
+      window.location.assign("/login");
     } finally {
       setBusy(false);
     }

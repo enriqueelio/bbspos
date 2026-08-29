@@ -24,7 +24,7 @@ export interface AddPosItemInput {
 export interface PosCartSnapshot {
   items: CartItem[];
   customerName: string;
-  deliveryType: PosDeliveryType;
+  deliveryType: PosDeliveryType | "";
 }
 
 const listeners = new Set<() => void>();
@@ -56,8 +56,9 @@ const stored = loadFromStorage();
 let items: CartItem[] = Array.isArray(stored.items) ? stored.items : [];
 let customerName =
   typeof stored.customerName === "string" ? stored.customerName : "";
-let deliveryType: PosDeliveryType =
-  stored.deliveryType === "LLEVAR" ? "LLEVAR" : "MESA";
+// El tipo de entrega arranca sin ninguno preseleccionado; el cliente/mesero
+// elige "Para mesa" o "Para llevar" (o se toma por defecto al enviar).
+let deliveryType: PosDeliveryType | "" = "";
 let snapshot: PosCartSnapshot = { items, customerName, deliveryType };
 
 function emit() {
@@ -128,7 +129,7 @@ export function setPosDeliveryType(type: PosDeliveryType) {
 export function clearPosCart() {
   items = [];
   customerName = "";
-  deliveryType = "MESA";
+  deliveryType = "";
   emit();
   if (typeof window !== "undefined") {
     try {

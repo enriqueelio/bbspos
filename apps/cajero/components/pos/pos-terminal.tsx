@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FlavorCategory,
@@ -19,6 +19,14 @@ import { createPosOrder } from "@/actions/pos";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 
 const CATEGORIES = FlavorCategoryList;
+
+function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
+  return (
+    CATEGORIES.find((c) =>
+      catalog.flavors.some((f) => f.categories.includes(c) && f.available),
+    ) ?? FlavorCategory.MILK
+  );
+}
 
 function totalOfItems(items: {
   unitPrice: number;
@@ -50,21 +58,33 @@ export function PosTerminal({
   const cart = usePosCart();
   const isBilling = role === Role.CAJERO || role === Role.ADMIN;
   const [activeCategory, setActiveCategory] = useState<FlavorCategoryType>(
-    CATEGORIES.find((c) =>
-      catalog.flavors.some(
-        (f) => f.categories.includes(c) && f.available,
-      ),
-    ) ?? FlavorCategory.MILK,
+    firstActiveCategory(catalog),
   );
   const [sizeId, setSizeId] = useState<string>("");
-  const [bobaTypeId, setBobaTypeId] = useState<string>(
-    catalog.bobaTypes[0]?.id ?? "",
-  );
+  const [bobaTypeId, setBobaTypeId] = useState<string>("");
   const [selectedFlavorId, setSelectedFlavorId] = useState<string | null>(null);
   const [toppingIds, setToppingIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Al entrar (montar) se dejan los selectores en blanco para que el mesero
+  // arranque un pedido nuevo sin arrastrar selecciones.
+  useEffect(() => {
+    setSizeId("");
+    setBobaTypeId("");
+    setSelectedFlavorId(null);
+    setToppingIds([]);
+    setActiveCategory(firstActiveCategory(catalog));
+  }, [catalog]);
+
+  // Al entrar se limpia el carrito persistido de una sesión anterior para que
+  // el mesero no herede ítems viejos guardados en localStorage.
+  useEffect(() => {
+    cart.clear();
+    // La limpieza es solo al montar: se ignora el resto de dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sizes = catalog.sizes.filter((s) => s.available);
   const bobaTypes = catalog.bobaTypes.filter((b) => b.available);
@@ -102,7 +122,7 @@ export function PosTerminal({
   function switchCategory(category: FlavorCategoryType) {
     setActiveCategory(category);
     setSizeId("");
-    setBobaTypeId(catalog.bobaTypes[0]?.id ?? "");
+    setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
   }
@@ -155,7 +175,11 @@ export function PosTerminal({
     try {
       const trimmedName = cart.customerName.trim();
       // El mesero solo toma pedidos en mesa: se fuerza MESA.
-      const deliveryType = isBilling ? cart.deliveryType : "MESA";
+      const deliveryType = isBilling
+        ? cart.deliveryType === ""
+          ? null
+          : cart.deliveryType
+        : "MESA";
       const result = await createPosOrder(
         cart.items,
         trimmedName === "" ? undefined : trimmedName,
@@ -166,15 +190,9 @@ export function PosTerminal({
       // las opciones del pedido anterior.
       setToppingIds([]);
       setSizeId("");
-      setBobaTypeId(catalog.bobaTypes[0]?.id ?? "");
+      setBobaTypeId("");
       setSelectedFlavorId(null);
-      setActiveCategory(
-        CATEGORIES.find((c) =>
-          catalog.flavors.some(
-            (f) => f.categories.includes(c) && f.available,
-          ),
-        ) ?? FlavorCategory.MILK,
-      );
+      setActiveCategory(firstActiveCategory(catalog));
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
@@ -188,6 +206,16 @@ export function PosTerminal({
     } finally {
       setBusy(false);
     }
+  }
+
+  // Limpia el pedido actual (carrito y producto en construcción) por si el
+  // cliente se arrepiente.
+  function handleClear() {
+    cart.clear();
+    setToppingIds([]);
+    setSizeId("");
+    setBobaTypeId("");
+    setSelectedFlavorId(null);
   }
 
   const selectedSize: Size | undefined = size;
@@ -213,7 +241,7 @@ export function PosTerminal({
                 onClick={() => switchCategory(category)}
                 className={`h-12 px-4 rounded-xl border text-base font-bold transition-colors disabled:opacity-30 ${
                   selected
-                    ? "border-secondary bg-secondary text-secondary-foreground"
+                    ? "border-primary bg-primary text-white"
                     : "border-border bg-slate-600 text-white hover:border-primary/60"
                 }`}
               >
@@ -235,7 +263,7 @@ export function PosTerminal({
                 className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   selected
                     ? "border-primary bg-primary/15 text-white"
-                    : "border-border bg-card text-white hover:border-primary hover:bg-primary/10"
+                    : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
                 }`}
               >
                 {flavor.name}
@@ -258,7 +286,7 @@ export function PosTerminal({
                 className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   s.id === sizeId
                     ? "border-primary bg-primary text-white"
-                    : "border-border bg-card hover:border-primary/60"
+                    : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
                 }`}
               >
                 {s.name} · {s.oz} oz
@@ -281,7 +309,7 @@ export function PosTerminal({
                 className={`h-16 w-full rounded-xl border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 ${
                   b.id === bobaTypeId
                     ? "border-primary bg-primary text-white"
-                    : "border-border bg-card hover:border-primary/60"
+                    : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
                 }`}
               >
                 {b.name}
@@ -306,7 +334,7 @@ export function PosTerminal({
                     className={`h-11 rounded-xl border px-4 text-base font-bold transition-colors ${
                       selected
                         ? "border-primary bg-primary text-white"
-                        : "border-border bg-card hover:border-primary/60"
+                        : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
                     }`}
                   >
                     + {t.name} · {formatPrice(t.price)}
@@ -326,7 +354,9 @@ export function PosTerminal({
             <div className="mt-2 space-y-1 text-base text-white">
               <p className="font-bold">{selectedFlavor.name}</p>
               <p className="font-normal">
-                {size?.name ? `${size.name} · ${bobaType?.name ?? ""}` : "Elige un tamaño"}
+                {size?.name
+                  ? `${size.name} · ${bobaType?.name ?? ""}`
+                  : "Elige un tamaño"}
               </p>
               {selectedToppings.length > 0 && (
                 <p className="font-normal">
@@ -344,7 +374,7 @@ export function PosTerminal({
             </div>
             <button
               type="button"
-              disabled={!selectedSize || !selectedFlavor}
+              disabled={!selectedSize || !selectedFlavor || !bobaType}
               onClick={confirmProduct}
               className="mt-3 h-16 w-full rounded-xl bg-emerald-600 text-2xl font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -362,9 +392,25 @@ export function PosTerminal({
       {/* ===== Derecha: Ticket en curso y cobro (barra lateral sólida) ===== */}
       <div className="w-full lg:w-[420px] flex-shrink-0 bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col h-full z-10 shadow-2xl">
         <div className="shrink-0 p-5 pb-0 space-y-2">
-          <h2 className="text-lg font-black uppercase tracking-wide text-white">
-            Ticket en curso
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black uppercase tracking-wide text-white">
+              Ticket en curso
+            </h2>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={
+                busy ||
+                (cart.items.length === 0 &&
+                  cart.customerName === "" &&
+                  selectedFlavorId === null)
+              }
+              title="Vaciar el pedido si el cliente se arrepiente"
+              className="h-10 shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 text-sm font-bold text-slate-300 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Limpiar
+            </button>
+          </div>
           {busy && (
             <p className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
               Enviando… por favor espera.

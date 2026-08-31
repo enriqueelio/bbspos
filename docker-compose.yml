@@ -14,6 +14,8 @@ services:
       NEXTAUTH_URL_CAJERO: "http://localhost:3002"
       NEXTAUTH_SECRET_MESERO: "cambia-este-secreto-mesero-tambien"
       NEXTAUTH_URL_MESERO: "http://localhost:3003"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID}"
     volumes:
       - bubba-data:/app/packages/db/prisma
     restart: unless-stopped

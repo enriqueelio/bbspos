@@ -23,7 +23,6 @@ import {
 } from "@bubba/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
-import { notifyDelayedOrder } from "@/actions/notifications";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 
 function ageMinutes(createdAtIso: string, now: number): number {
@@ -51,7 +50,6 @@ function useQueueClock(orders: Order[]) {
     action: () => Promise<void>;
   } | null>(null);
   const [closingConfirm, setClosingConfirm] = useState(false);
-  const notifiedRef = useRef<Set<string>>(new Set());
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
 
@@ -60,34 +58,6 @@ function useQueueClock(orders: Order[]) {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(timer);
   }, []);
-
-  // Alerta por Telegram para pedidos retrasados (>10 min), una sola vez.
-  // Se dispara solo con el tick del reloj (no en cada refresh de la cola).
-  // Al enviar, el id queda marcado para siempre; si el servidor reporta fallo,
-  // se libera para que el siguiente tick reintente.
-  useEffect(() => {
-    for (const order of ordersRef.current) {
-      if (
-        order.status !== OrderStatus.RECIBIDO &&
-        order.status !== OrderStatus.ACEPTADO
-      ) {
-        continue;
-      }
-      if (order.delayNotified || notifiedRef.current.has(order.id)) continue;
-      const minutes = ageMinutes(order.createdAt, now);
-      if (minutes >= 10) {
-        notifiedRef.current.add(order.id);
-        notifyDelayedOrder(order.id, order.seq ?? 0, minutes).then((ok) => {
-          if (ok) return;
-          // Falló el envío (Telegram caído, red, token…): se libera la marca
-          // local y el siguiente tick del reloj reintenta automáticamente.
-          notifiedRef.current.delete(order.id);
-        }).catch(() => {
-          notifiedRef.current.delete(order.id);
-        });
-      }
-    }
-  }, [now]);
 
   // Refresco automático de la cola; se pausa con la pestaña oculta.
   useEffect(() => {

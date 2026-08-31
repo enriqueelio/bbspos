@@ -18,5 +18,6 @@ node_modules/.bin/next start -p 3003 &
 
 cd /app/packages/db
 ./node_modules/.bin/tsx scripts/daily-report-worker.ts &
+./node_modules/.bin/tsx scripts/telegram-alert-worker.ts &
 
 wait

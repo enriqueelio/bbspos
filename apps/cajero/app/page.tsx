@@ -81,7 +81,7 @@ export default async function CashierPage({
     const catalog = await getPosCatalog();
 
     return (
-      <main className="min-h-screen">
+      <main className="h-full overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-[1400px] px-4 pt-4">
           <Header
             name={session.user.name ?? ""}

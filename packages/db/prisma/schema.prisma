@@ -16,6 +16,8 @@ model User {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   orders    Order[]
+  cancelledOrders Order[] @relation("OrderCanceledBy")
+  discountedOrders Order[] @relation("OrderDiscountedBy")
 }
 
 model Size {
@@ -94,8 +96,12 @@ model Order {
   discountAmount Int            @default(0)
   discountReason String?
   discountedAt   DateTime?
+  discountedById String?
+  discountedBy   User?          @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
   cancelledAt    DateTime?
   cancelReason   String?
+  canceledById   String?
+  canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
   delayNotified  Boolean        @default(false)
 
   @@index([createdAt, status])

@@ -212,8 +212,10 @@ export interface Order {
   paymentAmount2?: number | null;
   discountAmount?: number;
   discountReason?: string | null;
+  discountedBy?: { name: string; role: Role } | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  canceledBy?: { name: string; role: Role } | null;
   delayNotified?: boolean;
 }
 

@@ -62,6 +62,53 @@ El sistema SHALL mostrar al personal del restaurante la lista de pedidos con sus
 - **WHEN** el admin selecciona un pedido
 - **THEN** el sistema muestra sus bebidas con configuración, toppings, cantidades, precios unitarios y total
 
+### Requirement: Anulación de un pedido por el admin
+
+El sistema SHALL permitir al admin anular un pedido mediante un diálogo flotante de confirmación donde se pide el motivo, persistir el motivo, la fecha/hora y el usuario que ejecutó la anulación, y ocultar las acciones secundarias (Descontar/Anular) una vez anulado.
+
+#### Scenario: Anulación confirmada con motivo
+
+- **WHEN** el admin selecciona Anular, escribe el motivo obligatorio en el diálogo flotante y confirma
+- **THEN** el sistema cambia el pedido a `ANULADO`, guarda `cancelReason`, `cancelledAt` y `canceledById`, y la tarjeta muestra "Anulado por: {usuario} ({rol}) · Motivo: {motivo} · {fecha/hora}"
+
+#### Scenario: Anulación sin motivo
+
+- **WHEN** el admin intenta confirmar la anulación sin haber escrito un motivo
+- **THEN** el sistema deshabilita la confirmación hasta que el motivo esté presente
+
+#### Scenario: Pedido anulado sin acciones secundarias
+
+- **WHEN** un pedido está en estado `ANULADO`
+- **THEN** la tarjeta oculta los botones Descontar y Anular; solo conserva acciones permitidas como "Reimprimir comanda"
+
+### Requirement: Descuento a un pedido por el admin
+
+El sistema SHALL permitir al admin aplicar un descuento mediante un diálogo flotante de confirmación con monto y motivo, persistir quién lo aplicó, y reflejar el saldo y el monto descontado en la tarjeta.
+
+#### Scenario: Descuento confirmado con motivo
+
+- **WHEN** el admin selecciona Descontar, ingresa el monto y el motivo obligatorio en el diálogo y confirma
+- **THEN** el sistema reduce el `total`, incrementa `discountAmount`, guarda `discountReason`, `discountedAt` y `discountedById`, y la tarjeta muestra el saldo junto a "Descuento de {monto}"
+
+#### Scenario: Descuento sin motivo
+
+- **WHEN** el admin intenta confirmar el descuento sin haber escrito el motivo
+- **THEN** el sistema deshabilita la confirmación hasta que el motivo esté presente
+
+### Requirement: Gestos y desbordamiento táctil en la terminal de tablet
+
+El sistema SHALL fijar la terminal del mesero a la altura visible de la pantalla (`100dvh`), bloquear el pull-to-refresh del navegador y evitar el rebote del desbordamiento vertical para que la interfaz se comporte como una app nativa en tablet.
+
+#### Scenario: Interfaz fija a pantalla completa
+
+- **WHEN** el mesero usa la terminal en una tablet
+- **THEN** el contenedor raíz ocupa exactamente la altura visible (`h-dvh` con `overflow:hidden` en el cuerpo) y el contenido interno hace scroll sin mostrar barras de navegación flotantes
+
+#### Scenario: Sin recarga por deslizamiento accidental
+
+- **WHEN** el mesero desliza hacia abajo en el catálogo
+- **THEN** la página no se recarga (pull-to-refresh desactivado vía `overscroll-behavior-y: none`) y el avance del pedido actual no se pierde
+
 ### Requirement: Despliegue del QR de pago en la confirmación
 
 El sistema SHALL mostrar el QR de pago configurado en la pantalla de confirmación del pedido, junto al número de pedido, cuando exista un QR de pago activo.

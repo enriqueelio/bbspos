@@ -26,7 +26,11 @@ export default async function OrdersPage({
 
   const rawOrders = await prisma.order.findMany({
     where,
-    include: { items: { include: { toppings: true } } },
+    include: {
+      items: { include: { toppings: true } },
+      canceledBy: { select: { name: true, role: true } },
+      discountedBy: { select: { name: true, role: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -59,6 +63,12 @@ export default async function OrdersPage({
     discountReason: o.discountReason,
     cancelledAt: o.cancelledAt ? o.cancelledAt.toISOString() : null,
     cancelReason: o.cancelReason,
+    canceledBy: o.canceledBy
+      ? { name: o.canceledBy.name, role: o.canceledBy.role }
+      : null,
+    discountedBy: o.discountedBy
+      ? { name: o.discountedBy.name, role: o.discountedBy.role }
+      : null,
   }));
 
   return (

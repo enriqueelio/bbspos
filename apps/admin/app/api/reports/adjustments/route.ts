@@ -67,6 +67,8 @@ export async function GET(request: Request) {
         cancelledAt: true,
         cancelReason: true,
         user: { select: { id: true, name: true } },
+        canceledBy: { select: { id: true, name: true } },
+        discountedBy: { select: { id: true, name: true } },
       },
     });
 
@@ -86,8 +88,11 @@ export async function GET(request: Request) {
           orderSeq: order.seq,
           amount: order.total,
           reason: order.cancelReason ?? "",
-          byUser: order.user
-            ? { id: order.user.id, name: order.user.name }
+          byUser: (order.canceledBy ?? order.user)
+            ? {
+                id: (order.canceledBy ?? order.user)!.id,
+                name: (order.canceledBy ?? order.user)!.name,
+              }
             : null,
           at: order.cancelledAt.toISOString(),
         });
@@ -101,8 +106,11 @@ export async function GET(request: Request) {
           orderSeq: order.seq,
           amount: order.discountAmount ?? 0,
           reason: order.discountReason ?? "",
-          byUser: order.user
-            ? { id: order.user.id, name: order.user.name }
+          byUser: (order.discountedBy ?? order.user)
+            ? {
+                id: (order.discountedBy ?? order.user)!.id,
+                name: (order.discountedBy ?? order.user)!.name,
+              }
             : null,
           at: order.discountedAt.toISOString(),
         });

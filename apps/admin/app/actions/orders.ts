@@ -147,7 +147,11 @@ export async function cancelOrder(orderId: string, reason: string) {
       status: OrderStatus.ANULADO,
       cancelledAt: new Date(),
       cancelReason: trimmed,
-      userId: session.user.id,
+      // Quién ejecutó la anulación (FK vinculada al usuario real de sesión).
+      canceledById: session.user.id,
+      // Conserva el usuario original del pedido: el usuario de sesión
+      // puede no existir en la tabla de usuarios y rompería la FK.
+      userId: order.userId ?? session.user.id,
     },
   });
 
@@ -195,6 +199,8 @@ export async function applyDiscount(
       discountAmount: order.discountAmount + amount,
       discountReason: trimmed,
       discountedAt: new Date(),
+      // Quién aplicó el descuento (FK vinculada al usuario real de sesión).
+      discountedById: session.user.id,
       userId: order.userId ?? session.user.id,
     },
   });

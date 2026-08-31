@@ -9,6 +9,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
   Label,
   useToast,
@@ -17,6 +23,7 @@ import {
   formatPrice,
   formatOrderCode,
   PaymentMethodLabel,
+  RoleLabel,
   type Order,
   type OrderStatus,
 } from "@bubba/types";
@@ -203,23 +210,26 @@ function OrderCard({
   order: Order;
   statusLabels: Record<OrderStatus, string>;
 }) {
-  // Acciones secundarias de la tarjeta (Descontar / Anular).
-  const [panel, setPanel] = useState<"discount" | "cancel" | null>(null);
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
+  // Acciones secundarias de la tarjeta (Descontar / Anular) vía diálogos flotantes.
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [confirmDiscountOpen, setConfirmDiscountOpen] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
   const { toast } = useToast();
 
-  const closeSecondary = () => {
-    setPanel(null);
-    setAmount("");
-    setReason("");
+  const resetDiscount = () => {
+    setDiscountAmount("");
+    setDiscountReason("");
   };
 
-  const togglePanel = (which: "discount" | "cancel") =>
-    setPanel(panel === which ? null : which);
+  const resetCancel = () => {
+    setCancelReason("");
+  };
 
   return (
-    <Card>
+    <>
+      <Card>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -278,7 +288,14 @@ function OrderCard({
             )}
             {order.cancelledAt && order.cancelReason && (
               <p>
-                Anulado: {order.cancelReason} ·{" "}
+                Anulado por:{" "}
+                <span className="font-semibold text-white">
+                  {order.canceledBy?.name ?? "Usuario"}
+                  {order.canceledBy
+                    ? ` (${RoleLabel[order.canceledBy.role]})`
+                    : ""}
+                </span>{" "}
+                · Motivo: {order.cancelReason} ·{" "}
                 {new Date(order.cancelledAt).toLocaleString("es-MX", {
                   dateStyle: "short",
                   timeStyle: "short",
@@ -288,6 +305,13 @@ function OrderCard({
             {(order.discountAmount ?? 0) > 0 && order.discountReason && (
               <p>
                 Descuento aplicado: −{formatPrice(order.discountAmount ?? 0)}{" "}
+                por{" "}
+                <span className="font-semibold text-white">
+                  {order.discountedBy?.name ?? "Usuario"}
+                  {order.discountedBy
+                    ? ` (${RoleLabel[order.discountedBy.role]})`
+                    : ""}
+                </span>{" "}
                 ({order.discountReason})
               </p>
             )}
@@ -331,102 +355,183 @@ function OrderCard({
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div className="font-mono text-3xl font-bold text-emerald-400">
             {formatPrice(order.total)}
+            {(order.discountAmount ?? 0) > 0 && (
+              <span className="ml-2 inline-block rounded-full bg-warning/20 px-2 py-0.5 align-middle font-sans text-sm font-semibold text-warning">
+                Descuento de {formatPrice(order.discountAmount ?? 0)}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              className="h-9 bg-warning px-4 text-warning-foreground hover:bg-warning/90"
-              onClick={() => togglePanel("discount")}
-            >
-              Descontar
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 bg-red-700 px-4 text-white hover:bg-red-600"
-              onClick={() => togglePanel("cancel")}
-            >
-              Anular
-            </Button>
+            {order.status !== "ANULADO" && (
+              <>
+                <Button
+                  size="sm"
+                  className="h-9 bg-warning px-4 text-warning-foreground hover:bg-warning/90"
+                  onClick={() => {
+                    resetDiscount();
+                    setConfirmDiscountOpen(true);
+                  }}
+                >
+                  Descontar
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-9 bg-red-700 px-4 text-white hover:bg-red-600"
+                  onClick={() => {
+                    resetCancel();
+                    setConfirmCancelOpen(true);
+                  }}
+                >
+                  Anular
+                </Button>
+              </>
+            )}
             <ReprintButton orderId={order.id} />
           </div>
         </div>
-
-        {/* Paneles de descuento / anulación */}
-        {panel === "discount" && (
-          <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
-            <div className="w-24 space-y-1">
-              <Label htmlFor={`amount-${order.id}`}>Monto (Bs)</Label>
-              <Input
-                id={`amount-${order.id}`}
-                type="number"
-                min={1}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
-            <div className="min-w-48 flex-1 space-y-1">
-              <Label htmlFor={`reason-${order.id}`}>Motivo</Label>
-              <Input
-                id={`reason-${order.id}`}
-                type="text"
-                value={reason}
-                placeholder="Ej. promo del día"
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </div>
-            <Button
-              size="sm"
-              className="bg-warning text-warning-foreground hover:bg-warning/90"
-              onClick={() =>
-                runAction(async () => {
-                  await applyDiscount(order.id, Number(amount), reason);
-                  closeSecondary();
-                }, toast)
-              }
-            >
-              Aplicar descuento
-            </Button>
-          </div>
-        )}
-
-        {panel === "cancel" && (
-          <div className="flex flex-wrap items-end gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-            <div className="min-w-48 flex-1 space-y-1">
-              <Label htmlFor={`cancel-${order.id}`}>
-                Motivo de anulación (obligatorio)
-              </Label>
-              <Input
-                id={`cancel-${order.id}`}
-                type="text"
-                value={reason}
-                placeholder="Ej. pedido duplicado"
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => {
-                if (
-                  !confirm("¿Anular este pedido? Esta acción es irreversible.")
-                ) {
-                  return;
-                }
-                runAction(async () => {
-                  await cancelOrder(order.id, reason);
-                  closeSecondary();
-                }, toast);
-              }}
-            >
-              Anular pedido
-            </Button>
-          </div>
-        )}
 
         {/* Acciones primarias */}
         <OrderActions order={order} />
       </CardContent>
     </Card>
+
+    <Dialog
+      open={confirmCancelOpen}
+      onOpenChange={(open) => {
+        setConfirmCancelOpen(open);
+        if (!open) resetCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>¿Anular este pedido?</DialogTitle>
+          <DialogDescription>
+            Pedido #{formatOrderCode(order.seq)}
+            {order.customerName ? ` · ${order.customerName}` : ""} por{" "}
+            {formatPrice(order.total)}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Label htmlFor={`cancel-reason-${order.id}`}>
+            Motivo de anulación (obligatorio)
+          </Label>
+          <Input
+            id={`cancel-reason-${order.id}`}
+            type="text"
+            value={cancelReason}
+            autoFocus
+            placeholder="Ej. pedido duplicado"
+            onChange={(e) => setCancelReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && cancelReason.trim()) {
+                (document.getElementById(
+                  `cancel-confirm-${order.id}`,
+                ) as HTMLButtonElement | null)?.click();
+              }
+            }}
+          />
+        </div>
+        <p className="text-sm text-destructive">
+          Esta acción es irreversible y registrará el pedido como anulado.
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmCancelOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            id={`cancel-confirm-${order.id}`}
+            variant="destructive"
+            disabled={!cancelReason.trim()}
+            onClick={() => {
+              runAction(async () => {
+                await cancelOrder(order.id, cancelReason.trim());
+                setConfirmCancelOpen(false);
+                resetCancel();
+              }, toast);
+            }}
+          >
+            Sí, anular pedido
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog
+      open={confirmDiscountOpen}
+      onOpenChange={(open) => {
+        setConfirmDiscountOpen(open);
+        if (!open) resetDiscount();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Aplicar descuento</DialogTitle>
+          <DialogDescription>
+            Pedido #{formatOrderCode(order.seq)}
+            {order.customerName ? ` · ${order.customerName}` : ""} por{" "}
+            {formatPrice(order.total)}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor={`discount-amount-${order.id}`}>Monto (Bs)</Label>
+            <Input
+              id={`discount-amount-${order.id}`}
+              type="number"
+              min={1}
+              inputMode="numeric"
+              value={discountAmount}
+              placeholder={`Máx. ${order.total - 1}`}
+              onChange={(e) => setDiscountAmount(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`discount-reason-${order.id}`}>
+              Motivo del descuento (obligatorio)
+            </Label>
+            <Input
+              id={`discount-reason-${order.id}`}
+              type="text"
+              value={discountReason}
+              placeholder="Ej. promo del día"
+              onChange={(e) => setDiscountReason(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmDiscountOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            className="bg-warning text-warning-foreground hover:bg-warning/90"
+            disabled={!discountReason.trim()}
+            onClick={() => {
+              const value = Number(discountAmount);
+              if (!Number.isFinite(value) || value <= 0) {
+                toast({
+                  variant: "destructive",
+                  title: "Monto inválido",
+                  description: "Ingresa un monto mayor a cero.",
+                });
+                return;
+              }
+              runAction(async () => {
+                await applyDiscount(
+                  order.id,
+                  value,
+                  discountReason.trim(),
+                );
+                setConfirmDiscountOpen(false);
+                resetDiscount();
+              }, toast);
+            }}
+          >
+            Aplicar descuento
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

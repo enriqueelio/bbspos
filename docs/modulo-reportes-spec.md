@@ -92,17 +92,24 @@ model Order {
   paymentMethod  PaymentMethod?
   discountAmount Int            @default(0)
   discountReason String?
+  discountedAt   DateTime?
+  discountedById String?        // quien aplicó el descuento (FK -> User)
+  discountedBy   User?          @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
   cancelledAt    DateTime?
   cancelReason   String?
+  canceledById   String?        // quien anuló el pedido (FK -> User)
+  canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
 }
 
 model User {
   // ...campos actuales...
   orders Order[]
+  cancelledOrders Order[] @relation("OrderCanceledBy")
+  discountedOrders Order[] @relation("OrderDiscountedBy")
 }
 ```
 
-> Índices recomendados: `@@index([createdAt])` en `Order`.
+> Índices recomendados: `@@index([createdAt])` en `Order`, `@@index([canceledById])` y `@@index([discountedById])`.
 
 Los endpoints marcados **[Fase 2]** devuelven `501 NOT_IMPLEMENTED_SCHEMA` hasta aplicar la migración.
 
@@ -278,9 +285,11 @@ Registro de auditoría de descuentos aplicados y órdenes anuladas.
 | `from` | `YYYY-MM-DD` | sí | — | |
 | `to` | `YYYY-MM-DD` | sí | — | |
 | `type` | `discount\|cancellation\|all` | no | `all` | |
-| `userId` | string | no | todos | Quién realizó la acción |
+| `userId` | string | no | todos | Quién realizó la acción (ver nota de atribución) |
 | `page` | int ≥ 1 | no | `1` | Paginación, 50 registros/página |
 | `format` | `json\|csv` | no | `json` | |
+
+> **Atribución (`byUser`):** para las **anulaciones** se usa `Order.canceledBy` (quién ejecutó la anulación) y para los **descuentos** `Order.discountedBy` (quién aplicó el descuento). Si ese registro es anterior a la migración (sin `canceledById`/`discountedById`), se hace *fallback* al `Order.user` original. El filtro `userId` aplica al campo de atribución correspondiente según `type`.
 
 **Response `data`**
 

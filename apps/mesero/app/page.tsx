@@ -8,7 +8,7 @@ export default async function MeseroPage() {
   const catalog = await getPosCatalog();
 
   return (
-    <main className="min-h-screen">
+    <main className="h-full overflow-y-auto overscroll-contain">
       <div className="mx-auto w-full max-w-[950px] px-4 pt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
           <div className="flex items-center gap-2 font-bold">

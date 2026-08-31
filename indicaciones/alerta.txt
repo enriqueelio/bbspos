@@ -1,0 +1,14 @@
+Por favor, implementa un sistema automatizado en el backend para enviar alertas a Telegram cuando un pedido tenga más de 10 minutos sin ser entregado o cobrado, independientemente de si el navegador o los módulos de cajero están abiertos o minimizados. Realiza los siguientes pasos en el monorepo:
+
+1. **Actualización del Esquema de Prisma (`packages/db/prisma/schema.prisma`):**
+   - Añade un campo booleano a la tabla de órdenes (por ejemplo, `telegramAlertSent Boolean @default(false)`) para llevar el control de los pedidos que ya han sido notificados y evitar spam de mensajes.
+   - Ejecuta la migración correspondiente para actualizar SQLite.
+
+2. **Creación del Servicio de Verificación en Segundo Plano:**
+   - Crea un script o módulo de servicio (ej. en `packages/db/src/telegram-checker.ts` o la carpeta de servicios correspondiente) que contenga la función `checkDelayedOrders()`.
+   - Esta función debe consultar a Prisma buscando los pedidos cuya fecha de creación (`createdAt`) sea mayor a 10 minutos, cuyo estado no esté completado/pagado, y donde `telegramAlertSent` sea `false`.
+   - Por cada pedido encontrado, debe calcular el tiempo transcurrido y enviar un mensaje formateado a través de la API oficial de Telegram usando las variables de entorno (`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`).
+   - Una vez enviada la alerta con éxito, debe actualizar el registro en Prisma poniendo `telegramAlertSent: true`.
+
+3. **Ejecución Periódica (Cron Job):**
+   - Configura un proceso en segundo plano (usando un script independiente con `setInterval` cada 60 segundos, o integrándolo en el arranque del servidor backend) para que `checkDelayedOrders()` se ejecute de manera continua y automática.

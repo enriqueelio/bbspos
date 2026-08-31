@@ -30,6 +30,14 @@ function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
 }
 
+// Hora de creación formateada en formato 12h (ej. "01:18 p.m.").
+function horaCreacion(order: Order): string {
+  return new Date(order.createdAt).toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function useQueueClock(orders: Order[]) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -355,11 +363,11 @@ function OrderCard({
             <CardTitle className="text-2xl font-black text-white">
               Pedido #{formatOrderCode(order.seq)}
             </CardTitle>
-            {order.customerName && (
-              <p className="text-base font-semibold text-primary">
-                Para: {order.customerName}
-              </p>
-            )}
+            <p className="text-base font-semibold text-primary">
+              {order.customerName
+                ? `Para: ${order.customerName} · ${horaCreacion(order)}`
+                : horaCreacion(order)}
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 text-right">
             <Badge variant={statusVariant(order.status)} className="text-base">
@@ -371,12 +379,6 @@ function OrderCard({
               </Badge>
             )}
             <AgeBadge order={order} now={clock.now} />
-            <span className="text-base text-white">
-              {new Date(order.createdAt).toLocaleTimeString("es-MX", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
           </div>
         </div>
       </CardHeader>

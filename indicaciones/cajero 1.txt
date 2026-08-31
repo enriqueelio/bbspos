@@ -1,0 +1,11 @@
+Por favor, rediseña y refactoriza por completo la interfaz del **Módulo de Cajero** para optimizarla para pantallas de computadora de escritorio y monitores de 19 pulgadas, basándote en las siguientes directrices de diseño UX/UI profesional:
+
+1. **Estructura de Dos Columnas Maestras (Dashboard de Escritorio):**
+   - **Columna Izquierda (Aprox. 65% - 70% del ancho):** Panel principal de gestión de pedidos ("Cola de Pedidos Activos"). Utiliza una tabla moderna o una cuadrícula de tarjetas anchas organizada por estados (pendientes de pago, entregados sin cobrar, etc.), permitiendo ver de un solo vistazo múltiples órdenes sin saturar el espacio.
+   - **Columna Derecha (Aprox. 30% - 35% del ancho):** Panel de Acciones Rápidas / Detalle del Pedido Seleccionado y Cierre de Caja del día, donde el cajero pueda procesar cobros de forma ágil mediante atajos de teclado o clics directos.
+
+2. **Eliminación de Elementos Táctiles Innecesarios:**
+   - Al estar en PC, reduce el tamaño exagerado de los botones móviles (tipo tablet) y usa una densidad de información más limpia y profesional (`text-sm` / `text-base`, tablas compactas, tooltips o botones directos de acción rápida) para aprovechar el uso del mouse.
+
+3. **Panel de Alertas de Cobro Destacado:**
+   - Mantén visible y claramente diferenciada la alerta de cobro pendiente ("¡Falta Pagar!") con el color rojo característico en los pedidos que ya fueron entregados pero siguen sin registrar pago, asegurando que el cajero jamás pierda de vista el flujo de caja.

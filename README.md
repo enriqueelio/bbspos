@@ -16,6 +16,7 @@ apps/
   store/    App de clientes (http://localhost:3000)
   admin/    Panel admin (http://localhost:3001)
   cajero/   Pantalla del cajero (http://localhost:3002)
+  mesero/   Toma de pedidos del salón (http://localhost:3003)
 packages/
   config/   tsconfigs y preset de Tailwind compartidos
   types/    Tipos de dominio y helpers de precio
@@ -33,13 +34,14 @@ packages/
 ```bash
 pnpm install          # instala todos los workspaces
 pnpm db:migrate       # aplica las migraciones
-pnpm db:seed          # siembra catálogo + usuarios (admin y cajero)
-pnpm dev              # arranca store (3000), admin (3001) y cajero (3002)
+pnpm db:seed          # siembra catálogo + usuarios (admin, cajero y mesero)
+pnpm dev              # arranca store (3000), admin (3001), cajero (3002) y mesero (3003)
 ```
 
 - **Store**: http://localhost:3000
 - **Admin**: http://localhost:3001 — login: `admin@bubba.mx` / `admin123` (rol ADMIN)
 - **Cajero**: http://localhost:3002 — login: `cajero@bubba.mx` / `cajero123` (rol CAJERO)
+- **Mesero**: http://localhost:3003 — login: `mesero` / `mesero123` (rol MESERO)
 
 ## Scripts raíz
 

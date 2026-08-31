@@ -82,14 +82,14 @@ export default async function CashierPage({
 
     return (
       <main className="min-h-screen">
-        <div className="mx-auto w-full max-w-[950px] px-4 pt-6">
+        <div className="mx-auto w-full max-w-[1400px] px-4 pt-4">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
             tab={tab}
           />
         </div>
-        <div className="mx-auto mt-4 w-full max-w-[950px] px-4 lg:px-6">
+        <div className="mx-auto mt-2 w-full max-w-[1400px] px-4 lg:px-6">
           <PosTerminal catalog={catalog} role={session.user.role} />
         </div>
       </main>

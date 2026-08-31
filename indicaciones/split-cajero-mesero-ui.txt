@@ -1,0 +1,11 @@
+Necesito refactorizar la estructura de la aplicación actual para separar las interfaces y flujos de trabajo en dos aplicaciones o rutas independientes dentro del monorepo:
+
+1. **Módulo / Vista de Cajero:**
+   - Enfocado en el cobro rápido, gestión de la caja, visualización estricta de pedidos pendientes de pago (con la alerta visual de "¡Falta Pagar!") y cierre de transacciones.
+   - Optimizado para pantallas de PC/monitor de escritorio (19 pulgadas), aprovechando el espacio horizontal en dos columnas fijas sin desbordamientos.
+
+2. **Módulo / Vista de Mesero:**
+   - Enfocado exclusivamente en la toma de pedidos, selección rápida de productos y envío a cocina/caja.
+   - Optimizado y adaptado específicamente para dispositivos táctiles pequeños (como tablets de 8 pulgadas), con botones grandes, flujo táctil cómodo y sin elementos pesados de administración o cobro.
+
+Por favor, analiza la arquitectura actual de carpetas (ej. `apps/cajero` o componentes compartidos) y propón los cambios de rutas, componentes y layout necesarios para independizar ambas experiencias manteniendo la misma base de datos y lógica de Prisma.

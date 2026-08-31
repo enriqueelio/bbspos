@@ -1,0 +1,14 @@
+Actúa como un arquitecto de software experto y documentador técnico. Necesito que analices todo el proyecto actual de mi sistema POS (Next.js, Prisma, Tailwind) y me redacciones un **Prompt Maestro de Ingeniería Inversa** ultra detallado.
+
+Este prompt maestro será utilizado en Google AI Studio para recrear el sistema exactamente como lo hemos diseñado. Debe incluir y detallar estrictamente lo siguiente:
+
+1. **Arquitectura y Stack:** Next.js (App Router), Prisma ORM con SQLite, y Tailwind CSS estructurado en un monorepo.
+2. **Módulo de Cajero (Escritorio / 19 pulgadas):** - Pantalla dividida en dos columnas fijas optimizadas para monitor.
+   - Cola de pedidos con control estricto de estado de pago.
+   - Alerta visual obligatoria y parpadeante ("¡Falta Pagar!") en pedidos entregados pero no cobrados.
+   - Montos de deuda resaltados en rojo y limpieza de redundancias de texto en los badges de tiempo.
+3. **Módulo de Mesero (Tablet / 8 pulgadas):**
+   - Interfaz simplificada y táctil enfocada únicamente en la toma rápida de pedidos y envío al sistema, sin elementos pesados de administración o cobro.
+4. **Base de Datos y Transacciones:** Esquema de Prisma con relaciones limpias entre órdenes, ítems y estados de pago para evitar errores de llaves foráneas.
+
+Redacta este prompt maestro de forma clara, estructurada y directa, de modo que cualquier IA que lo lea pueda replicar la lógica de negocio y la interfaz visual sin perder ningún detalle de los requerimientos que hemos construido.

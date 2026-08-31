@@ -36,6 +36,13 @@ function useQueueClock(orders: Order[]) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Diálogo flotante de confirmación de acciones importantes.
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    orderId: string;
+    message: string;
+    action: () => Promise<void>;
+  } | null>(null);
+  const [closingConfirm, setClosingConfirm] = useState(false);
   const notifiedRef = useRef<Set<string>>(new Set());
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
@@ -88,12 +95,8 @@ function useQueueClock(orders: Order[]) {
     };
   }, [router]);
 
-  async function run(
-    orderId: string,
-    action: () => Promise<void>,
-    confirmMsg?: string,
-  ) {
-    if (confirmMsg && !confirm(confirmMsg)) return;
+  // Ejecuta una acción de pedido (cambio de estado / cobro) una vez confirmada.
+  async function run(orderId: string, action: () => Promise<void>) {
     setBusyId(orderId);
     setError(null);
     setNotice(null);
@@ -105,6 +108,38 @@ function useQueueClock(orders: Order[]) {
     } finally {
       setBusyId(null);
     }
+  }
+
+  // Abre el diálogo flotante de confirmación sin ejecutar nada todavía.
+  function askConfirm(
+    orderId: string,
+    message: string,
+    action: () => Promise<void>,
+  ) {
+    setClosingConfirm(false);
+    setPendingConfirm({ orderId, message, action });
+  }
+
+  // Cierra el diálogo con una transición suave y (opcionalmente) ejecuta la acción.
+  function settleConfirm(afterClose?: () => void) {
+    setClosingConfirm(true);
+    setTimeout(() => {
+      setPendingConfirm(null);
+      setClosingConfirm(false);
+      if (afterClose) afterClose();
+    }, 200);
+  }
+
+  // "Aceptar": cierra el diálogo y ejecuta la acción (única vía que toca la BD).
+  function confirmAction() {
+    const pending = pendingConfirm;
+    if (!pending) return;
+    settleConfirm(() => run(pending.orderId, pending.action));
+  }
+
+  // "Cancelar": descarta la acción sin alterar ningún registro.
+  function cancelAction() {
+    settleConfirm();
   }
 
   async function reprint(orderId: string) {
@@ -122,7 +157,20 @@ function useQueueClock(orders: Order[]) {
     }
   }
 
-  return { now, busyId, error, notice, run, reprint, setError };
+  return {
+    now,
+    busyId,
+    error,
+    notice,
+    run,
+    reprint,
+    setError,
+    pendingConfirm,
+    closingConfirm,
+    askConfirm,
+    confirmAction,
+    cancelAction,
+  };
 }
 
 function AgeBadge({ order, now }: { order: Order; now: number }) {
@@ -412,15 +460,15 @@ function OrderCard({
                 size="lg"
                 className="bg-emerald-500 hover:bg-emerald-600 text-white w-full"
                 disabled={clock.busyId === order.id}
-                onClick={() =>
-                  clock.run(
-                    order.id,
-                    async () => {
-                      await deliverOrder(order.id);
-                    },
-                    "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
-                  )
-                }
+        onClick={() =>
+          clock.askConfirm(
+            order.id,
+            "¿Confirmas la entrega de este pedido? Esta acción no se puede deshacer.",
+            async () => {
+              await deliverOrder(order.id);
+            },
+          )
+        }
               >
                 {clock.busyId === order.id ? "Entregando…" : "Marcar entregado"}
               </Button>
@@ -477,6 +525,59 @@ function EmptyQueue({ title, hint }: { title: string; hint: string }) {
         <p className="mt-1 text-base text-white">{hint}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function ConfirmDialog({
+  message,
+  closing,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  closing: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center p-6 transition-opacity duration-200 ${
+        closing ? "opacity-0" : "opacity-100"
+      }`}
+    >
+      <div
+        className="absolute inset-0 bg-black/70"
+        onClick={onCancel}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`relative w-full max-w-lg space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl transition-transform duration-200 ${
+          closing ? "scale-95" : "scale-100 animate-in fade-in"
+        }`}
+      >
+        <h2 className="text-2xl font-black text-white">Confirmar acción</h2>
+        <p className="text-lg text-white">{message}</p>
+        <div className="flex w-full flex-col gap-3">
+          <Button
+            size="lg"
+            className="h-14 w-full bg-emerald-600 text-xl font-black text-white hover:bg-emerald-700"
+            onClick={onConfirm}
+          >
+            Aceptar
+          </Button>
+          <Button
+            size="lg"
+            variant="secondary"
+            className="h-14 w-full text-xl font-black"
+            onClick={onCancel}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -550,6 +651,15 @@ export function QueueView({
           <OrderCard key={order.id} order={order} clock={clock} billing={billing} />
         ))}
       </section>
+
+      {clock.pendingConfirm && (
+        <ConfirmDialog
+          message={clock.pendingConfirm.message}
+          closing={clock.closingConfirm}
+          onConfirm={clock.confirmAction}
+          onCancel={clock.cancelAction}
+        />
+      )}
     </div>
   );
 }

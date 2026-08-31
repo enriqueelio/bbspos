@@ -1,0 +1,11 @@
+Por favor, rediseña y refactoriza por completo la interfaz del **Módulo de Cajero** para optimizarla para pantallas de computadora de escritorio y monitores de 19 pulgadas, basándote en las siguientes directrices de diseño UX/UI profesional y distribución de columnas:
+
+1. **Estructura de Dos Columnas Maestras (Dashboard de Escritorio con Ticket a la Izquierda):**
+   - **Columna Izquierda (Aprox. 30% - 35% del ancho):** Panel de Ticket y Cobro. Coloca de manera fija y permanente el contenedor del ticket activo, la lista de productos seleccionados, los totales y los botones de cobro/pago, manteniéndolo siempre a la vista para un procesamiento ágil.
+   - **Columna Derecha (Aprox. 65% - 70% del ancho):** Cola de Pedidos Activos y gestión general. Desplaza la lista de pedidos entrantes, estados y filtros hacia la derecha, dándole mayor espacio horizontal en el monitor de la PC.
+
+2. **Eliminación de Elementos Táctiles Innecesarios:**
+   - Al estar en una computadora de escritorio con mouse y teclado, reduce el tamaño de los botones móviles (tipo tablet) y utiliza una densidad de información más limpia, profesional y compacta (`text-sm` / `text-base`, tablas o tarjetas bien estructuradas) para aprovechar al máximo el espacio de la pantalla de 19 pulgadas.
+
+3. **Panel de Alertas de Cobro Destacado:**
+   - Mantén visible y claramente diferenciada la alerta de cobro pendiente ("¡Falta Pagar!") con el color rojo característico en los pedidos que ya fueron entregados pero siguen sin registrar pago, asegurando un control estricto del flujo de caja.

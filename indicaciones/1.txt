@@ -1,7 +1,0 @@
-Necesito agregar una funcionalidad de "Nueva Venta" manual en la aplicación del cajero (apps/cajero). El cajero debe poder crear pedidos directamente.
-
-**1. Server Actions para Catálogo y Creación**
-Crea un nuevo archivo `apps/cajero/actions/pos.ts`.
-- Crea una función `getPosCatalog()` que consulte Prisma y devuelva todos los catálogos activos: `sizes`, `flavors`, `bobaTypes`, `toppings` y la matriz `drinkPrices`. (Similar a lo que hace el admin en `/menu`).
-- Crea una función `createPosOrder(data)` que reciba el carrito, el nombre del cliente y el `deliveryType` (MESA/LLEVAR).
-- La función `createPosOrder` debe insertar en Prisma un `Order` con sus `items` y `toppings`. Debe asignar un `seq` (número de pedido), establecer el `status` directamente en `RECIBIDO`, calcular el `total` y usar `revalidatePath("/")`.

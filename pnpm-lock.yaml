@@ -162,6 +162,70 @@ importers:
         specifier: ^5.6.0
         version: 5.9.3
 
+  apps/mesero:
+    dependencies:
+      '@bubba/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@bubba/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      '@bubba/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      bcryptjs:
+        specifier: ^2.4.3
+        version: 2.4.3
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.8)
+      next:
+        specifier: ^15.1.0
+        version: 15.5.23(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next-auth:
+        specifier: ^4.24.11
+        version: 4.24.15(next@15.5.23(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@bubba/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@types/bcryptjs':
+        specifier: ^2.4.6
+        version: 2.4.6
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.4(postcss@8.5.26)
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1(supports-color@8.1.1)
+      eslint-config-next:
+        specifier: ^15.1.0
+        version: 15.5.23(eslint@8.57.1(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.26
+      tailwindcss:
+        specifier: ^3.4.14
+        version: 3.4.19(tsx@4.23.12)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   apps/store:
     dependencies:
       '@bubba/db':

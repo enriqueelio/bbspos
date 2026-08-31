@@ -1,0 +1,17 @@
+Añade alertas visuales críticas en la cola de pedidos (`apps/cajero/components/queue-view.tsx`) para resaltar fuertemente los pedidos que ya fueron entregados pero que aún no se han pagado.
+
+**1. Lógica de Estado Pendiente**
+En el componente de la tarjeta del pedido (`OrderCard` o donde se renderice cada ítem de la cola), crea una constante booleana para identificar este estado específico:
+`const isDeliveredNotPaid = order.deliveredAt !== null && order.paidAt === null;`
+
+**2. Alerta Palpitante en el Encabezado**
+En la sección donde se renderiza el número de pedido (`Pedido #00001`) y los badges de estado ("Entregado", "Ingresado hace X min"):
+- Añade un renderizado condicional basado en `isDeliveredNotPaid`.
+- Si es verdadero, inserta este elemento justo después del número de pedido o al lado del badge de "Entregado":
+  `<Badge className="bg-red-600 text-white font-black animate-pulse px-3 py-1 uppercase text-sm border border-red-400 shadow-[0_0_10px_rgba(220,38,38,0.5)]">¡Falta Pagar!</Badge>`
+
+**3. Resaltar la Deuda en el Total**
+Busca el contenedor donde se imprime el monto total gigante (el `div` o `span` que muestra "25 Bs" encima de los botones de pago).
+- Usa una clase dinámica para el color del texto:
+  `className={\`text-4xl font-mono font-black \${isDeliveredNotPaid ? 'text-red-500' : 'text-white'}\`}`
+- De esta manera, el número se volverá rojo advirtiendo al cajero que ese dinero aún no está en la caja.

@@ -1,0 +1,12 @@
+Ahora vamos a integrar el `pos-terminal` en la navegación actual del cajero.
+
+**1. Pestaña de Navegación**
+Abre `apps/cajero/app/page.tsx`. El sistema actual lee `searchParams.tab` ("preparar" o "reporte").
+- Añade una tercera pestaña: `?tab=venta`.
+- Actualiza la navegación superior (Header/Tabs) para incluir el botón "Nueva Venta" (destácalo visualmente con `bg-primary text-white`).
+
+**2. Renderizado Condicional**
+En el mismo `page.tsx`, si `tab === "venta"`, debes hacer await a la función `getPosCatalog()` que creamos anteriormente y renderizar el componente `<PosTerminal catalog={catalog} />`.
+
+**3. Flujo de Cobro**
+En `PosTerminal`, cuando el cajero presione "Enviar y Cobrar", ejecuta la Server Action `createPosOrder`. Al recibir el `orderId` de éxito, puedes hacer un `router.push("/?tab=preparar")` para que el cajero vea el pedido recién creado en la cola y pueda proceder a cobrarlo con los botones azules que ya existen.

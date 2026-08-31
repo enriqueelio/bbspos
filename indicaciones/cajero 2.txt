@@ -1,0 +1,5 @@
+Por favor, ajusta la distribución del panel en el **Módulo de Cajero** para reorganizar las columnas principales:
+
+1. **Columna Izquierda (Panel de Ticket / Cobro):** Mueve el contenedor del ticket activo, la lista de productos seleccionados, los totales y los botones de cobro/pago para que se ubiquen de manera fija y permanente en la **columna izquierda** de la pantalla.
+2. **Columna Derecha (Cola de Pedidos):** Desplaza la lista general de pedidos entrantes, estados y filtros hacia la **columna derecha**, dándole mayor espacio horizontal para ver los registros cómodamente en el monitor de la PC.
+3. **Consistencia de Escritorio:** Asegúrate de que esta distribución de dos columnas esté optimizada para el uso con mouse y teclado en pantallas grandes, evitando desplazamientos innecesarios y manteniendo el ticket siempre a la vista en el lado izquierdo.

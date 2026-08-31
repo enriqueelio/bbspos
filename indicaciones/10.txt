@@ -1,1 +1,0 @@
-Modifica `apps/cajero/components/queue-view.tsx`. En la lógica del `AgeBadge` de la tarjeta `OrderCard`, calcula los minutos desde `createdAt`. Si `minutos >= 10`, aplica `className="bg-red-600 text-white animate-pulse"`. Si `minutos >= 7`, aplica `className="bg-amber-500 text-white"`. Si es menor, usa `className="bg-slate-700 text-slate-300"`.

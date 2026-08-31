@@ -93,3 +93,22 @@
     box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.15);
   }
 }
+
+@keyframes name-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(251, 191, 36, 0.5),
+      0 0 12px rgba(251, 191, 36, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(251, 191, 36, 0.85),
+      0 0 22px rgba(251, 191, 36, 0.55);
+  }
+}
+
+.animate-name-glow {
+  animation: name-glow 2s ease-in-out infinite;
+}
+

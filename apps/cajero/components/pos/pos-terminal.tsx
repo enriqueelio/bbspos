@@ -100,6 +100,18 @@ export function PosTerminal({
     [catalog.flavors, activeCategory],
   );
 
+  // Autoselección por defecto: Tamaño Grande y Tipo de boba Tapioca.
+  const grandSize = sizes.find((s) => s.name === "Grande") ?? sizes[0];
+  const tapiocaBoba =
+    bobaTypes.find((b) => b.name === "Tapioca") ?? bobaTypes[0];
+
+  // Orden de tipos de boba: Tapioca primero (izquierda) y Explosivas a la derecha.
+  const sortedBobaTypes = [...bobaTypes].sort((a, b) => {
+    const rank = (t: (typeof bobaTypes)[number]) =>
+      t.name === "Tapioca" ? 0 : t.name === "Explosivas" ? 1 : 2;
+    return rank(a) - rank(b);
+  });
+
   function priceOf(): number {
     if (!size || !bobaType) return 0;
     return (
@@ -115,6 +127,13 @@ export function PosTerminal({
   const selectedToppings = toppingIds
     .map((id) => toppings.find((t) => t.id === id))
     .filter((t): t is Topping => Boolean(t));
+
+  // Subtotal del producto en proceso: bebida base + el costo de los extras seleccionados.
+  function preticketSubtotal(): number {
+    const base = priceOf();
+    const extras = selectedToppings.reduce((sum, t) => sum + t.price, 0);
+    return base + extras;
+  }
 
   const selectedFlavor =
     flavors.find((f) => f.id === selectedFlavorId) ?? null;
@@ -141,10 +160,12 @@ export function PosTerminal({
     setSelectedFlavorId((current) => {
       if (current !== flavor.id) {
         setToppingIds([]);
-        setSizeId("");
       }
       return flavor.id;
     });
+    // Autoselección inteligente: Tamaño Grande y Tipo de boba Tapioca por defecto.
+    if (grandSize) setSizeId(grandSize.id);
+    if (tapiocaBoba) setBobaTypeId(tapiocaBoba.id);
   }
 
   function confirmProduct() {
@@ -220,6 +241,9 @@ export function PosTerminal({
 
   const selectedSize: Size | undefined = size;
   const cartTotal = totalOfItems(cart.items);
+  // Brillo sutil en el cuadro de nombre cuando ya hay un ticket generado
+  // pero aún no se ha ingresado el nombre o la mesa.
+  const needsName = cart.items.length > 0 && cart.customerName.trim() === "";
 
   return (
     <div className="flex w-full h-[calc(100vh-8rem)] bg-slate-950 overflow-hidden">
@@ -335,8 +359,12 @@ export function PosTerminal({
             type="text"
             value={cart.customerName}
             onChange={(e) => cart.setCustomerName(e.target.value)}
-            placeholder="Nombre del cliente (opcional)"
-            className="h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 text-sm text-white placeholder:text-slate-500 focus:border-primary focus:outline-none"
+            placeholder="Nombre o Mesa"
+            className={`h-10 w-full rounded-md border bg-slate-800 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+              needsName
+                ? "border-amber-400/70 animate-name-glow"
+                : "border-slate-700 focus:border-primary"
+            }`}
           />
 
           <div className="grid grid-cols-2 gap-2">
@@ -467,7 +495,7 @@ export function PosTerminal({
               Tipo de boba
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-              {bobaTypes.map((b) => (
+              {sortedBobaTypes.map((b) => (
                 <button
                   key={b.id}
                   type="button"
@@ -535,7 +563,7 @@ export function PosTerminal({
                   Subtotal
                 </span>
                 <span className="font-mono text-xl font-black text-white">
-                  {selectedSize && bobaType ? formatPrice(priceOf()) : "—"}
+                  {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
                 </span>
               </div>
               <button

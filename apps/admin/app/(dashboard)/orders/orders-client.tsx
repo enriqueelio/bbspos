@@ -73,7 +73,7 @@ function ReprintButton({ orderId }: { orderId: string }) {
   return (
     <Button
       size="sm"
-      variant="secondary"
+      className="h-9 bg-slate-800 px-4 text-slate-200 hover:bg-slate-700"
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -101,11 +101,7 @@ function ReprintButton({ orderId }: { orderId: string }) {
 }
 
 function OrderActions({ order }: { order: Order }) {
-  const [panel, setPanel] = useState<"pay" | "discount" | "cancel" | null>(
-    null,
-  );
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
+  const [panel, setPanel] = useState<"pay" | null>(null);
   const [showSplit, setShowSplit] = useState(false);
   const [splitBusy, setSplitBusy] = useState(false);
   const { toast } = useToast();
@@ -114,11 +110,7 @@ function OrderActions({ order }: { order: Order }) {
     return null;
   }
 
-  const close = () => {
-    setPanel(null);
-    setAmount("");
-    setReason("");
-  };
+  const close = () => setPanel(null);
 
   return (
     <div className="space-y-3">
@@ -127,6 +119,7 @@ function OrderActions({ order }: { order: Order }) {
           <div className="flex flex-wrap justify-end gap-2">
             <Button
               className="h-14 w-full text-lg"
+              disabled={panel === "pay"}
               variant={panel === "pay" ? "default" : "secondary"}
               onClick={() => setPanel(panel === "pay" ? null : "pay")}
             >
@@ -184,92 +177,6 @@ function OrderActions({ order }: { order: Order }) {
         </Button>
       )}
 
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          size="sm"
-          className="bg-warning text-warning-foreground hover:bg-warning/90"
-          onClick={() => setPanel(panel === "discount" ? null : "discount")}
-        >
-          Descontar
-        </Button>
-        <Button
-          variant="destructive"
-          className="mt-2 h-12 w-full"
-          onClick={() => setPanel(panel === "cancel" ? null : "cancel")}
-        >
-          Anular
-        </Button>
-      </div>
-
-      {panel === "discount" && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
-          <div className="w-24 space-y-1">
-            <Label htmlFor={`amount-${order.id}`}>Monto (Bs)</Label>
-            <Input
-              id={`amount-${order.id}`}
-              type="number"
-              min={1}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div className="min-w-48 flex-1 space-y-1">
-            <Label htmlFor={`reason-${order.id}`}>Motivo</Label>
-            <Input
-              id={`reason-${order.id}`}
-              type="text"
-              value={reason}
-              placeholder="Ej. promo del día"
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          <Button
-            size="sm"
-            className="bg-warning text-warning-foreground hover:bg-warning/90"
-            onClick={() =>
-              runAction(async () => {
-                await applyDiscount(order.id, Number(amount), reason);
-                close();
-              }, toast)
-            }
-          >
-            Aplicar descuento
-          </Button>
-        </div>
-      )}
-
-      {panel === "cancel" && (
-        <div className="flex flex-wrap items-end gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-          <div className="min-w-48 flex-1 space-y-1">
-            <Label htmlFor={`cancel-${order.id}`}>
-              Motivo de anulación (obligatorio)
-            </Label>
-            <Input
-              id={`cancel-${order.id}`}
-              type="text"
-              value={reason}
-              placeholder="Ej. pedido duplicado"
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => {
-              if (!confirm("¿Anular este pedido? Esta acción es irreversible.")) {
-                return;
-              }
-              runAction(async () => {
-                await cancelOrder(order.id, reason);
-                close();
-              }, toast);
-            }}
-          >
-            Anular pedido
-          </Button>
-        </div>
-      )}
-
       {showSplit && (
         <SplitPaymentDialog
           total={order.total}
@@ -296,6 +203,21 @@ function OrderCard({
   order: Order;
   statusLabels: Record<OrderStatus, string>;
 }) {
+  // Acciones secundarias de la tarjeta (Descontar / Anular).
+  const [panel, setPanel] = useState<"discount" | "cancel" | null>(null);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const { toast } = useToast();
+
+  const closeSecondary = () => {
+    setPanel(null);
+    setAmount("");
+    setReason("");
+  };
+
+  const togglePanel = (which: "discount" | "cancel") =>
+    setPanel(panel === which ? null : which);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -404,15 +326,105 @@ function OrderCard({
             </div>
           ))}
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-3 border-t pt-3">
+
+        {/* Fila del precio con acciones secundarias uniformes */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
           <div className="font-mono text-3xl font-bold text-emerald-400">
             {formatPrice(order.total)}
           </div>
-          <OrderActions order={order} />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              className="h-9 bg-warning px-4 text-warning-foreground hover:bg-warning/90"
+              onClick={() => togglePanel("discount")}
+            >
+              Descontar
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 bg-red-700 px-4 text-white hover:bg-red-600"
+              onClick={() => togglePanel("cancel")}
+            >
+              Anular
+            </Button>
+            <ReprintButton orderId={order.id} />
+          </div>
         </div>
-        <div className="flex justify-end">
-          <ReprintButton orderId={order.id} />
-        </div>
+
+        {/* Paneles de descuento / anulación */}
+        {panel === "discount" && (
+          <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/40 p-3">
+            <div className="w-24 space-y-1">
+              <Label htmlFor={`amount-${order.id}`}>Monto (Bs)</Label>
+              <Input
+                id={`amount-${order.id}`}
+                type="number"
+                min={1}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div className="min-w-48 flex-1 space-y-1">
+              <Label htmlFor={`reason-${order.id}`}>Motivo</Label>
+              <Input
+                id={`reason-${order.id}`}
+                type="text"
+                value={reason}
+                placeholder="Ej. promo del día"
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+            <Button
+              size="sm"
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
+              onClick={() =>
+                runAction(async () => {
+                  await applyDiscount(order.id, Number(amount), reason);
+                  closeSecondary();
+                }, toast)
+              }
+            >
+              Aplicar descuento
+            </Button>
+          </div>
+        )}
+
+        {panel === "cancel" && (
+          <div className="flex flex-wrap items-end gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+            <div className="min-w-48 flex-1 space-y-1">
+              <Label htmlFor={`cancel-${order.id}`}>
+                Motivo de anulación (obligatorio)
+              </Label>
+              <Input
+                id={`cancel-${order.id}`}
+                type="text"
+                value={reason}
+                placeholder="Ej. pedido duplicado"
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                if (
+                  !confirm("¿Anular este pedido? Esta acción es irreversible.")
+                ) {
+                  return;
+                }
+                runAction(async () => {
+                  await cancelOrder(order.id, reason);
+                  closeSecondary();
+                }, toast);
+              }}
+            >
+              Anular pedido
+            </Button>
+          </div>
+        )}
+
+        {/* Acciones primarias */}
+        <OrderActions order={order} />
       </CardContent>
     </Card>
   );

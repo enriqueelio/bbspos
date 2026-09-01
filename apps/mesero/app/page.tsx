@@ -1,6 +1,7 @@
 import { getRequiredSession } from "@/lib/session";
 import { PosTerminal } from "@/components/pos/pos-terminal";
 import { SignOutButton } from "@/components/sign-out-button";
+import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import { getPosCatalog } from "@/actions/pos";
 
 export default async function MeseroPage() {
@@ -26,6 +27,7 @@ export default async function MeseroPage() {
       <div className="mx-auto mt-4 w-full max-w-[950px] px-4 lg:px-6">
         <PosTerminal catalog={catalog} />
       </div>
+      <PwaInstallBanner appName="Bubba Mesero" />
     </main>
   );
 }

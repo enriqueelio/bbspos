@@ -1,0 +1,21 @@
+{
+  "name": "Bubba Mesero — Toma de pedidos",
+  "short_name": "Bubba Mesero",
+  "description": "Terminal de toma de pedidos del mesero.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business"],
+  "lang": "es",
+  "dir": "ltr"
+}

@@ -2,8 +2,6 @@
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { KioskTimeout } from "@/components/kiosk-timeout";
-import { PwaInstallBanner } from "@/components/pwa-install-banner";
-
 export const metadata: Metadata = {
   title: "Bubble Drink — Bubble Tea y bebidas con boba",
   description:
@@ -41,7 +39,6 @@ export default function RootLayout({
           {children}
         </main>
         <KioskTimeout />
-        <PwaInstallBanner appName="Bubble Drink" />
       </body>
     </html>
   );

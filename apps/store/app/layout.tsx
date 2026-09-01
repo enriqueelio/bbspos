@@ -2,6 +2,7 @@
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { KioskTimeout } from "@/components/kiosk-timeout";
+
 export const metadata: Metadata = {
   title: "Bubble Drink — Bubble Tea y bebidas con boba",
   description:

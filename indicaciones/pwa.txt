@@ -1,0 +1,8 @@
+Por favor, configura nuestro proyecto en Next.js (App Router) para que sea reconocido como una Progressive Web App (PWA) instalable en tablets (especialmente para Silk Browser):
+
+1. **Crear el Manifest (`public/manifest.json`):**
+   - Añade un archivo `manifest.json` en la carpeta `public` con los datos básicos de la app (nombre, nombre corto, `start_url: "/"`, `display: "standalone"`, colores de fondo y tema corporativos, y los iconos correspondientes).
+2. **Enlazar el Manifest en el Root Layout (`app/layout.tsx` o equivalente):**
+   - Asegúrate de incluir la etiqueta `<link rel="manifest" href="/manifest.json" />` y las meta tags de Apple/Android para modo app en el encabezado global de la aplicación (`metadata` de Next.js).
+3. **Verificación de Protocolo / Advertencia:**
+   - Ten en cuenta que los navegadores móviles basados en Chromium (como Silk) exigen HTTPS para activar la función nativa de instalación (excepto en `localhost`). Si estás probando por IP local (`192.168.x.x`) vía HTTP puro, ayúdanos agregando un pequeño script o botón alternativo de ayuda o verificando si Next.js puede servir los metadatos correctamente para mitigar esta restricción del navegador.

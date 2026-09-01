@@ -14,6 +14,18 @@ import {
   printText,
 } from "@/lib/printing";
 
+/** El usuario de la sesión puede haber sido eliminado de la DB tras el login
+ *  (la sesión es JWT y no se invalida al borrar al usuario). Asignar su id como
+ *  clave foránea generaría un error P2003, así que solo lo devolvemos si el
+ *  usuario sigue existiendo; en caso contrario, null. */
+async function resolveSessionUserId(sessionUserId: string): Promise<string | null> {
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUserId },
+    select: { id: true },
+  });
+  return dbUser ? dbUser.id : null;
+}
+
 /** Registra el pago de un pedido RECIBIDO y lo pasa a ACEPTADO.
  *  Soporta pago simple (un método) o dividido (dos métodos con montos). */
 export async function acceptOrder(
@@ -76,7 +88,7 @@ export async function acceptOrder(
       paymentMethod2,
       paymentAmount2,
       paidAt: new Date(),
-      userId: order.userId ?? session.user.id,
+      userId: order.userId ?? (await resolveSessionUserId(session.user.id)),
     },
   });
 
@@ -115,7 +127,7 @@ export async function deliverOrder(orderId: string) {
       status: OrderStatus.ENTREGADO,
       // El momento de entrega se registra una sola vez.
       deliveredAt: order.deliveredAt ?? new Date(),
-      userId: order.userId ?? session.user.id,
+      userId: order.userId ?? (await resolveSessionUserId(session.user.id)),
     },
   });
 
@@ -148,10 +160,10 @@ export async function cancelOrder(orderId: string, reason: string) {
       cancelledAt: new Date(),
       cancelReason: trimmed,
       // Quién ejecutó la anulación (FK vinculada al usuario real de sesión).
-      canceledById: session.user.id,
+      canceledById: await resolveSessionUserId(session.user.id),
       // Conserva el usuario original del pedido: el usuario de sesión
       // puede no existir en la tabla de usuarios y rompería la FK.
-      userId: order.userId ?? session.user.id,
+      userId: order.userId ?? (await resolveSessionUserId(session.user.id)),
     },
   });
 
@@ -200,8 +212,8 @@ export async function applyDiscount(
       discountReason: trimmed,
       discountedAt: new Date(),
       // Quién aplicó el descuento (FK vinculada al usuario real de sesión).
-      discountedById: session.user.id,
-      userId: order.userId ?? session.user.id,
+      discountedById: await resolveSessionUserId(session.user.id),
+      userId: order.userId ?? (await resolveSessionUserId(session.user.id)),
     },
   });
 

@@ -75,6 +75,18 @@ export async function acceptOrder(
     paymentAmount2 = Math.trunc(amount2);
   }
 
+  // El pedido ya cobrado o el usuario de la sesión pueden no existir en la DB
+  // (p. ej. usuario eliminado tras el login). Verificamos antes de asignar la
+  // llave foránea para no violar la restricción (P2003).
+  let userId = order.userId;
+  if (!userId) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    userId = dbUser ? dbUser.id : null;
+  }
+
   await prisma.order.update({
     where: { id: orderId },
     data: {
@@ -87,7 +99,7 @@ export async function acceptOrder(
       paymentMethod2,
       paymentAmount2,
       paidAt: new Date(),
-      userId: order.userId ?? session.user.id,
+      userId,
     },
   });
 
@@ -115,13 +127,24 @@ export async function deliverOrder(orderId: string) {
     throw new Error("El pedido ya fue entregado.");
   }
 
+  // El pedido o el usuario de la sesión pueden no existir en la DB; verificamos
+  // antes de asignar la llave foránea para no violar la restricción (P2003).
+  let userId = order.userId;
+  if (!userId) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    userId = dbUser ? dbUser.id : null;
+  }
+
   await prisma.order.update({
     where: { id: orderId },
     data: {
       status: OrderStatus.ENTREGADO,
       // El momento de entrega se registra una sola vez.
       deliveredAt: order.deliveredAt ?? new Date(),
-      userId: order.userId ?? session.user.id,
+      userId,
     },
   });
 

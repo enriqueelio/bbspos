@@ -20,6 +20,10 @@ build/
 # config local de impresora
 apps/store/printing.json
 
+# artefactos PWA generados por next-pwa en cada build (no versionar)
+apps/store/public/sw.js
+apps/store/public/workbox-*.js
+
 # reference files
 color.png
 colori.txt

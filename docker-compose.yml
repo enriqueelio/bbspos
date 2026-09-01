@@ -8,12 +8,12 @@ services:
       - "3003:3003"
     environment:
       DATABASE_URL: "file:/app/packages/db/prisma/dev.db"
-      NEXTAUTH_SECRET: "cambia-este-secreto-por-uno-seguro"
-      NEXTAUTH_URL: "http://localhost:3001"
-      NEXTAUTH_SECRET_CAJERO: "cambia-este-secreto-cajero-tambien"
-      NEXTAUTH_URL_CAJERO: "http://localhost:3002"
-      NEXTAUTH_SECRET_MESERO: "cambia-este-secreto-mesero-tambien"
-      NEXTAUTH_URL_MESERO: "http://localhost:3003"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET:-cambia-este-secreto-por-uno-seguro}"
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost:3001}"
+      NEXTAUTH_SECRET_CAJERO: "${NEXTAUTH_SECRET_CAJERO:-cambia-este-secreto-cajero-tambien}"
+      NEXTAUTH_URL_CAJERO: "${NEXTAUTH_URL_CAJERO:-http://localhost:3002}"
+      NEXTAUTH_SECRET_MESERO: "${NEXTAUTH_SECRET_MESERO:-cambia-este-secreto-mesero-tambien}"
+      NEXTAUTH_URL_MESERO: "${NEXTAUTH_URL_MESERO:-http://localhost:3003}"
       TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
       TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID}"
     volumes:

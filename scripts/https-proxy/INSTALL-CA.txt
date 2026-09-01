@@ -1,0 +1,73 @@
+== HTTPS para PWA en tablets (Bubba Drinks) ==
+== Guia de instalacion del certificado CA local ==
+
+Para que la tableta acepte el certificado HTTPS sin advertencias
+y la app se pueda instalar como PWA (sin barra de navegacion):
+
+--- Paso 1: Copiar rootCA.pem a la tableta ---
+
+La PC genera un certificado local con mkcert. El certificado raiz
+(rootCA.pem) esta en:
+  C:\Users\PC-ENRIQUE\AppData\Local\mkcert\rootCA.pem
+
+Copialo a la tableta por USB, correo, o descargalo desde la PC
+sirviendolo por HTTP (ver paso 2).
+
+--- Paso 2 (opcional): Servir rootCA.pem por HTTP ---
+
+Si no puedes copiar por USB, sirvelo desde la PC:
+
+  python -m http.server 9999 --directory "%LOCALAPPDATA%\mkcert"
+
+En la tableta abre: http://192.168.1.10:9999/rootCA.pem
+(Android lo descargara como archivo).
+
+--- Paso 3: Instalar el certificado en la tableta ---
+
+Silk Browser (Amazon Fire):
+  1. Configuracion > Seguridad > Credenciales > Instalar desde almacenamiento
+  2. Selecciona el archivo rootCA.pem descargado
+  3. Nombra el certificado (ej: "Bubba Local CA") y acepta
+
+Chrome (Android generico):
+  1. Configuracion > Privacidad y seguridad > Credenciales > Instalar un certificado > CA
+  2. Selecciona rootCA.pem
+  3. Acepta
+
+Si Android no permite instalar CA manualmente (versiones recientes),
+haz esto:
+  1. Abre https://192.168.1.10:8446 en la tableta
+  2. Aparecera una advertencia de seguridad — toca "Avanzado" > "Continuar"
+  3. La app PWA se instalara de todas formas (el HTTPS funciona aunque
+     no confies en el cert)
+
+--- Paso 4: Instalar la PWA ---
+
+Una vez con HTTPS funcionando (sin advertencia o con el cert instalado):
+
+  Mesero:    https://192.168.1.10:8446
+  Cajero:    https://192.168.1.10:8445
+  Store:     https://192.168.1.10:8443
+  Admin:     https://192.168.1.10:8444
+
+En Silk/Chrome, toca el menu ... > "Agregar a la pantalla de inicio".
+La app se abrira en modo standalone (sin barra de navegacion).
+
+--- Puertos ---
+
+  HTTP (dev):    3000  3001  3002  3003
+  HTTPS (proxy): 8443  8444  8445  8446
+
+El proxy HTTPS (proxy.mjs) debe estar corriendo para acceder por HTTPS.
+
+--- Reiniciar todo ---
+
+  1. Iniciar el proxy:   node scripts/https-proxy/proxy.mjs
+  2. Iniciar las apps:   pnpm dev
+  3. En la tablet, abrir https://192.168.1.10:8446 (mesero)
+
+--- Borrar el SW viejo (si la tienda sigue en blanco) ---
+
+En la tablet: Configuracion > Apps > Bubble Drink >
+  Almacenamiento > Borrar datos / Borrar cache.
+Luego recarga la pagina.

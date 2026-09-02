@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Button,
   Dialog,
@@ -16,8 +16,17 @@ const INACTIVITY_MS = 45_000;
 const WARNING_MS = 10_000;
 const EVENTS: (keyof WindowEventMap)[] = ["touchstart", "click", "scroll"];
 
+/** Rutas donde el temporizador de inactividad está activo (flujo de pedido). */
+const ACTIVE_PATHS = ["/build", "/cart"];
+
+/** ¿Está el kiosco dentro del flujo de pedido? */
+function isActivePath(pathname: string): boolean {
+  return ACTIVE_PATHS.some((p) => pathname === p || pathname?.startsWith(p + "/"));
+}
+
 export function KioskTimeout() {
   const router = useRouter();
+  const pathname = usePathname();
   const clearCart = useCartStore((s) => s.clear);
   const [showWarning, setShowWarning] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -39,6 +48,12 @@ export function KioskTimeout() {
 
   const reset = useCallback(() => {
     if (loggingOut.current) return;
+    // En la página de inicio no se cuenta inactividad ni se redirige.
+    if (!isActivePath(pathname)) {
+      setWarning(false);
+      stopTimers();
+      return;
+    }
     setWarning(false);
     stopTimers();
 
@@ -52,7 +67,7 @@ export function KioskTimeout() {
         router.replace("/");
       }, WARNING_MS);
     }, INACTIVITY_MS);
-  }, [stopTimers, clearCart, router]);
+  }, [stopTimers, clearCart, router, pathname]);
 
   useEffect(() => {
     function resetOnEvent() {

@@ -243,7 +243,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   const needsName = cart.items.length > 0 && cart.customerName.trim() === "";
 
   return (
-    <div className="flex w-full min-h-screen flex-col bg-slate-950">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-950">
       {/* Toast flotante de confirmación (se desvanece solo) */}
       {toastVisible && (
         <div
@@ -313,7 +313,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
         </div>
 
         {/* Cuerpo del ticket: ítems con scroll interno sin alterar el tamaño del cuadro */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="scroll-touch min-h-0 flex-1 p-4 space-y-3">
           {cart.items.length === 0 && (
             <p className="text-base text-white">
               Agrega bebidas tocando un sabor.
@@ -417,7 +417,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       )}
 
       {/* ===== Catálogo de menú (abajo) ===== */}
-      <div className="flex-1 overflow-y-auto p-4 lg:p-6">
+      <div className="scroll-touch min-h-0 flex-1 p-4 lg:p-6">
         <div className="max-w-4xl mx-auto flex flex-col gap-6">
           {/* Pestañas de categorías */}
           <div className="flex flex-wrap gap-2">

@@ -32,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="h-dvh overflow-hidden bg-slate-950 font-sans text-slate-50 antialiased">
+      <body className="h-screen overflow-hidden bg-slate-950 font-sans text-slate-50 antialiased">
         {children}
         <ServiceWorkerRegister />
       </body>

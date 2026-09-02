@@ -76,6 +76,9 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   // Toast de éxito: aparece suavemente, permanece ~3s y se desvanece solo.
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Contenedor con scroll del catálogo: se desplaza al inicio al confirmar un producto.
+  const catalogScrollRef = useRef<HTMLDivElement | null>(null);
+
   function showToast(message: string) {
     if (toastTimer.current) {
       clearTimeout(toastTimer.current);
@@ -195,6 +198,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setSizeId("");
     setBobaTypeId("");
     setToppingIds([]);
+    catalogScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function submit() {
@@ -279,10 +283,10 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
 
       {/* ===== Ticket en curso (visible solo cuando hay productos agregados) ===== */}
       {cart.items.length > 0 && (
-        <div className="ticket-in sticky top-0 z-20 flex h-[42vh] w-full shrink-0 flex-col bg-slate-900 border-b border-slate-800 shadow-2xl">
-        <div className="shrink-0 p-4 space-y-2">
+        <div className="ticket-in sticky top-0 z-20 flex h-[30vh] w-full shrink-0 flex-col bg-slate-900 border-b border-slate-800 shadow-2xl">
+        <div className="shrink-0 px-3 pt-2 pb-1 space-y-1">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-black uppercase tracking-wide text-white">
+            <h2 className="text-sm font-black uppercase tracking-wide text-white">
               Ticket en curso
             </h2>
             <button
@@ -295,27 +299,27 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                   selectedFlavorId === null)
               }
               title="Vaciar el pedido si el cliente se arrepiente"
-              className="h-10 shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 text-sm font-bold text-slate-300 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="h-7 shrink-0 rounded-md border border-slate-700 bg-slate-800 px-2 text-xs font-bold text-slate-300 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               Limpiar
             </button>
           </div>
           {busy && (
-            <p className="rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-300">
+            <p className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300">
               Enviando… por favor espera.
             </p>
           )}
           {error && (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-300">
               ⚠ {error}
             </p>
           )}
         </div>
 
         {/* Cuerpo del ticket: ítems con scroll interno sin alterar el tamaño del cuadro */}
-        <div className="scroll-touch min-h-0 flex-1 p-4 space-y-3">
+        <div className="scroll-touch min-h-0 flex-1 px-3 py-1 space-y-1.5">
           {cart.items.length === 0 && (
-            <p className="text-base text-white">
+            <p className="text-sm text-white">
               Agrega bebidas tocando un sabor.
             </p>
           )}
@@ -326,98 +330,99 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
             return (
               <div
                 key={item.id}
-                className="flex items-start justify-between gap-2 rounded-lg bg-slate-800 px-3 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg bg-slate-800 pl-2.5 pr-1.5 py-1"
               >
-                <div className="min-w-0 text-base">
-                  <p className="font-bold text-white">
-                    {item.quantity}× {item.flavor.name}
+                <div className="min-w-0 flex-1 text-sm">
+                  <p className="truncate font-bold text-white">
+                    {item.flavor.name}
                   </p>
-                  <p className="text-white font-normal">
+                  <p className="truncate text-xs text-slate-300">
                     {item.size.name} · {item.bobaType.name}
+                    {item.toppings.length > 0 &&
+                      " · +" + item.toppings.map((t) => t.name).join(", ")}
                   </p>
-                  {item.toppings.length > 0 && (
-                    <p className="text-white font-normal">
-                      + {item.toppings.map((t) => t.name).join(", ")}
-                    </p>
-                  )}
-                  <div className="mt-2 flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="h-14 w-14 rounded-lg bg-slate-700 text-white text-2xl font-bold flex items-center justify-center active:scale-95 transition-transform"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity - 1)
-                      }
-                    >
-                      −
-                    </button>
-                    <span className="text-xl font-bold w-8 text-center">
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      className="h-14 w-14 rounded-lg bg-slate-700 text-white text-2xl font-bold flex items-center justify-center active:scale-95 transition-transform"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity + 1)
-                      }
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className="h-14 px-6 rounded-lg bg-red-600 text-white text-lg font-bold active:scale-95 transition-transform"
-                      onClick={() => cart.removeItem(item.id)}
-                    >
-                      Quitar
-                    </button>
-                  </div>
                 </div>
-                <span className="font-mono text-base font-bold text-white">
-                  {formatPrice(unitWithExtras * item.quantity)}
-                </span>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Quitar una unidad"
+                    className="h-9 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
+                    onClick={() =>
+                      cart.updateQuantity(item.id, item.quantity - 1)
+                    }
+                  >
+                    −
+                  </button>
+                  <span className="w-7 text-center text-base font-bold text-white">
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Agregar una unidad"
+                    className="h-9 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
+                    onClick={() =>
+                      cart.updateQuantity(item.id, item.quantity + 1)
+                    }
+                  >
+                    +
+                  </button>
+                  <span className="ml-1.5 w-14 text-right font-mono text-sm font-bold text-white">
+                    {formatPrice(unitWithExtras * item.quantity)}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Quitar el producto"
+                    className="ml-2 h-9 px-2 rounded-md bg-red-600 text-white text-sm font-bold active:scale-95 transition-transform"
+                    onClick={() => cart.removeItem(item.id)}
+                  >
+                    Quitar
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Área de pago: input, luego fila con Total + botón Enviar a Caja en la misma línea */}
-        <div className="shrink-0 p-4 bg-slate-950 border-t border-slate-800 flex flex-col gap-3">
-          <input
-            type="text"
-            value={cart.customerName}
-            onChange={(e) => cart.setCustomerName(e.target.value)}
-            placeholder="Nombre o Mesa"
-            className={`h-11 w-full rounded-lg border bg-slate-800 px-3 text-base text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
-              needsName
-                ? "border-amber-400/70 animate-name-glow"
-                : "border-slate-700 focus:border-primary"
-            }`}
-          />
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <span className="shrink-0 text-base font-bold uppercase tracking-wide text-white">
-                Total
-              </span>
-              <span className="truncate font-mono text-3xl font-black text-white">
-                {formatPrice(totalOfItems(cart.items))}
-              </span>
-            </div>
-
+        {/* Área de pago: input + botón Enviar a Caja en una sola línea, mismo alto */}
+        <div className="shrink-0 p-2 bg-slate-950 border-t border-slate-800 flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={cart.customerName}
+              onChange={(e) => cart.setCustomerName(e.target.value)}
+              placeholder="Nombre o Mesa"
+              className={`h-11 w-full rounded-lg border bg-slate-800 px-3 text-base text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+                needsName
+                  ? "border-amber-400/70 animate-name-glow"
+                  : "border-slate-700 focus:border-primary"
+              }`}
+            />
             <button
               type="button"
               disabled={busy || cart.items.length === 0}
               onClick={submit}
-              className="flex h-16 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 text-xl font-black text-white shadow-lg transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-lg font-black text-white shadow-lg transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy ? "Enviando…" : "Enviar a Caja"}
             </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="shrink-0 text-sm font-bold uppercase tracking-wide text-white">
+                Total
+              </span>
+              <span className="truncate font-mono text-2xl font-black text-white">
+                {formatPrice(totalOfItems(cart.items))}
+              </span>
+            </div>
           </div>
         </div>
       </div>
       )}
 
       {/* ===== Catálogo de menú (abajo) ===== */}
-      <div className="scroll-touch min-h-0 flex-1 p-4 lg:p-6">
+      <div ref={catalogScrollRef} className="scroll-touch min-h-0 flex-1 p-4 lg:p-6">
         <div className="max-w-4xl mx-auto flex flex-col gap-6">
           {/* Pestañas de categorías */}
           <div className="flex flex-wrap gap-2">

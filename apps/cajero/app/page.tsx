@@ -113,9 +113,15 @@ export default async function CashierPage({
     });
 
     return (
-      <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
-        <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-        <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} />
+      <main className="flex h-full flex-col">
+        <div className="mx-auto w-full max-w-3xl px-4 py-6">
+          <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
+        </div>
+        <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto w-full max-w-3xl px-4 pb-6">
+            <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} />
+          </div>
+        </div>
       </main>
     );
   }
@@ -123,14 +129,16 @@ export default async function CashierPage({
   const data = await getCashierDailyData(session.user.id);
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
-      <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
-      <div className="flex items-center justify-between gap-3 print:hidden">
-        <h1 className="text-xl font-bold">Reporte del día</h1>
-        <ReportActions />
-      </div>
-      <div className="print-report-area">
-        <ReportView data={data} myName={session.user.name ?? ""} />
+    <main className="h-full overflow-y-auto overscroll-contain">
+      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+        <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
+        <div className="flex items-center justify-between gap-3 print:hidden">
+          <h1 className="text-xl font-bold">Reporte del día</h1>
+          <ReportActions />
+        </div>
+        <div className="print-report-area">
+          <ReportView data={data} myName={session.user.name ?? ""} />
+        </div>
       </div>
     </main>
   );

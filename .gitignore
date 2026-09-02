@@ -29,3 +29,17 @@ color.png
 colori.txt
 flavors-icons.csv
 flavors-icons.xlsx
+
+# certificados y datos locales (no versionar)
+*.pem
+*.p12
+*.pfx
+*.crt
+*.csr
+192.168.1.10+2*
+bubba-ca.*
+csrf*.txt
+
+# utilidades de diagnostico locales
+packages/db/checkusers.js
+gen-icons.js

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import ServiceWorkerRegister from "@/components/service-worker-register";
 
 export const metadata: Metadata = {
   title: "Bubba Mesero — Toma de pedidos",
@@ -33,6 +34,7 @@ export default function RootLayout({
     <html lang="es">
       <body className="h-dvh overflow-hidden bg-slate-950 font-sans text-slate-50 antialiased">
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

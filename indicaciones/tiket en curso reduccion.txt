@@ -1,0 +1,8 @@
+Por favor, optimiza y reduce el alto del panel **"Ticket en Curso"** en el Módulo Mesero para que ocupe mucho menos espacio vertical:
+
+1. **Compactar las filas de productos dentro del ticket:**
+   - En lugar de poner los botones de control de cantidad (`-`, `1`, `+`) y el botón "Quitar" ocupando una línea gigante debajo del nombre, muévelos **en línea (inline)** o al lado derecho del producto (ej. dejar el precio y los botones a la derecha, y el nombre con sus detalles a la izquierda). O bien, reduce el padding y el tamaño de estos botones para que la tarjeta del producto sea una barra horizontal compacta.
+2. **Reducir espaciados (Padding y Margins):**
+   - Disminuye los espacios vacíos (`p-4` a `p-2` o `p-3`) en el contenedor principal de "Ticket en Curso".
+3. **Distribución ultra compacta del Total y el Botón "Enviar a Caja":**
+   - Coloca el input de "Nombre o Mesa", el texto del "TOTAL" y el botón verde "Enviar a Caja" en una estructura de renglones más juntos (por ejemplo, el input arriba y en una sola línea horizontal abajo el total a la izquierda y el botón de enviar a la derecha), eliminando todo espacio vertical muerto.

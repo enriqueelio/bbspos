@@ -1,6 +1,6 @@
 # Índice de Indicaciones
 
-Referencia rápida de todos los archivos `.txt` de la carpeta `indicaciones/`.
+Referencia rápida de todos los archivos `.txt` y `.md` de la carpeta `indicaciones/`.
 
 ---
 
@@ -41,3 +41,9 @@ Referencia rápida de todos los archivos `.txt` de la carpeta `indicaciones/`.
 | `auth-username-login.txt` | Cambiar autenticación de email a username en Prisma, NextAuth y UI de login |
 | `role-mesero-rbac.txt` | RBAC: rol MESERO solo toma pedidos, no cobra. Modificar middleware, UI y server actions |
 | `split-cajero-mesero-ui.txt` | Separar interfaces: Cajero (cobro, PC 19") vs Mesero (pedidos, tablet 8") |
+
+## Red / Configuración del servidor
+
+| Archivo | Descripción |
+|---|---|
+| `GUIA-RED-CONFIGURACION.md` | Guía paso a paso (sin conocimientos de redes) para configurar la IP del servidor, el hostname `bubba.local`, los certificados y las tablets |

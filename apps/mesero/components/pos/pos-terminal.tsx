@@ -281,144 +281,134 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
         </div>
       )}
 
-      {/* ===== Ticket en curso (visible solo cuando hay productos agregados) ===== */}
+      {/* ===== Ticket en curso (ultra compacto) ===== */}
       {cart.items.length > 0 && (
-        <div className="ticket-in sticky top-0 z-20 flex h-[30vh] w-full shrink-0 flex-col bg-slate-900 border-b border-slate-800 shadow-2xl">
-        <div className="shrink-0 px-3 pt-2 pb-1 space-y-1">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-black uppercase tracking-wide text-white">
-              Ticket en curso
-            </h2>
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={
-                busy ||
-                (cart.items.length === 0 &&
-                  cart.customerName === "" &&
-                  selectedFlavorId === null)
-              }
-              title="Vaciar el pedido si el cliente se arrepiente"
-              className="h-7 shrink-0 rounded-md border border-slate-700 bg-slate-800 px-2 text-xs font-bold text-slate-300 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Limpiar
-            </button>
-          </div>
-          {busy && (
-            <p className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300">
-              Enviando… por favor espera.
-            </p>
-          )}
-          {error && (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1 text-xs text-red-300">
-              ⚠ {error}
-            </p>
-          )}
-        </div>
-
-        {/* Cuerpo del ticket: ítems con scroll interno sin alterar el tamaño del cuadro */}
-        <div className="scroll-touch min-h-0 flex-1 px-3 py-1 space-y-1.5">
-          {cart.items.length === 0 && (
-            <p className="text-sm text-white">
-              Agrega bebidas tocando un sabor.
-            </p>
-          )}
-          {cart.items.map((item) => {
-            const unitWithExtras =
-              item.unitPrice +
-              item.toppings.reduce((sum, t) => sum + t.price, 0);
-            return (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-slate-800 pl-2.5 pr-1.5 py-1"
+        <div className="ticket-in sticky top-0 z-20 flex w-full shrink-0 flex-col bg-slate-900 border-b border-slate-800 shadow-2xl max-h-[40vh] overflow-hidden">
+          <div className="shrink-0 px-2 pt-1 pb-0.5">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xs font-black uppercase tracking-wide text-white">
+                Ticket
+              </h2>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={busy}
+                title="Vaciar el pedido"
+                className="h-6 shrink-0 rounded border border-slate-700 bg-slate-800 px-1.5 text-[10px] font-bold text-slate-400 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <div className="min-w-0 flex-1 text-sm">
-                  <p className="truncate font-bold text-white">
-                    {item.flavor.name}
-                  </p>
-                  <p className="truncate text-xs text-slate-300">
-                    {item.size.name} · {item.bobaType.name}
-                    {item.toppings.length > 0 &&
-                      " · +" + item.toppings.map((t) => t.name).join(", ")}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <button
-                    type="button"
-                    aria-label="Quitar una unidad"
-                    className="h-9 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
-                    onClick={() =>
-                      cart.updateQuantity(item.id, item.quantity - 1)
-                    }
-                  >
-                    −
-                  </button>
-                  <span className="w-7 text-center text-base font-bold text-white">
-                    {item.quantity}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Agregar una unidad"
-                    className="h-9 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
-                    onClick={() =>
-                      cart.updateQuantity(item.id, item.quantity + 1)
-                    }
-                  >
-                    +
-                  </button>
-                  <span className="ml-1.5 w-14 text-right font-mono text-sm font-bold text-white">
-                    {formatPrice(unitWithExtras * item.quantity)}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Quitar el producto"
-                    className="ml-2 h-9 px-2 rounded-md bg-red-600 text-white text-sm font-bold active:scale-95 transition-transform"
-                    onClick={() => cart.removeItem(item.id)}
-                  >
-                    Quitar
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                Limpiar
+              </button>
+            </div>
+            {busy && (
+              <p className="mt-0.5 rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-300">
+                Enviando…
+              </p>
+            )}
+            {error && (
+              <p className="mt-0.5 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
+                ⚠ {error}
+              </p>
+            )}
+          </div>
 
-        {/* Área de pago: input + botón Enviar a Caja en una sola línea, mismo alto */}
-        <div className="shrink-0 p-2 bg-slate-950 border-t border-slate-800 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
+          {/* Ítems compactos */}
+          <div className="scroll-touch min-h-0 flex-1 overflow-y-auto px-2 py-0.5 space-y-0.5">
+            {cart.items.map((item) => {
+              const unitWithExtras =
+                item.unitPrice +
+                item.toppings.reduce((sum, t) => sum + t.price, 0);
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-1 rounded bg-slate-800/80 px-1.5 py-0.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-bold text-white leading-tight">
+                      {item.flavor.name}
+                      <span className="ml-1 font-normal text-slate-400">
+                        {item.size.name}·{item.bobaType.name}
+                      </span>
+                      {item.toppings.length > 0 && (
+                        <span className="ml-1 font-normal text-slate-500 text-[10px]">
+                          +{item.toppings.map((t) => t.name).join(",")}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      type="button"
+                      aria-label="Quitar una unidad"
+                      className="h-6 w-6 rounded bg-slate-700 text-white text-xs font-bold flex items-center justify-center active:scale-95"
+                      onClick={() =>
+                        cart.updateQuantity(item.id, item.quantity - 1)
+                      }
+                    >
+                      −
+                    </button>
+                    <span className="w-5 text-center text-xs font-bold text-white">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Agregar una unidad"
+                      className="h-6 w-6 rounded bg-slate-700 text-white text-xs font-bold flex items-center justify-center active:scale-95"
+                      onClick={() =>
+                        cart.updateQuantity(item.id, item.quantity + 1)
+                      }
+                    >
+                      +
+                    </button>
+                    <span className="w-12 text-right font-mono text-[11px] font-bold text-white">
+                      {formatPrice(unitWithExtras * item.quantity)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Quitar el producto"
+                      className="ml-1 h-5 px-1 rounded bg-red-600/80 text-white text-[10px] font-bold active:scale-95"
+                      onClick={() => cart.removeItem(item.id)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer: input + Total + Enviar a Caja compacto */}
+          <div className="shrink-0 px-2 py-1 bg-slate-950 border-t border-slate-800 space-y-1">
             <input
               type="text"
               value={cart.customerName}
               onChange={(e) => cart.setCustomerName(e.target.value)}
               placeholder="Nombre o Mesa"
-              className={`h-11 w-full rounded-lg border bg-slate-800 px-3 text-base text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+              className={`h-8 w-full rounded border bg-slate-800 px-2 text-xs text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
                 needsName
                   ? "border-amber-400/70 animate-name-glow"
                   : "border-slate-700 focus:border-primary"
               }`}
             />
-            <button
-              type="button"
-              disabled={busy || cart.items.length === 0}
-              onClick={submit}
-              className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 text-lg font-black text-white shadow-lg transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {busy ? "Enviando…" : "Enviar a Caja"}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex min-w-0 items-baseline gap-2">
-              <span className="shrink-0 text-sm font-bold uppercase tracking-wide text-white">
-                Total
-              </span>
-              <span className="truncate font-mono text-2xl font-black text-white">
-                {formatPrice(totalOfItems(cart.items))}
-              </span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                  Total
+                </span>
+                <span className="font-mono text-lg font-black text-white">
+                  {formatPrice(totalOfItems(cart.items))}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={busy || cart.items.length === 0}
+                onClick={submit}
+                className="flex h-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-4 text-xs font-black text-white shadow transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busy ? "…" : "Enviar a Caja"}
+              </button>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* ===== Catálogo de menú (abajo) ===== */}

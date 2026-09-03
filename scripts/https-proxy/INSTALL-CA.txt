@@ -53,6 +53,21 @@ Una vez con HTTPS funcionando (sin advertencia o con el cert instalado):
 En Silk/Chrome, toca el menu ... > "Agregar a la pantalla de inicio".
 La app se abrira en modo standalone (sin barra de navegacion).
 
+--- Hostname opcional (bubba.local) ---
+
+El certificado ya cubre bubba.local (SAN). Para no depender de la IP:
+
+  1. En el router/DNS agrega: bubba.local -> IP del servidor
+  2. en server.config.json pon host en "bubba.local"
+     y corre:  pnpm -- setup-env --host bubba.local
+  3. Reinicia apps y proxy, y en las tablets usa:
+     Mesero:  https://bubba.local:8446
+     Cajero:  https://bubba.local:8445
+     Store:   https://bubba.local:8443
+     Admin:   https://bubba.local:8444
+
+Asi, cuando cambie la IP solo actualizas el DNS del router.
+
 --- Puertos ---
 
   HTTP (dev):    3000  3001  3002  3003

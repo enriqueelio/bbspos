@@ -1,0 +1,15 @@
+{
+  "host": "192.168.1.10",
+  "https": {
+    "store": 8443,
+    "admin": 8444,
+    "cajero": 8445,
+    "mesero": 8446
+  },
+  "http": {
+    "store": 3000,
+    "admin": 3001,
+    "cajero": 3002,
+    "mesero": 3003
+  }
+}

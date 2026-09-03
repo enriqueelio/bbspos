@@ -1,23 +1,72 @@
 import { createServer as createHttpsServer } from "https";
 import { request as httpRequest } from "http";
-import { readFileSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
 const DIR = import.meta.dirname;
-const HOST = "192.168.1.10";
+const ROOT = join(DIR, "..", "..");
 
-const HTTPS_TLS = {
-  key: readFileSync(join(DIR, "192.168.1.10+2-key.pem")),
-  cert: readFileSync(join(DIR, "192.168.1.10+2.pem")),
-};
+// Host configurable: prioridad a SERVER_HOST env, si no del archivo central.
+// Cambiar la IP del servidor = editar server.config.json (o exportar SERVER_HOST)
+// y reiniciar el proxy. NO es necesario tocar los .env de las apps si se usa
+// el script "setup-env" para regenerarlos.
+function resolveHost() {
+  if (process.env.SERVER_HOST) return process.env.SERVER_HOST;
+  const cfgFile = join(ROOT, "server.config.json");
+  if (existsSync(cfgFile)) {
+    try {
+      const cfg = JSON.parse(readFileSync(cfgFile, "utf8"));
+      if (cfg.host) return cfg.host;
+    } catch (e) {
+      console.error("[proxy] aviso: no se pudo leer server.config.json:", e.message);
+    }
+  }
+  return "192.168.1.10";
+}
 
-// Puerto HTTPS (tablets) -> puerto HTTP del app (dev)
-const ROUTES = {
-  store: { https: 8443, http: 3000 },
-  admin: { https: 8444, http: 3001 },
-  cajero: { https: 8445, http: 3002 },
-  mesero: { https: 8446, http: 3003 },
-};
+const HOST = resolveHost();
+
+// Certificados TLS. Si se cambia el host a un hostname (p. ej. bubba.local),
+// generar unos certificados que cubran ese hostname y colocarlos en la carpeta.
+function resolveTls() {
+  const cert = join(DIR, `${HOST}+2.pem`);
+  const key = join(DIR, `${HOST}+2-key.pem`);
+  if (existsSync(cert) && existsSync(key)) {
+    return { key: readFileSync(key), cert: readFileSync(cert) };
+  }
+  // Fallback al certificado actual de la IP para no romper nada
+  return {
+    key: readFileSync(join(DIR, "192.168.1.10+2-key.pem")),
+    cert: readFileSync(join(DIR, "192.168.1.10+2.pem")),
+  };
+}
+
+// Puerto HTTPS (tablets) -> puerto HTTP del app (dev).
+// Se sobrescriben desde server.config.json si existe.
+function resolvePorts() {
+  const defaults = {
+    store: { https: 8443, http: 3000 },
+    admin: { https: 8444, http: 3001 },
+    cajero: { https: 8445, http: 3002 },
+    mesero: { https: 8446, http: 3003 },
+  };
+  const cfgFile = join(ROOT, "server.config.json");
+  if (existsSync(cfgFile)) {
+    try {
+      const cfg = JSON.parse(readFileSync(cfgFile, "utf8"));
+      for (const name of Object.keys(defaults)) {
+        if (cfg.http && cfg.http[name]) defaults[name].http = cfg.http[name];
+        if (cfg.https && cfg.https[name]) defaults[name].https = cfg.https[name];
+      }
+    } catch (e) {
+      console.error("[proxy] aviso: no se pudieron leer los puertos:", e.message);
+    }
+  }
+  return defaults;
+}
+
+const HTTPS_TLS = resolveTls();
+const ROUTES = resolvePorts();
 
 function handleProxyError(err, req, res) {
   console.error("[proxy] error:", err.message);

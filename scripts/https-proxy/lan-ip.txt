@@ -1,1 +1,2 @@
 192.168.1.10
+bubba.local (hostname fijo opcional - ver INSTALL-CA.txt)

@@ -46,8 +46,8 @@ const priceMatrix: Record<
 };
 
 const toppings = [
-  { name: "Boba de tapioca extra", price: 4 },
-  { name: "Bobas explosivas extra", price: 5 },
+  { name: "Tapioca extra", price: 4 },
+  { name: "Explosiva extra", price: 5 },
 ];
 
 async function main() {

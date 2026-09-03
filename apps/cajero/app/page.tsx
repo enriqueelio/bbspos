@@ -82,14 +82,14 @@ export default async function CashierPage({
 
     return (
       <main className="h-full overflow-y-auto overscroll-contain">
-        <div className="mx-auto w-full max-w-[1400px] px-4 pt-4">
+        <div className="mx-auto w-full max-w-[70vw] px-4 pt-4">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
             tab={tab}
           />
         </div>
-        <div className="mx-auto mt-2 w-full max-w-[1400px] px-4 lg:px-6">
+        <div className="mx-auto mt-2 w-full max-w-[70vw] px-4 lg:px-6">
           <PosTerminal catalog={catalog} role={session.user.role} />
         </div>
       </main>
@@ -114,11 +114,11 @@ export default async function CashierPage({
 
     return (
       <main className="flex h-full flex-col">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6">
+        <div className="mx-auto w-full max-w-[70vw] px-4 py-6">
           <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
         </div>
         <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-3xl px-4 pb-6">
+          <div className="mx-auto w-full max-w-[70vw] px-4 pb-6">
             <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} />
           </div>
         </div>
@@ -130,7 +130,7 @@ export default async function CashierPage({
 
   return (
     <main className="h-full overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+      <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-6">
         <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
         <div className="flex items-center justify-between gap-3 print:hidden">
           <h1 className="text-xl font-bold">Reporte del día</h1>
@@ -183,8 +183,8 @@ function Header({
             href="/?tab=venta"
             className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
               tab === "venta"
-                ? "bg-primary text-white"
-                : "bg-primary text-white opacity-80 hover:opacity-100"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-accent"
             }`}
           >
             Nueva Venta

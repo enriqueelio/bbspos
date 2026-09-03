@@ -1,0 +1,439 @@
+========================================================================
+ANÁLISIS DEL MÓDULO DE REPORTES — MÓDULO ADMIN (Bubba)
+========================================================================
+Fecha de análisis: 2026-09-03
+Stack: Next.js (App Router) + Prisma (SQLite) + Tailwind.
+Arquitectura: Frontend en `apps/admin`, APIs de reportes bajo
+`apps/admin/app/api/reports/*`, helpers compartidos en `apps/admin/lib/reports/*`,
+formas de datos en `packages/types`, esquema de BD en `packages/db/prisma/schema.prisma`.
+
+La zona horaria del negocio es `America/La_Paz` (no la del servidor).
+Toda conversión de fechas pasa por helpers en `apps/admin/lib/reports/range.ts`
+para interpretar días/tiempos locales correctamente.
+
+========================================================================
+1. RESUMEN ESTRUCTURADO DE LAS MÉTRICAS ACTUALES
+========================================================================
+
+La pantalla de Reportes (`reports-client.tsx`) ofrece 9 pestañas, cada una
+alimentada por un endpoint distinto. Todas devuelven un "sobre" común:
+
+  { data: T, meta: { report, from, to, generatedAt, currency: "BOB" } }
+
+La moneda es siempre BOB (Bs). Los montos se almacenan como enteros.
+Los reportes con rango usan `from` y `to` en formato YYYY-MM-DD (fecha local)
+y permiten exportar a CSV/Excel y (Resumen/Cierre diario) imprimir en térmica.
+
+------------------------------------------------------------
+1.1 Resumen / Dashboard (reporte "dashboard-summary")
+    Endpoint: api/reports/dashboard-summary
+------------------------------------------------------------
+- Ventas hoy:      suma de `total` de las órdenes NO anuladas cuya
+                   `createdAt` cae dentro del día local actual.
+- Pedidos hoy:     cantidad de esas órdenes.
+- Ticket promedio hoy: ventas_hoy / pedidos_hoy (redondeado).
+- Variación vs ayer (delta %): (hoy - ayer)/ayer para ingresos y pedidos.
+                   Si ayer es 0 → null.
+- Últimos 7 días:  suma de ingresos/pedidos/ticket de los últimos 7 días
+                   locales (incluyendo hoy), sin anuladas.
+- Pedidos pendientes: count de órdenes con status = "RECIBIDO".
+
+Nota: este endpoint se cachea en memoria 30 s (CACHE_TTL_MS).
+
+------------------------------------------------------------
+1.2 Cierre diario (reporte "daily")
+    Endpoint: api/reports/daily?date=YYYY-MM-DD
+------------------------------------------------------------
+Para un día dado (por defecto hoy):
+- Ingresos totales: suma de `total` (sin anuladas).
+- Órdenes totales y ticket promedio.
+- Bebidas vendidas: suma de `quantity` de todos los items.
+- Ingreso por toppings: suma(unitPrice de toppings) * quantity.
+- Descuentos aplicados: suma de `discountAmount`.
+- Anulaciones: count de órdenes ANULADAS de ese día.
+- Desglose por método de pago: Efectivo/QR/Tarjeta (+ pagos divididos,
+  reparte `total - paymentAmount2` y `paymentAmount2`).
+- Desglose por categoría (MILK/WATER/SPECIAL): nº de órdenes (set único de
+  orderId), unidades e ingresos por categoría.
+
+------------------------------------------------------------
+1.3 Evolución de ventas (reporte "sales-range")
+    Endpoint: api/reports/sales-range?from&to&granularity=day|week|month&status
+------------------------------------------------------------
+- Serie agrupada por día/semana ISO/mes según `granularity`.
+  Cada punto: bucket, órdenes, ingresos, ticket promedio.
+- Sumarios: ingresos, órdenes, ticket promedio del periodo y "mejor día".
+- Variación contra periodo anterior de igual duración (inmediatamente previo)
+  solo en ingresos (comparisonPrevPeriod).
+- `status` opcional permite filtrar por estado concreto; por defecto excluye
+  anuladas.
+
+------------------------------------------------------------
+1.4 Horas pico (reporte "peak-hours")
+    Endpoint: api/reports/peak-hours?from&to&weekday&hourFrom&hourTo
+------------------------------------------------------------
+- Cuenta órdenes e ingresos por hora local (0-23) dentro del rango.
+- Filtros opcionales: `weekday` (0=lunes..6=domingo) y ventana de horas
+  `hourFrom`/`hourTo` (default 11-23).
+- Hora pico: la con más órdenes; hora más tranquila CON venta (>0 órdenes),
+  ambas dentro de la ventana horaria.
+
+------------------------------------------------------------
+1.5 Por categoría (reporte "category-sales")
+    Endpoint: api/reports/category-sales?from&to
+------------------------------------------------------------
+- Por categoría (MILK/WATER/SPECIAL): unidades, ingresos, participación % de
+  ingresos y precio promedio por ítem.
+- Mejor categoría por ingresos (solo si hay ingresos > 0).
+- No incluye topping revenue; solo unitPrice * quantity de items.
+
+------------------------------------------------------------
+1.6 Top productos (reporte "top-products")
+    Endpoint: api/reports/top-products?from&to&groupBy&metric&limit
+------------------------------------------------------------
+- `groupBy`: drink (combinación sabor·tamaño·boba), flavor, size, bobaType o
+  topping (agrega por topping en items).
+- `metric`: quantity | revenue para ordenar.
+- `limit` opcional (el cliente limita a 10 con "Top 10").
+- Cada fila: rank, key, unitsSold, revenue, unitPriceAvg (revenue/units).
+
+------------------------------------------------------------
+1.7 Baja rotación (reporte "slow-movers")
+    Endpoint: api/reports/slow-movers?from&to&limit&includeZero&toppings
+------------------------------------------------------------
+- Universo = matriz de precios vigente (DrinkPrice × Size × BobaType).
+- Para cada combinación calcula unidades e ingresos vendidos; los que vendieron
+  poco/poco salen primero (ascendente por unidades).
+- `includeZero` (default true) incluye combos sin ventas; `limit` default 10.
+- `toppings=true` analiza toppings en vez de bebidas (universo = tabla Topping).
+- Incluye campo `available` (¿está disponible en el menú?).
+
+------------------------------------------------------------
+1.8 Personal (reporte "staff-performance")
+    Endpoint: api/reports/staff-performance?from&to&userId
+------------------------------------------------------------
+- Requiere esquema de auditoría (hasAuditSchema, campo Order.userId).
+- Agrupa por usuario: órdenes procesadas, recaudado, ticket promedio y
+  participación % sobre el total recaudado del periodo.
+- Solo considera órdenes no anuladas; filtra por `userId` si se indica.
+
+------------------------------------------------------------
+1.9 Anulaciones y descuentos (reporte "adjustments")
+    Endpoint: api/reports/adjustments?from&to&type&userId&page
+------------------------------------------------------------
+- Requiere esquema de auditoría.
+- Lista de eventos: anulaciones (por cancelledAt) y descuentos (por discountedAt)
+  dentro del rango, con responsable (canceledBy/discountedBy, fallback user).
+- Sumario: nº de descuentos, total descontado, nº de anulaciones e ingreso
+  perdido (suma del total de anuladas).
+- Paginado (50/page) y exportable a CSV (todos los ítems, no solo la página).
+
+------------------------------------------------------------------------
+2. CÓDIGO FUENTE / EXTRACTOS CLAVE
+------------------------------------------------------------------------
+
+A) RUTA PÁGINA (server component):
+   apps/admin/app/(dashboard)/reports/page.tsx
+   ──────────────────────────────────────────────
+   import { ReportsClient } from "./reports-client";
+   export const metadata = { title: "Reportes — Bubba Admin" };
+   export default async function ReportsPage({ searchParams }) {
+     const { report } = await searchParams;
+     return <ReportsClient initialReport={report} />;
+   }
+   (La página es un "shell" delgado; toda la lógica vive en reports-client.tsx.)
+
+B) CLIENTE PRINCIPAL (client component):
+   apps/admin/app/(dashboard)/reports/reports-client.tsx (956 líneas)
+   ───────────────────────────────────────────────────────────────────
+   - Define REPORT_TABS con las 9 pestañas y si cada una usa rango de fechas.
+   - Estado: report, from (default hoy-6), to (default hoy), granularity (day),
+     hourFrom (11), hourTo (23), topOnly (bool).
+   - rangeQuery: construye query string según la pestaña activa.
+   - useEffect dispara `fetchData` a /api/reports/<endpoint> según la pestaña;
+     guardia `cancelled` para evitar carreras.
+   - Acciones de exportación/impresión:
+       * printSummaryReport() / printDailyReport(to)  (server actions)
+       * sendDailyReportToBot()  (cierre de caja a Telegram, desde 23:10)
+       * exportPdf(): html2canvas + jsPDF del área renderizada.
+       * exportExcel(): exportReportToExcel(report, payload, from, to).
+   - Componentes de vista por pestaña: DashboardView, DailyView,
+     SalesRangeView, PeakHoursView, CategorySalesView, TopProductsView,
+     SlowMoversView, StaffPerformanceView, AdjustmentsView.
+   - DataTable genérico con ordenamiento por columna.
+   - KpiCard para métricas resumidas.
+
+   Extracto clave del fetching dinámico:
+     const fetchData = useCallback(async <T,>(endpoint) => {
+       const res = await fetch(`/api/reports/${endpoint}`, { cache: "no-store" });
+       if (!res.ok) { /* lanza error con mensaje del envelope */ }
+       return (await res.json()).data;
+     }, []);
+
+     useEffect(() => {
+       let cancelled = false;
+       setFetched(null);
+       (async () => {
+         let result;
+         switch (report) {
+           case "dashboard":   result = await fetchData("dashboard-summary"); break;
+           case "daily":       result = await fetchData(`daily?date=${encodeURIComponent(to)}`); break;
+           case "sales-range": result = await fetchData(`sales-range?${rangeQuery}`); break;
+           case "peak-hours":  result = await fetchData(`peak-hours?${rangeQuery}`); break;
+           case "category-sales": result = await fetchData(`category-sales?${rangeQuery}`); break;
+           case "top-products": result = await fetchData<TopProductRow[]>(`top-products?${rangeQuery}`); break;
+           case "slow-movers": result = await fetchData<SlowMoverRow[]>(`slow-movers?${rangeQuery}`); break;
+           case "staff-performance": result = await fetchData<StaffPerformanceRow[]>(`staff-performance?${rangeQuery}`); break;
+           case "adjustments": result = await fetchData<AdjustmentsData>(`adjustments?${rangeQuery}`); break;
+         }
+         if (!cancelled) setFetched({ key: report, payload: result });
+       })();
+       return () => { cancelled = true; };
+     }, [report, rangeQuery, to, fetchData]);
+
+C) HELPERS COMPARTIDOS
+   - lib/reports/range.ts  : conversión de zona horaria, dayBounds, rangeBounds,
+     agrupación por día/semana ISO/mes, validación de fechas, MAX_RANGE_DAYS=366.
+   - lib/reports/params.ts : esquemas Zod de validación por endpoint.
+   - lib/reports/response.ts: ApiError, reportEnvelope, errores tipados.
+   - lib/reports/sales.ts   : notCancelled = { status: { not: "ANULADO" } }.
+   - lib/reports/guard.ts   : requireSession (NextAuth), hasAuditSchema.
+   - lib/reports/csv.ts     : buildCsv con BOM UTF-8 + csvResponse.
+   - lib/reports/excel.ts   : exportReportToExcel (xlsx), una función por pestaña.
+
+D) SERVER ACTIONS (impresión / envío)
+   - app/actions/print-report.ts : printSummaryReport() y printDailyReport(date)
+     re-ejecutan las mismas consultas Prisma que los endpoints y formatean el
+     texto térmico.
+   - app/actions/daily-report.ts : sendDailyReportToBot() con corte 23:10 y
+     envío único a Telegram (DailyReportLog por fecha).
+
+------------------------------------------------------------------------
+3. CONSULTAS A BASE DE DATOS (Prisma) QUE ALIMENTAN LAS PESTAÑAS
+------------------------------------------------------------------------
+
+[Regla general] "Ventas" = órdenes con status != ANULADO (notCancelled).
+Los rangos se expresan con { gte: <inicio UTC de día>, lt: <fin UTC de día> }
+calculados por dayBounds/rangeBounds en la zona America/La_Paz.
+
+MODELOS relevantes (schema.prisma):
+  Order { seq, status, total, createdAt, paidAt, deliveredAt, userId,
+          paymentMethod, paymentMethod2, paymentAmount2, discountAmount,
+          discountReason, discountedAt, discountedById, cancelledAt,
+          cancelReason, canceledById, delayNotified, items[] }
+  OrderItem { orderId, sizeName, flavorName, flavorCategory, bobaTypeName,
+              unitPrice, quantity, toppings[] }
+  OrderItemTopping { orderItemId, toppingName, unitPrice }
+  DrinkPrice { category, size, bobaType, price }
+  Size/BobaType/Topping { name, available }
+  User { id, username, name, role }
+
+------------------------------------------------------------------------
+3.1 dashboard-summary  (api/reports/dashboard-summary/route.ts)
+------------------------------------------------------------------------
+  // Rango del día local actual
+  const todayB = dayBounds(today);            // {gte, lt} en UTC
+  const yesterdayB = dayBounds(yesterdayDate);
+  const weekB = { gte: dayBounds(weekAgoDate).gte, lt: todayB.lt };
+
+  const [todayOrders, yesterdayOrders, weekOrders, pendingOrders] =
+    await Promise.all([
+      prisma.order.findMany({ where: { createdAt: { gte: todayB.gte, lt: todayB.lt },
+        ...notCancelled }, select: { total: true } }),
+      prisma.order.findMany({ where: { createdAt: { gte: yesterdayB.gte, lt: yesterdayB.lt },
+        ...notCancelled }, select: { total: true } }),
+      prisma.order.findMany({ where: { createdAt: { gte: weekB.gte, lt: weekB.lt },
+        ...notCancelled }, select: { total: true } }),
+      prisma.order.count({ where: { status: "RECIBIDO" } }),
+    ]);
+
+  // summarize() suma total y cuenta; avgTicket = revenue/orders (redondeado).
+  // deltaPct() = round(((cur - prev)/prev) * 1000)/10, null si prev <= 0.
+
+------------------------------------------------------------------------
+3.2 daily  (api/reports/daily/route.ts)
+------------------------------------------------------------------------
+  const bounds = dayBounds(date);
+  const [orders, cancelledAgg] = await Promise.all([
+    prisma.order.findMany({
+      where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled },
+      include: { items: { include: { toppings: true } } },
+    }),
+    prisma.order.count({
+      where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, status: "ANULADO" },
+    }),
+  ]);
+
+  // Luego agrega en memoria:
+  //  discountsTotal = Σ order.discountAmount ?? 0
+  //  Por método de pago: si paymentMethod2/paymentAmount2 => pago dividido
+  //    (amount1 = total - paymentAmount2, amount2 = paymentAmount2);
+  //    si no, todo al paymentMethod.
+  //  Por categoría: por cada item, row = byCategory.get(item.flavorCategory);
+  //    row.units += quantity; row.revenue += unitPrice * quantity;
+  //    y orderIds.add(order.id) (set único para contar órdenes).
+  //  itemsSold = Σ quantity; toppingsRevenue = Σ(Σ topping.unitPrice * quantity).
+
+------------------------------------------------------------------------
+3.3 sales-range  (api/reports/sales-range/route.ts)
+------------------------------------------------------------------------
+  const bounds = rangeBounds(query.from, query.to);      // [from 00:00, to+1 00:00)
+  const prev = previousPeriodRange(query.from, query.to); // periodo previo igual longitud
+  const prevBounds = rangeBounds(prev.from, prev.to);
+
+  const [orders, prevRevenueAgg] = await Promise.all([
+    prisma.order.findMany({
+      where: { createdAt: { gte: bounds.gte, lt: bounds.lt },
+        ...(query.status ? { status: query.status } : notCancelled) },
+      select: { createdAt: true, total: true },
+    }),
+    prisma.order.aggregate({
+      where: { createdAt: { gte: prevBounds.gte, lt: prevBounds.lt }, ...notCancelled },
+      _sum: { total: true },
+    }),
+  ]);
+
+  // bucketOf = dayKeyOf | isoWeekKeyOf | monthKeyOf (según granularity).
+  // Agrupa por bucket (órdenes, ingresos) y por día (para "mejor día").
+  // comparisonPrevPeriod.revenueDeltaPct = ((revenueTotal - prevRevenue)/prevRevenue)*1000/10
+  //   (solo si prevRevenue > 0).
+
+------------------------------------------------------------------------
+3.4 peak-hours  (api/reports/peak-hours/route.ts)
+------------------------------------------------------------------------
+  const orders = await prisma.order.findMany({
+    where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled },
+    select: { createdAt: true, total: true },
+  });
+
+  // Para cada order:
+  //   if (query.weekday !== undefined && weekdayIndex(order.createdAt) !== query.weekday) continue;
+  //   hour = hourOfDay(order.createdAt); hourly[hour].orders++; revenue += total;
+  // Filtra ventana [hourFrom, hourTo]; peak = max órdenes; quiet = min órdenes (>0).
+
+------------------------------------------------------------------------
+3.5 category-sales  (api/reports/category-sales/route.ts)
+------------------------------------------------------------------------
+  const items = await prisma.orderItem.findMany({
+    where: { order: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled } },
+    select: { flavorCategory: true, unitPrice: true, quantity: true },
+  });
+
+  // Inicializa totals por FlavorCategoryList (MILK/WATER/SPECIAL).
+  // entry.unitsSold += quantity; entry.revenue += unitPrice * quantity.
+  // sharePct = revenue/categoria / revenueAll * 1000 /10; bestCategory por revenue.
+
+------------------------------------------------------------------------
+3.6 top-products  (api/reports/top-products/route.ts)
+------------------------------------------------------------------------
+  // Para bebidas (groupBy != topping):
+  const items = await prisma.orderItem.findMany({
+    where: { order: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled } },
+    select: { sizeName: true, flavorName: true, bobaTypeName: true,
+              unitPrice: true, quantity: true },
+  });
+  // key según groupBy; acc.unitsSold += quantity; acc.revenue += unitPrice*quantity.
+
+  // Para toppings (groupBy == "topping"):
+  const items = await prisma.orderItem.findMany({
+    where: { order: { createdAt: { gte, lt }, ...notCancelled } },
+    select: { quantity: true, toppings: { select: { toppingName: true, unitPrice: true } } },
+  });
+  // Por topping: acc.unitsSold += quantity; acc.revenue += topping.unitPrice*quantity.
+
+  // rank(): ordena desc por metric, luego nombre asc; opcional slice(limit);
+  // unitPriceAvg = revenue/units.
+
+------------------------------------------------------------------------
+3.7 slow-movers  (api/reports/slow-movers/route.ts)
+------------------------------------------------------------------------
+  // Bebidas:
+  const [matrix, items] = await Promise.all([
+    prisma.drinkPrice.findMany({
+      select: { category: true,
+        size: { select: { name: true, available: true } },
+        bobaType: { select: { name: true, available: true } } },
+    }),
+    prisma.orderItem.findMany({
+      where: { order: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled } },
+      select: { flavorCategory: true, sizeName: true, bobaTypeName: true,
+                unitPrice: true, quantity: true },
+    }),
+  ]);
+  // soldByCombo[key = category·size·boba].  { unitsSold += qty, revenue += price*qty }
+  // Universidad: cada entrada de `matrix` (dedupe por combo) => fila con ventas (o 0),
+  //   available = size.available && bobaType.available.
+
+  // Toppings (query.toppings):
+  const [toppings, items] = await Promise.all([
+    prisma.topping.findMany({ select: { name: true, available: true } }),
+    prisma.orderItemTopping.findMany({
+      where: { orderItem: { order: { createdAt: { gte, lt }, ...notCancelled } } },
+      select: { toppingName: true, unitPrice: true, orderItem: { select: { quantity: true } } },
+    }),
+  ]);
+  // soldByName: unitsSold += orderItem.quantity; revenue += unitPrice*orderItem.quantity.
+
+  // respond(): filtra includeZero, ordena asc por units (luego revenue, luego key),
+  //   aplica slice(limit).
+
+------------------------------------------------------------------------
+3.8 staff-performance  (api/reports/staff-performance/route.ts)
+------------------------------------------------------------------------
+  // Guard: si !(await hasAuditSchema()) => 501 (no aplicada migración).
+  // Si query.userId: valida que exista el usuario (404 si no).
+  const orders = await prisma.order.findMany({
+    where: { createdAt: { gte: bounds.gte, lt: bounds.lt },
+      status: { not: OrderStatus.ANULADO },
+      ...(query.userId ? { userId: query.userId } : {}) },
+    select: { total: true, userId: true, user: { select: { id: true, name: true } } },
+  });
+  // revenueAll = Σ total.  byUser: ordersProcessed++, revenueTotal += total.
+  // Fila: avgTicket = revenueTotal/ordersProcessed;
+  //       shareOfRevenuePct = revenueTotal / revenueAll * 1000 /10.
+
+------------------------------------------------------------------------
+3.9 adjustments  (api/reports/adjustments/route.ts)
+------------------------------------------------------------------------
+  // Guard: if (!(await hasAuditSchema())) => 501.
+  const discountWhere = { discountedAt: { gte: bounds.gte, lt: bounds.lt },
+                           ...(query.userId ? { userId: query.userId } : {}) };
+  const cancellationWhere = { status: OrderStatus.ANULADO,
+                              cancelledAt: { gte: bounds.gte, lt: bounds.lt },
+                              ...(query.userId ? { userId: query.userId } : {}) };
+  const where = query.type === "discount" ? discountWhere
+              : query.type === "cancellation" ? cancellationWhere
+              : { OR: [discountWhere, cancellationWhere] };
+
+  const orders = await prisma.order.findMany({
+    where,
+    select: { id, seq, total, status, discountAmount, discountReason,
+              discountedAt, cancelledAt, cancelReason,
+              user: { id, name }, canceledBy: { id, name }, discountedBy: { id, name } },
+  });
+
+  // Itera: si ANULADO y cancelledAt => anulación (perdida += total, byUser=canceledBy??user);
+  //        si discountAmount>0 y discountedAt => descuento (total += discountAmount,
+  //        byUser=discountedBy??user).
+  // items ordenados por at desc; paginado PAGE_SIZE=50 (slice); en CSV exporta TODOS.
+
+------------------------------------------------------------------------
+4. OBSERVACIONES / NOTAS PARA EVALUACIÓN
+------------------------------------------------------------------------
+- Moneda entera (Bs) sin decimales en BD.
+- "Ingresos" de venta siempre excluyen anuladas; los reportes de ajustes
+  exponen las anuladas a parte (ingreso perdido).
+- Los descuentos se restan del total de la orden en origen; los programas de
+  ventas (dashboard/daily) muestran directamente `total`, no
+  "ingreso bruto - descuento" por separado.
+- staff-performance y adjustments dependen de que existan campos de auditoría
+  (Order.userId, canceledBy, discountedBy, discountedAt, cancelledAt) => si la
+  migración no está aplicada devuelven 501 NOT_IMPLEMENTED_SCHEMA.
+- dashboard-summary tiene cache en memoria de 30 s (no configurable por
+  request).
+- La zona horaria es fija a America/La_Paz (constante REPORT_TIMEZONE).
+- El cliente fija por defecto el rango "Últimos 7 días" (de hoy-6 a hoy) en las
+  pestañas que lo requieren; "Cierre diario"/"Resumen" usan el día actual.
+=======================================================================
+FIN DEL ANÁLISIS
+=======================================================================

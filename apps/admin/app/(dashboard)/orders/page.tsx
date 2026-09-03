@@ -19,13 +19,9 @@ export default async function OrdersPage({
   const currentStatus =
     status && status in OrderStatus ? (status as Order["status"]) : "ALL";
 
-  const where =
-    currentStatus === "ALL"
-      ? {}
-      : { status: currentStatus as (typeof OrderStatus)[keyof typeof OrderStatus] };
-
+  // Se cargan todos los pedidos y el filtrado por estado y fechas se hace en
+  // el cliente (OrdersClient), para que la lista se actualice sin recargar.
   const rawOrders = await prisma.order.findMany({
-    where,
     include: {
       items: { include: { toppings: true } },
       canceledBy: { select: { name: true, role: true } },

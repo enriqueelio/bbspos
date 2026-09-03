@@ -144,7 +144,12 @@ interface ComandaOrder {
   items: ComandaItem[];
 }
 
-const WIDTH = 30;
+// Ancho de la comanda en columnas de texto.
+// Se subió de 30 a 34 para que el precio quepa en la misma línea que el ítem.
+// El tamaño de letra NO cambia mientras la impresora acepte ~34 chars a 12pt;
+// si en la impresora real la letra sale muy chica, bajá este número (32 o 30)
+// para agrandarla (ver la fórmula `Math.Min(12, $availW/($maxLen*$cw)*12)` en printText).
+const WIDTH = 34;
 
 function repeat(ch: string, count: number): string {
   return ch.repeat(Math.max(0, count));
@@ -170,6 +175,31 @@ function row(left: string, right: string): string {
   return `${l}${repeat(" ", space)}${r}`;
 }
 
+// Fila con precio individual alineado a la derecha, con puntos de relleno.
+function pricedRow(label: string, price: number, indent = 0): string {
+  const right = money(price);
+  const prefix = repeat(" ", indent);
+  const l = truncate(`${prefix}${label}`, WIDTH - right.length - 1);
+  const dots = WIDTH - l.length - right.length;
+  const fill = dots >= 1 ? repeat(".", Math.max(1, dots)) : " ";
+  return `${l}${fill}${right}`;
+}
+
+const SIZE_SHORT: Record<string, string> = { Grande: "G", Extragrande: "XG" };
+const BOBA_SHORT: Record<string, string> = { Tapioca: "Tap", Explosivas: "Expl" };
+
+// Arma la línea del ítem usando abreviaturas de tamaño y boba para
+// que quepa el nombre del sabor junto al precio.
+function itemLabel(flavorName: string, sizeName: string, bobaTypeName: string): string {
+  const size = SIZE_SHORT[sizeName] ?? sizeName;
+  const boba = BOBA_SHORT[bobaTypeName] ?? bobaTypeName;
+  return `${flavorName} ${size} - ${boba}`;
+}
+
+function money(n: number): string {
+  return `Bs ${n}`;
+}
+
 function wrap(text: string, width: number): string[] {
   const words = toAscii(text).split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -191,7 +221,6 @@ function wrap(text: string, width: number): string[] {
 /** Formatea la comanda como texto plano para impresora de tickets. */
 export function formatComanda(order: ComandaOrder): string {
   const lines: string[] = [];
-  const money = (n: number) => `Bs ${n}`;
 
   lines.push(repeat("=", WIDTH));
   lines.push(centered("BUBBLE DRINK"));
@@ -213,20 +242,24 @@ export function formatComanda(order: ComandaOrder): string {
   lines.push(repeat("-", WIDTH));
 
   for (const item of order.items) {
-    lines.push(...wrap(`${item.quantity}x ${item.flavorName}`, WIDTH));
-    for (const l of wrap(`${item.sizeName} - ${item.bobaTypeName}`, WIDTH - 3)) {
-      lines.push(`   ${l}`);
-    }
+    const quantityLabel = item.quantity > 1 ? `${item.quantity}x ` : "";
+    const baseLabel = `${quantityLabel}${itemLabel(item.flavorName, item.sizeName, item.bobaTypeName)}`;
+    lines.push(pricedRow(baseLabel, item.unitPrice * item.quantity));
+    const toppingGroups = new Map<string, { count: number; total: number }>();
     for (const topping of item.toppings) {
-      for (const l of wrap(topping.toppingName, WIDTH - 5)) {
-        lines.push(`   + ${l}`);
-      }
+      const g = toppingGroups.get(topping.toppingName) ?? { count: 0, total: 0 };
+      g.count += 1;
+      g.total += topping.unitPrice;
+      toppingGroups.set(topping.toppingName, g);
     }
-    lines.push(row("", money(item.unitPrice * item.quantity)));
+    for (const [name, g] of toppingGroups) {
+      const label = g.count > 1 ? `${g.count}x + ${name}` : `+ ${name}`;
+      lines.push(pricedRow(label, g.total, 1));
+    }
   }
 
   lines.push(repeat("-", WIDTH));
-  lines.push(row("TOTAL:", money(order.total)));
+  lines.push(pricedRow("TOTAL", order.total));
   lines.push(repeat("=", WIDTH));
   lines.push(centered("Presente esta comanda"));
   lines.push(centered("en mostrador"));

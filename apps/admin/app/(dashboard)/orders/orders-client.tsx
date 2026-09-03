@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import {
   Badge,
   Button,
@@ -535,6 +534,64 @@ function OrderCard({
   );
 }
 
+function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function DateRangePicker({
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  from: string;
+  to: string;
+  onFromChange: (v: string) => void;
+  onToChange: (v: string) => void;
+}) {
+  const label = "block mb-1 text-xs font-medium uppercase tracking-wide text-slate-400";
+  const input =
+    "h-9 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-white [color-scheme:dark] focus:border-primary focus:outline-none";
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div>
+        <Label className={label}>Desde</Label>
+        <input
+          type="date"
+          className={input}
+          value={from}
+          max={to}
+          onChange={(e) => onFromChange(e.target.value)}
+        />
+      </div>
+      <div>
+        <Label className={label}>Hasta</Label>
+        <input
+          type="date"
+          className={input}
+          value={to}
+          min={from}
+          onChange={(e) => onToChange(e.target.value)}
+        />
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          const today = toISODate(new Date());
+          onFromChange(today);
+          onToChange(today);
+        }}
+      >
+        Hoy
+      </Button>
+    </div>
+  );
+}
+
 export function OrdersClient({
   orders,
   currentStatus,
@@ -544,6 +601,19 @@ export function OrdersClient({
   currentStatus: "ALL" | OrderStatus;
   statusLabels: Record<OrderStatus, string>;
 }) {
+  const today = toISODate(new Date());
+  const [status, setStatus] = useState<"ALL" | OrderStatus>(currentStatus);
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+
+  const filtered = orders.filter((order) => {
+    if (status !== "ALL" && order.status !== status) return false;
+    const t = new Date(order.createdAt).getTime();
+    const fromStart = new Date(`${from}T00:00:00`).getTime();
+    const toEnd = new Date(`${to}T23:59:59.999`).getTime();
+    return t >= fromStart && t <= toEnd;
+  });
+
   return (
     <div className="space-y-6">
       <div className="mb-6 border-b border-slate-800 pb-4">
@@ -553,26 +623,38 @@ export function OrdersClient({
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <Button
-            key={f.value}
-            variant={currentStatus === f.value ? "default" : "secondary"}
-            size="sm"
-            asChild
-          >
-            <Link
-              href={
-                f.value === "ALL" ? "/orders" : `/orders?status=${f.value}`
-              }
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => (
+            <Button
+              key={f.value}
+              variant={status === f.value ? "default" : "secondary"}
+              size="sm"
+              onClick={() => setStatus(f.value)}
             >
               {f.label}
-            </Link>
-          </Button>
-        ))}
+            </Button>
+          ))}
+        </div>
+        <DateRangePicker from={from} to={to} onFromChange={setFrom} onToChange={setTo} />
       </div>
 
-      {orders.length === 0 ? (
+      <p className="text-sm text-muted-foreground">
+        Mostrando{" "}
+        <span className="font-semibold text-white">{filtered.length}</span>{" "}
+        pedido(s) ·{" "}
+        {from === to
+          ? new Date(`${from}T12:00:00`).toLocaleDateString("es-MX", {
+              dateStyle: "long",
+            })
+          : `${new Date(`${from}T12:00:00`).toLocaleDateString("es-MX", {
+              dateStyle: "medium",
+            })} → ${new Date(`${to}T12:00:00`).toLocaleDateString("es-MX", {
+              dateStyle: "medium",
+            })}`}
+      </p>
+
+      {filtered.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
             No hay pedidos que mostrar.
@@ -580,7 +662,7 @@ export function OrdersClient({
         </Card>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => (
+          {filtered.map((order) => (
             <OrderCard key={order.id} order={order} statusLabels={statusLabels} />
           ))}
         </div>

@@ -15,6 +15,7 @@
     "db:seed": "pnpm --filter @bubba/db seed",
     "daily-report": "pnpm --filter @bubba/db daily-report",
     "telegram-alert": "pnpm --filter @bubba/db telegram-alert",
+    "rename-toppings": "pnpm --filter @bubba/db rename-toppings",
     "db:sync": "scripts\\db-sync.bat",
     "setup-env": "node scripts/setup-env.mjs",
     "proxy": "node scripts/https-proxy/proxy.mjs"

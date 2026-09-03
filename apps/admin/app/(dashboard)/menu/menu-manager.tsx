@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
   Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -51,6 +49,46 @@ import {
   updateSize,
   updateTopping,
 } from "@/app/actions/catalog";
+
+function CollapsibleCard({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 rounded-t-xl border-b border-slate-800 px-6 py-4 text-left transition-colors hover:bg-slate-900/50"
+      >
+        <span className="text-xl font-bold text-white">{title}</span>
+        <ChevronDown
+          className={cn(
+            "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-in-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="p-6">{children}</div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function CategoryToggles({
   selected,
@@ -132,74 +170,67 @@ function PriceMatrixEditor({
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          Matriz de precios · {FlavorCategoryLabel[category]}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {sizes.length === 0 || bobaTypes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Registra al menos un tamaño y un tipo de boba para cargar la matriz.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  <th className="px-2 py-1 text-left font-medium text-muted-foreground">
-                    Vaso / Boba
+    <div className="space-y-4">
+      {sizes.length === 0 || bobaTypes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Registra al menos un tamaño y un tipo de boba para cargar la matriz.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="px-2 py-1 text-left font-medium text-muted-foreground">
+                  Vaso / Boba
+                </th>
+                {bobaTypes.map((b) => (
+                  <th
+                    key={b.id}
+                    className="px-2 py-1 text-left font-medium text-muted-foreground"
+                  >
+                    {b.name}
                   </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sizes.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-2 py-1 font-medium">
+                    {s.name} · {s.oz} oz
+                  </td>
                   {bobaTypes.map((b) => (
-                    <th
-                      key={b.id}
-                      className="px-2 py-1 text-left font-medium text-muted-foreground"
-                    >
-                      {b.name}
-                    </th>
+                    <td key={b.id} className="px-2 py-1">
+                      <Input
+                        type="number"
+                        min="0"
+                        className="h-9 w-24"
+                        placeholder="Bs"
+                        value={values[`${s.id}-${b.id}`]}
+                        onChange={(e) =>
+                          setValues({
+                            ...values,
+                            [`${s.id}-${b.id}`]: e.target.value,
+                          })
+                        }
+                      />
+                    </td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {sizes.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-2 py-1 font-medium">
-                      {s.name} · {s.oz} oz
-                    </td>
-                    {bobaTypes.map((b) => (
-                      <td key={b.id} className="px-2 py-1">
-                        <Input
-                          type="number"
-                          min="0"
-                          className="h-9 w-24"
-                          placeholder="Bs"
-                          value={values[`${s.id}-${b.id}`]}
-                          onChange={(e) =>
-                            setValues({
-                              ...values,
-                              [`${s.id}-${b.id}`]: e.target.value,
-                            })
-                          }
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div className="flex justify-end">
-          <Button
-            onClick={save}
-            disabled={sizes.length === 0 || bobaTypes.length === 0}
-          >
-            Guardar matriz
-          </Button>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </CardContent>
-    </Card>
+      )}
+      <div className="flex justify-end">
+        <Button
+          onClick={save}
+          disabled={sizes.length === 0 || bobaTypes.length === 0}
+        >
+          Guardar matriz
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -290,11 +321,8 @@ export function MenuManager({
         </p>
       </div>
 
-      <Card>
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-xl font-bold text-white">Tamaños de vaso</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Tamaños de vaso">
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Input
               className="max-w-40"
@@ -380,14 +408,11 @@ export function MenuManager({
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-xl font-bold text-white">Sabores</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Sabores">
+        <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex flex-wrap gap-2">
               <Input
@@ -484,14 +509,11 @@ export function MenuManager({
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-xl font-bold text-white">Tipos de boba</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Tipos de boba">
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Input
               className="max-w-48"
@@ -585,14 +607,11 @@ export function MenuManager({
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
-      <Card>
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-xl font-bold text-white">Toppings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Toppings">
+        <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <Input
               className="max-w-48"
@@ -682,17 +701,21 @@ export function MenuManager({
               </p>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {FlavorCategoryList.map((category) => (
-        <PriceMatrixEditor
+        <CollapsibleCard
           key={category}
-          category={category}
-          sizes={sizes}
-          bobaTypes={bobaTypes}
-          initialPrices={drinkPrices.filter((p) => p.category === category)}
-        />
+          title={`Matriz de precios · ${FlavorCategoryLabel[category]}`}
+        >
+          <PriceMatrixEditor
+            category={category}
+            sizes={sizes}
+            bobaTypes={bobaTypes}
+            initialPrices={drinkPrices.filter((p) => p.category === category)}
+          />
+        </CollapsibleCard>
       ))}
 
       <Dialog

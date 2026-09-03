@@ -5,7 +5,9 @@ import {
   type AdjustmentsData,
   type CategorySalesData,
   type DailyReportData,
+  type DayTotalData,
   type PeakHoursData,
+  type PaymentsData,
   type SalesRangeData,
   type SlowMoverRow,
   type StaffPerformanceRow,
@@ -15,13 +17,15 @@ import {
 export type ReportKey =
   | "dashboard"
   | "daily"
+  | "day-total"
   | "sales-range"
   | "peak-hours"
   | "category-sales"
   | "top-products"
   | "slow-movers"
   | "staff-performance"
-  | "adjustments";
+  | "adjustments"
+  | "payments";
 
 function download(wb: XLSX.WorkBook, filename: string) {
   XLSX.writeFile(wb, filename + ".xlsx", { bookType: "xlsx" });
@@ -67,6 +71,23 @@ function handleDaily(data: DailyReportData, to: string) {
   }
 
   download(wb, `cierre-diario-${to}`);
+}
+
+function handleDayTotal(data: DayTotalData, from: string, to: string) {
+  const wb = XLSX.utils.book_new();
+
+  const summaryRows = [
+    { Concepto: "Ingresos totales (bruto)", Valor: data.revenueTotal },
+    { Concepto: "Órdenes totales", Valor: data.ordersTotal },
+    { Concepto: "Ingresos válidos (sin anuladas)", Valor: data.validRevenue },
+    { Concepto: "Anulaciones", Valor: data.cancellationsCount },
+    { Concepto: "Ingreso anulado", Valor: data.cancellationsRevenue },
+    { Concepto: "Ticket promedio", Valor: data.avgTicket },
+    { Concepto: "Ítems vendidos", Valor: data.itemsSold },
+  ];
+  XLSX.utils.book_append_sheet(wb, sheetFromRows("Resumen", summaryRows).ws, "Resumen");
+
+  download(wb, `venta-total-${from}_${to}`);
 }
 
 function handleSalesRange(data: SalesRangeData, from: string, to: string) {
@@ -214,6 +235,28 @@ function handleAdjustments(data: AdjustmentsData, from: string, to: string) {
   download(wb, `anulaciones-descuentos-${from}_${to}`);
 }
 
+function handlePayments(data: PaymentsData, from: string, to: string) {
+  const wb = XLSX.utils.book_new();
+
+  const summaryRows = [
+    { Concepto: "Ingresos totales", Valor: data.summary.revenueTotal },
+    { Concepto: "Órdenes", Valor: data.summary.ordersTotal },
+    { Concepto: "Métodos activos", Valor: data.summary.methodsCount },
+  ];
+  XLSX.utils.book_append_sheet(wb, sheetFromRows("Resumen", summaryRows).ws, "Resumen");
+
+  if (data.breakdown.length > 0) {
+    const rows = data.breakdown.map((r) => ({
+      "Método de pago": PaymentMethodLabel[r.method] ?? r.method,
+      Órdenes: r.orders,
+      Ingresos: r.revenue,
+    }));
+    XLSX.utils.book_append_sheet(wb, sheetFromRows("Por método", rows).ws, "Por método");
+  }
+
+  download(wb, `metodos-pago-${from}_${to}`);
+}
+
 export function exportReportToExcel(
   report: ReportKey,
   data: unknown,
@@ -223,6 +266,9 @@ export function exportReportToExcel(
   switch (report) {
     case "daily":
       handleDaily(data as DailyReportData, to);
+      break;
+    case "day-total":
+      handleDayTotal(data as DayTotalData, from, to);
       break;
     case "sales-range":
       handleSalesRange(data as SalesRangeData, from, to);
@@ -244,6 +290,9 @@ export function exportReportToExcel(
       break;
     case "adjustments":
       handleAdjustments(data as AdjustmentsData, from, to);
+      break;
+    case "payments":
+      handlePayments(data as PaymentsData, from, to);
       break;
     default:
       break;

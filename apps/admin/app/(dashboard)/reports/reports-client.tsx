@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { FileSpreadsheet, FileDown, Printer, Send } from "lucide-react";
+import { ChevronDown, FileSpreadsheet, FileDown, Printer, Send } from "lucide-react";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import {
@@ -25,14 +25,17 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  Label,
 } from "@bubba/ui";
 import type {
   AdjustmentsData,
   CategorySalesData,
   DailyReportData,
   DashboardSummaryData,
+  DayTotalData,
   Granularity,
   PeakHoursData,
+  PaymentsData,
   ReportEnvelope,
   SalesRangeData,
   SlowMoverRow,
@@ -49,17 +52,51 @@ import {
 } from "@bubba/types";
 import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
 
-const REPORT_TABS: { key: ReportKey; label: string; needsRange: boolean }[] = [
-  { key: "dashboard", label: "Resumen", needsRange: false },
-  { key: "daily", label: "Cierre diario", needsRange: false },
-  { key: "sales-range", label: "Evolución de ventas", needsRange: true },
-  { key: "peak-hours", label: "Horas pico", needsRange: true },
-  { key: "category-sales", label: "Por categoría", needsRange: true },
-  { key: "top-products", label: "Top productos", needsRange: true },
-  { key: "slow-movers", label: "Baja rotación", needsRange: true },
-  { key: "staff-performance", label: "Personal", needsRange: true },
-  { key: "adjustments", label: "Anulaciones y descuentos", needsRange: true },
+interface ReportTab {
+  key: ReportKey;
+  label: string;
+  needsRange: boolean;
+}
+
+interface ReportCategory {
+  key: string;
+  label: string;
+  tabs: ReportTab[];
+}
+
+const REPORT_GROUPS: ReportCategory[] = [
+  {
+    key: "financiero",
+    label: "Financiero",
+    tabs: [
+      { key: "dashboard", label: "Resumen", needsRange: false },
+      { key: "daily", label: "Cierre diario", needsRange: false },
+      { key: "sales-range", label: "Evolución de ventas", needsRange: true },
+      { key: "payments", label: "Métodos de pago", needsRange: true },
+    ],
+  },
+  {
+    key: "operativo",
+    label: "Operativo",
+    tabs: [
+      { key: "peak-hours", label: "Horas pico", needsRange: true },
+      { key: "top-products", label: "Top productos", needsRange: true },
+      { key: "category-sales", label: "Por categoría", needsRange: true },
+      { key: "day-total", label: "Toda la venta del día", needsRange: true },
+    ],
+  },
+  {
+    key: "auditoria",
+    label: "Auditoría y Control",
+    tabs: [
+      { key: "adjustments", label: "Anulaciones y descuentos", needsRange: true },
+      { key: "staff-performance", label: "Personal", needsRange: true },
+      { key: "slow-movers", label: "Baja rotación", needsRange: true },
+    ],
+  },
 ];
+
+const REPORT_TABS: ReportTab[] = REPORT_GROUPS.flatMap((g) => g.tabs);
 
 function todayStr(): string {
   return new Intl.DateTimeFormat("en-CA", {
@@ -79,6 +116,48 @@ function daysAgoStr(n: number): string {
     month: "2-digit",
     day: "2-digit",
   }).format(d);
+}
+
+function monthStartStr(current: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/La_Paz",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(current.getFullYear(), current.getMonth(), 1));
+}
+
+type RangePreset =
+  | "today"
+  | "yesterday"
+  | "last7"
+  | "month"
+  | "custom";
+
+const RANGE_PRESETS: { value: RangePreset; label: string }[] = [
+  { value: "today", label: "Hoy" },
+  { value: "yesterday", label: "Ayer" },
+  { value: "last7", label: "Últimos 7 días" },
+  { value: "month", label: "Este mes" },
+  { value: "custom", label: "Rango personalizado" },
+];
+
+function presetRange(
+  preset: RangePreset,
+): { from: string; to: string; isCustom: boolean } {
+  const today = todayStr();
+  switch (preset) {
+    case "today":
+      return { from: today, to: today, isCustom: false };
+    case "yesterday":
+      return { from: daysAgoStr(1), to: daysAgoStr(1), isCustom: false };
+    case "last7":
+      return { from: daysAgoStr(6), to: today, isCustom: false };
+    case "month":
+      return { from: monthStartStr(), to: today, isCustom: false };
+    default:
+      return { from: today, to: today, isCustom: true };
+  }
 }
 
 function pct(value: number | null | undefined): string {
@@ -130,6 +209,7 @@ export function ReportsClient({
     ? (initialReport as ReportKey)
     : "dashboard";
   const [report, setReport] = useState<ReportKey>(validInitial);
+  const [rangePreset, setRangePreset] = useState<RangePreset>("last7");
   const [from, setFrom] = useState(daysAgoStr(6));
   const [to, setTo] = useState(todayStr());
   const [granularity, setGranularity] = useState<Granularity>("day");
@@ -154,11 +234,6 @@ export function ReportsClient({
   const [isExportingPdf, setExportingPdf] = useState(false);
   const [isExportingExcel, setExportingExcel] = useState(false);
   const pdfAreaRef = useRef<HTMLDivElement>(null);
-
-  const tab = useMemo(
-    () => REPORT_TABS.find((t) => t.key === report)!,
-    [report],
-  );
 
   const rangeQuery = useMemo(() => {
     const params = new URLSearchParams({ from, to });
@@ -250,6 +325,12 @@ export function ReportsClient({
           break;
         case "adjustments":
           result = await fetchData<AdjustmentsData>(`adjustments?${rangeQuery}`);
+          break;
+        case "payments":
+          result = await fetchData<PaymentsData>(`payments?${rangeQuery}`);
+          break;
+        case "day-total":
+          result = await fetchData<DayTotalData>(`day-total?${rangeQuery}`);
           break;
       }
       if (!cancelled) setFetched({ key: report, payload: result });
@@ -402,55 +483,101 @@ export function ReportsClient({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {REPORT_TABS.map((t) => (
-          <Button
-            key={t.key}
-            size="sm"
-            variant={report === t.key ? "default" : "secondary"}
-            onClick={() => setReport(t.key)}
-          >
-            {t.label}
-          </Button>
-        ))}
-      </div>
+      {/* Filtro de fechas global (persistente en todas las pestañas). */}
+      <Card>
+        <CardContent className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Rango
+            </span>
+            {RANGE_PRESETS.map((p) => (
+              <Button
+                key={p.value}
+                size="sm"
+                variant={rangePreset === p.value ? "default" : "secondary"}
+                onClick={() => {
+                  setRangePreset(p.value);
+                  const r = presetRange(p.value);
+                  setFrom(r.from);
+                  setTo(r.to);
+                }}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
 
-      {tab.needsRange && (
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label htmlFor="reports-from" className="text-sm font-medium">
-              Desde
-            </label>
-            <Input
-              id="reports-from"
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
+          {rangePreset === "custom" && (
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="reports-from" className="text-sm font-medium">
+                  Desde
+                </Label>
+                <Input
+                  id="reports-from"
+                  type="date"
+                  value={from}
+                  onChange={(e) => {
+                    setFrom(e.target.value);
+                    if (e.target.value > to) setTo(e.target.value);
+                  }}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="reports-to" className="text-sm font-medium">
+                  Hasta
+                </Label>
+                <Input
+                  id="reports-to"
+                  type="date"
+                  value={to}
+                  onChange={(e) => {
+                    setTo(e.target.value);
+                    if (e.target.value < from) setFrom(e.target.value);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <span>
+              Desde{" "}
+              <span className="font-semibold text-white">
+                {new Date(`${from}T12:00:00`).toLocaleDateString("es-MX", {
+                  dateStyle: "medium",
+                })}
+              </span>{" "}
+              hasta{" "}
+              <span className="font-semibold text-white">
+                {new Date(`${to}T12:00:00`).toLocaleDateString("es-MX", {
+                  dateStyle: "medium",
+                })}
+              </span>
+            </span>
+            <span className="hidden sm:inline text-slate-500">·</span>
+            <span>
+              {from === to
+                ? "Un día específico"
+                : `${Math.round(
+                    (new Date(`${to}T12:00:00`).getTime() -
+                      new Date(`${from}T12:00:00`).getTime()) /
+                      86_400_000,
+                  ) + 1} días`}
+            </span>
           </div>
-          <div className="space-y-1">
-            <label htmlFor="reports-to" className="text-sm font-medium">
-              Hasta
-            </label>
-            <Input
-              id="reports-to"
-              type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
-          </div>
+
+          {/* Controles contextuales por pestaña. */}
           {report === "sales-range" && (
-            <div className="space-y-1">
-              <label htmlFor="reports-gran" className="text-sm font-medium">
+            <div className="border-t pt-3">
+              <Label htmlFor="reports-gran" className="text-sm font-medium">
                 Agrupar por
-              </label>
+              </Label>
               <select
                 id="reports-gran"
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                className="ml-3 h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
                 value={granularity}
-                onChange={(e) =>
-                  setGranularity(e.target.value as Granularity)
-                }
+                onChange={(e) => setGranularity(e.target.value as Granularity)}
               >
                 <option value="day">Día</option>
                 <option value="week">Semana</option>
@@ -458,69 +585,71 @@ export function ReportsClient({
               </select>
             </div>
           )}
-          {report === "peak-hours" && (
-            <>
-              <div className="space-y-1">
-                <label htmlFor="reports-hour-from" className="text-sm font-medium">
-                  Desde hora
-                </label>
-                <select
-                  id="reports-hour-from"
-                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-                  value={hourFrom}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setHourFrom(v);
-                    if (v > hourTo) setHourTo(v);
-                  }}
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {String(i).padStart(2, "0")}:00
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="reports-hour-to" className="text-sm font-medium">
-                  Hasta hora
-                </label>
-                <select
-                  id="reports-hour-to"
-                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-                  value={hourTo}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setHourTo(v);
-                    if (v < hourFrom) setHourFrom(v);
-                  }}
-                >
-                  {Array.from({ length: 24 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {String(i).padStart(2, "0")}:00
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
-      {report === "top-products" && (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={topOnly ? "default" : "outline"}
-            onClick={() => setTopOnly(!topOnly)}
-          >
-            {topOnly ? "Top 10" : "Todos los productos"}
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {topOnly ? "Mostrando los 10 más vendidos" : "Mostrando todos los productos"}
-          </span>
-        </div>
-      )}
+          {report === "peak-hours" && (
+            <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+              <Label htmlFor="reports-hour-from" className="text-sm font-medium">
+                Desde hora
+              </Label>
+              <select
+                id="reports-hour-from"
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                value={hourFrom}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setHourFrom(v);
+                  if (v > hourTo) setHourTo(v);
+                }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {String(i).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+              <Label htmlFor="reports-hour-to" className="text-sm font-medium">
+                Hasta hora
+              </Label>
+              <select
+                id="reports-hour-to"
+                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                value={hourTo}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setHourTo(v);
+                  if (v < hourFrom) setHourFrom(v);
+                }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {String(i).padStart(2, "0")}:00
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {report === "top-products" && (
+            <div className="flex items-center gap-2 border-t pt-3">
+              <Button
+                size="sm"
+                variant={topOnly ? "default" : "outline"}
+                onClick={() => setTopOnly(!topOnly)}
+              >
+                {topOnly ? "Top 10" : "Todos los productos"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {topOnly
+                  ? "Mostrando los 10 más vendidos"
+                  : "Mostrando todos los productos"}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Menú desplegable por categorías. */}
+      <ReportMenu group={REPORT_GROUPS} report={report} onSelect={setReport} />
 
       {loading && (
         <p className="text-sm text-muted-foreground">Cargando reporte…</p>
@@ -568,7 +697,83 @@ function ReportBody({ report, data }: { report: ReportKey; data: unknown }) {
       );
     case "adjustments":
       return <AdjustmentsView data={data as AdjustmentsData} />;
+    case "payments":
+      return <PaymentsView data={data as PaymentsData} />;
+    case "day-total":
+      return <DayTotalView data={data as DayTotalData} />;
   }
+}
+
+function ReportMenu({
+  group,
+  report,
+  onSelect,
+}: {
+  group: ReportCategory[];
+  report: ReportKey;
+  onSelect: (key: ReportKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const active = REPORT_TABS.find((t) => t.key === report);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-block">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="gap-2"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span className="text-muted-foreground">Reportes:</span>
+        <span className="font-medium">{active?.label}</span>
+        <ChevronDown
+          className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </Button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border bg-popover p-2 shadow-md">
+          {group.map((g, gi) => (
+            <div key={g.key} className={gi > 0 ? "mt-2 border-t border-border pt-2" : ""}>
+              <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {g.label}
+              </p>
+              {g.tabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`flex w-full items-center rounded-md py-1.5 pl-5 pr-2 text-left text-sm transition-colors ${
+                    report === t.key
+                      ? "bg-primary text-primary-foreground"
+                      : "text-slate-200 hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  onClick={() => {
+                    onSelect(t.key);
+                    setOpen(false);
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Column<T> = {
@@ -673,6 +878,16 @@ function DashboardView({ data }: { data: DashboardSummaryData }) {
   const delta = data.deltaPct ?? { revenue: null, orders: null };
   const last7 =
     data.last7Days ?? { revenue: 0, orders: 0, avgTicket: 0 };
+
+  const payments = data.paymentsToday ?? [];
+  const totalPaid = payments.reduce((acc, p) => acc + p.revenue, 0);
+  const shareOf = (revenue: number) =>
+    totalPaid > 0 ? Math.round((revenue / totalPaid) * 100) : 0;
+  const cash = payments.find((p) => p.method === "EFECTIVO");
+  const qr = payments.find((p) => p.method === "QR");
+  const cashPct = shareOf(cash?.revenue ?? 0);
+  const qrPct = shareOf(qr?.revenue ?? 0);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -689,6 +904,54 @@ function DashboardView({ data }: { data: DashboardSummaryData }) {
         <KpiCard label="Ticket promedio hoy" value={formatPrice(today.avgTicket)} />
         <KpiCard label="Pedidos pendientes" value={String(data.pendingOrders ?? 0)} />
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Anuladas hoy"
+          value={`${data.cancelledPct ?? 0}%`}
+          hint="tasa de pedidos anulados"
+        />
+        <KpiCard
+          label="Descuentos hoy"
+          value={formatPrice(data.discountsToday ?? 0)}
+          hint="promociones y cortesías"
+        />
+        <KpiCard
+          label="Entrega promedio"
+          value={`${data.avgDeliveryMinutes ?? 0} min`}
+          hint="createdAt → deliveredAt"
+        />
+        <KpiCard
+          label="Método preferido"
+          value={formatPrice(totalPaid)}
+          hint={`Efectivo ${cashPct}% · QR ${qrPct}%`}
+        />
+      </div>
+
+      {payments.length > 0 && (
+        <div className="space-y-2">
+          {payments.map((p) => {
+            const pctv = shareOf(p.revenue);
+            return (
+              <div key={p.method} className="flex items-center gap-3">
+                <span className="w-24 shrink-0 text-sm text-muted-foreground">
+                  {PaymentMethodLabel[p.method] ?? p.method}
+                </span>
+                <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${pctv}%` }}
+                  />
+                </div>
+                <span className="w-24 shrink-0 text-right text-sm text-white">
+                  {pctv}% · {formatPrice(p.revenue)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <KpiCard
         label="Últimos 7 días"
         value={formatPrice(last7.revenue)}
@@ -950,6 +1213,88 @@ function AdjustmentsView({ data }: { data: AdjustmentsData }) {
       <p className="text-xs text-muted-foreground">
         Página {pagination.page} de {pagination.totalPages} ·{" "}
         {pagination.totalItems} registros
+      </p>
+    </div>
+  );
+}
+
+function PaymentsView({ data }: { data: PaymentsData }) {
+  const summary = data.summary ?? {
+    revenueTotal: 0,
+    ordersTotal: 0,
+    methodsCount: 0,
+  };
+  const breakdown = data.breakdown ?? [];
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <KpiCard
+          label="Ingresos del rango"
+          value={formatPrice(summary.revenueTotal)}
+        />
+        <KpiCard label="Órdenes pagadas" value={String(summary.ordersTotal)} />
+        <KpiCard label="Métodos activos" value={String(summary.methodsCount)} />
+      </div>
+      <DataTable
+        columns={[
+          {
+            header: "Método de pago",
+            cell: (r) => PaymentMethodLabel[r.method] ?? r.method,
+            sortValue: (r) => PaymentMethodLabel[r.method] ?? r.method,
+          },
+          {
+            header: "Órdenes",
+            cell: (r) => r.orders,
+            numeric: true,
+            sortValue: (r) => r.orders,
+          },
+          {
+            header: "Ingresos",
+            cell: (r) => formatPrice(r.revenue),
+            numeric: true,
+            sortValue: (r) => r.revenue,
+          },
+        ]}
+        rows={breakdown}
+        emptyText="Sin pagos en el rango."
+      />
+    </div>
+  );
+}
+
+function DayTotalView({ data }: { data: DayTotalData }) {
+  const cancellationsPct =
+    data.revenueTotal > 0
+      ? Math.round((data.cancellationsRevenue / data.revenueTotal) * 100)
+      : 0;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label="Ingresos totales (bruto)"
+          value={formatPrice(data.revenueTotal)}
+        />
+        <KpiCard label="Órdenes totales" value={String(data.ordersTotal)} />
+        <KpiCard
+          label="Ingresos válidos (sin anuladas)"
+          value={formatPrice(data.validRevenue)}
+        />
+        <KpiCard label="Ticket promedio" value={formatPrice(data.avgTicket)} />
+        <KpiCard label="Ítems vendidos" value={String(data.itemsSold)} />
+        <KpiCard
+          label="Anulaciones"
+          value={String(data.cancellationsCount)}
+        />
+        <KpiCard
+          label="Ingreso anulado"
+          value={formatPrice(data.cancellationsRevenue)}
+        />
+        <KpiCard label="% anulado" value={`${cancellationsPct}%`} />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Venta bruta del rango sin discriminar nada: incluye todas las órdenes,
+        incluso las anuladas. Para la venta neta (excluye anulaciones) revisa
+        Cierre diario.
       </p>
     </div>
   );

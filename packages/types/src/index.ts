@@ -327,6 +327,16 @@ export interface PaymentBreakdownRow {
   revenue: number;
 }
 
+/** Reporte independiente de métodos de pago (EFECTIVO / QR / TARJETA). */
+export interface PaymentsData {
+  summary: {
+    revenueTotal: number;
+    ordersTotal: number;
+    methodsCount: number;
+  };
+  breakdown: PaymentBreakdownRow[];
+}
+
 export interface DailyReportData {
   date: string;
   revenueTotal: number;
@@ -338,6 +348,21 @@ export interface DailyReportData {
   paymentBreakdown: PaymentBreakdownRow[] | null;
   discountsTotal: number | null;
   cancellationsCount: number | null;
+}
+
+/**
+ * Venta bruta del rango sin discriminar nada: incluye TODAS las órdenes,
+ * incluidas las ANULADAS. Es la contraparte "total bruto" de los demás
+ * reportes que excluyen anulaciones.
+ */
+export interface DayTotalData {
+  revenueTotal: number;
+  ordersTotal: number;
+  cancellationsCount: number;
+  cancellationsRevenue: number;
+  validRevenue: number;
+  avgTicket: number;
+  itemsSold: number;
 }
 
 export interface SalesRangePoint {
@@ -430,6 +455,14 @@ export interface DashboardSummaryData {
   deltaPct: { revenue: number | null; orders: number | null };
   last7Days: { revenue: number; orders: number; avgTicket: number };
   pendingOrders: number;
+  /** % de órdenes anuladas hoy sobre el total de órdenes (incl. anuladas). */
+  cancelledPct: number;
+  /** Suma de descuentos emitidos hoy (Bs). */
+  discountsToday: number;
+  /** Desglose de ingresos/órdenes por método de pago hoy (pagos divididos incluidos). */
+  paymentsToday: PaymentBreakdownRow[];
+  /** Promedio de minutos entre createdAt y deliveredAt de hoy (0 si no hay). */
+  avgDeliveryMinutes: number;
 }
 
 /** Zona horaria del negocio (acorde a lib/day.ts y al worker de cierre). */

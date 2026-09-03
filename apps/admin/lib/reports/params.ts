@@ -76,6 +76,10 @@ export const peakHoursQuerySchema = rangeObject({
 
 export const categorySalesQuerySchema = rangeObject({ format: formatSchema });
 
+export const dayTotalQuerySchema = rangeObject({ format: formatSchema });
+
+export const paymentsQuerySchema = rangeObject({ format: formatSchema });
+
 export const topProductsQuerySchema = rangeObject({
   groupBy: z
     .enum(["drink", "flavor", "size", "bobaType", "topping"])
@@ -116,6 +120,8 @@ export type DailyQuery = z.infer<typeof dailyQuerySchema>;
 export type SalesRangeQuery = z.infer<typeof salesRangeQuerySchema>;
 export type PeakHoursQuery = z.infer<typeof peakHoursQuerySchema>;
 export type CategorySalesQuery = z.infer<typeof categorySalesQuerySchema>;
+export type PaymentsQuery = z.infer<typeof paymentsQuerySchema>;
+export type DayTotalQuery = z.infer<typeof dayTotalQuerySchema>;
 export type TopProductsQuery = z.infer<typeof topProductsQuerySchema>;
 export type SlowMoversQuery = z.infer<typeof slowMoversQuerySchema>;
 export type StaffPerformanceQuery = z.infer<typeof staffPerformanceQuerySchema>;

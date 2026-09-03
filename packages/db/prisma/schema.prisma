@@ -104,8 +104,11 @@ model Order {
   canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
   delayNotified  Boolean        @default(false)
 
+  @@index([createdAt])
   @@index([createdAt, status])
+  @@index([status, createdAt])
   @@index([deliveredAt])
+  @@index([userId])
   @@index([userId, status])
 }
 

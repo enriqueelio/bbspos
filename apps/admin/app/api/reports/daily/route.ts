@@ -17,6 +17,41 @@ const CATEGORY_LABELS: Record<string, string> = {
   SPECIAL: "Especiales",
 };
 
+// Filas devueltas por las consultas SQL nativas (SQLite devuelve agregaciones
+// como números enteros grandes; se normalizan con Number()).
+type CategoryRow = {
+  flavorCategory: string;
+  orders: number | bigint;
+  units: number | bigint;
+  revenue: number | bigint;
+};
+
+type ToppingsRow = {
+  value: number | bigint;
+};
+
+// Desglose por categoría (COUNT DISTINCT de órdenes, unidades e ingresos por
+// producto) delegado por completo a SQLite.
+const CATEGORY_SQL = `
+  SELECT oi."flavorCategory" AS flavorCategory,
+         COUNT(DISTINCT oi."orderId") AS orders,
+         COALESCE(SUM(oi."quantity"), 0) AS units,
+         COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
+  FROM "OrderItem" oi
+  JOIN "Order" o ON o.id = oi."orderId"
+  WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
+  GROUP BY oi."flavorCategory"
+`;
+
+// Ingreso por toppings (cada topping multiplicado por la cantidad del ítem).
+const TOPPINGS_SQL = `
+  SELECT COALESCE(SUM(t."unitPrice" * oi."quantity"), 0) AS value
+  FROM "OrderItemTopping" t
+  JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+  JOIN "Order" o ON o.id = oi."orderId"
+  WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
+`;
+
 export async function GET(request: Request) {
   return handleReportRoute(async () => {
     await requireSession();
@@ -39,27 +74,66 @@ export async function GET(request: Request) {
     })();
 
     const bounds = dayBounds(date);
+    const { gte, lt } = bounds;
 
-    const [orders, cancelledAgg] = await Promise.all([
-      prisma.order.findMany({
-        where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled },
-        include: { items: { include: { toppings: true } } },
-      }),
-      prisma.order.count({
-        where: {
-          createdAt: { gte: bounds.gte, lt: bounds.lt },
-          status: "ANULADO",
-        },
-      }),
-    ]);
+    // Todas las agregaciones se delegan a SQLite:
+    //  - resumen de órdenes y descuentos (order.aggregate)
+    //  - anulaciones (order.count)
+    //  - desglose por categoría e ingreso por toppings (SQL nativo)
+    //  - desglose por método de pago (solo campos ligeros, sin items/toppings)
+    const [orderAgg, cancelledAgg, catRows, toppingsRows, payments] =
+      await Promise.all([
+        prisma.order.aggregate({
+          where: { createdAt: { gte, lt }, ...notCancelled },
+          _sum: { total: true, discountAmount: true },
+          _count: { _all: true },
+        }),
+        prisma.order.count({
+          where: { createdAt: { gte, lt }, status: "ANULADO" },
+        }),
+        prisma.$queryRawUnsafe<CategoryRow[]>(CATEGORY_SQL, gte, lt),
+        prisma.$queryRawUnsafe<ToppingsRow[]>(TOPPINGS_SQL, gte, lt),
+        prisma.order.findMany({
+          where: { createdAt: { gte, lt }, ...notCancelled },
+          select: {
+            paymentMethod: true,
+            paymentMethod2: true,
+            paymentAmount2: true,
+            total: true,
+          },
+        }),
+      ]);
 
-    const discountsTotal = orders.reduce(
-      (acc, o) => acc + (o.discountAmount ?? 0),
-      0,
-    );
+    const revenueTotal = Number(orderAgg._sum.total ?? 0);
+    const ordersTotal = orderAgg._count._all;
+    const avgTicket =
+      ordersTotal > 0 ? Math.round(revenueTotal / ordersTotal) : 0;
+    const discountsTotal = Number(orderAgg._sum.discountAmount ?? 0);
+
+    const byCategoryMap = new Map<string, CategoryBreakdownRow & { units: number }>();
+    for (const category of FlavorCategoryList) {
+      byCategoryMap.set(category, {
+        category,
+        orders: 0,
+        units: 0,
+        revenue: 0,
+      });
+    }
+    let itemsSold = 0;
+    for (const row of catRows) {
+      const entry = byCategoryMap.get(row.flavorCategory);
+      if (!entry) continue;
+      const units = Number(row.units);
+      entry.orders = Number(row.orders);
+      entry.units = units;
+      entry.revenue = Number(row.revenue);
+      itemsSold += units;
+    }
+
+    const toppingsRevenue = Number(toppingsRows[0]?.value ?? 0);
 
     const paymentTotals = new Map<string, { orders: number; revenue: number }>();
-    for (const order of orders) {
+    for (const order of payments) {
       if (!order.paymentMethod) continue;
 
       if (order.paymentMethod2 && order.paymentAmount2 != null) {
@@ -86,41 +160,6 @@ export async function GET(request: Request) {
       .sort((a, b) => b[1].revenue - a[1].revenue)
       .map(([method, v]) => ({ method, ...v })) as DailyReportData["paymentBreakdown"];
 
-    const revenueTotal = orders.reduce((acc, o) => acc + o.total, 0);
-    const ordersTotal = orders.length;
-    const avgTicket =
-      ordersTotal > 0 ? Math.round(revenueTotal / ordersTotal) : 0;
-
-    let itemsSold = 0;
-    let toppingsRevenue = 0;
-    const byCategory = new Map<string, CategoryBreakdownRow & { orderIds: Set<string> }>();
-    for (const category of FlavorCategoryList) {
-      byCategory.set(category, {
-        category,
-        orders: 0,
-        units: 0,
-        revenue: 0,
-        orderIds: new Set(),
-      });
-    }
-
-    for (const order of orders) {
-      for (const item of order.items) {
-        itemsSold += item.quantity;
-        toppingsRevenue +=
-          item.toppings.reduce((acc, t) => acc + t.unitPrice, 0) *
-          item.quantity;
-
-        const row = byCategory.get(item.flavorCategory);
-        if (row) {
-          row.orderIds.add(order.id);
-          row.units += item.quantity;
-          row.revenue +=
-            item.unitPrice * item.quantity;
-        }
-      }
-    }
-
     const data: DailyReportData = {
       date: localDateKey(date),
       revenueTotal,
@@ -129,8 +168,8 @@ export async function GET(request: Request) {
       itemsSold,
       toppingsRevenue,
       byCategory: FlavorCategoryList.map((c) => {
-        const row = byCategory.get(c)!;
-        return { category: row.category, orders: row.orderIds.size, units: row.units, revenue: row.revenue };
+        const row = byCategoryMap.get(c)!;
+        return { category: row.category, orders: row.orders, units: row.units, revenue: row.revenue };
       }),
       paymentBreakdown,
       discountsTotal,

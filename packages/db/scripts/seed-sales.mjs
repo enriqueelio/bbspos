@@ -1,4 +1,5 @@
 /* Genera 500 ventas de ejemplo en un rango de ~30 días (8 ago → 2 sep 2026),
+ * todas ACEPTADAS → ENTREGADAS y COBRADAS (con paidAt y método de pago),
  * reutilizando el catálogo real (tamaños, sabores, bobas, toppings, precios y
  * usuarios). Conserva los pedidos ya existentes y continúa la secuencia `seq`.
  *
@@ -14,10 +15,6 @@ const CUSTOMERS = [
   "Valeria Cruz", "Nicolás Blanco", "Camila Suárez", "Rodrigo Mesa",
   "Andrea Quiroga", "Marcos Luna", "Paola Rivero", "Santiago Paredes",
   "Fernanda Cabrera", "Luis Montero", "Gabriela Arias", "Tomás Garrido",
-];
-
-const CANCEL_REASONS = [
-  "Cliente se retiró", "Sin insumos", "Pedido duplicado", "Cambio de pedido",
 ];
 
 const DISCOUNT_REASONS = [
@@ -95,19 +92,11 @@ async function main() {
     day.setUTCHours(0, 0, 0, 0);
     const createdAt = localDateTime(day.getTime());
 
-    const statusRoll = Math.random();
-    let status, deliveredAt = null, cancelledAt = null, cancelReason = null, paidAt = null;
-    if (statusRoll < 0.05) {
-      status = "RECIBIDO";
-    } else if (statusRoll < 0.885) {
-      status = "ENTREGADO";
-      deliveredAt = new Date(createdAt.getTime() + rand(8, 35) * 60_000);
-      paidAt = new Date(createdAt.getTime() + rand(1, 6) * 60_000);
-    } else {
-      status = "ANULADO";
-      cancelledAt = new Date(createdAt.getTime() + rand(2, 12) * 60_000);
-      cancelReason = pick(CANCEL_REASONS);
-    }
+    // Todos los pedidos quedan ACEPTADOS → ENTREGADOS y COBRADOS (sin ANULADO,
+    // sin pendientes en cola). El pago se registra (paidAt + paymentMethod).
+    const status = "ENTREGADO";
+    const paidAt = new Date(createdAt.getTime() + rand(1, 6) * 60_000);
+    const deliveredAt = new Date(createdAt.getTime() + rand(8, 35) * 60_000);
 
     const itemCount = rand(1, 3);
     const items = [];
@@ -143,37 +132,31 @@ async function main() {
       0,
     );
 
-    const isClosed = status === "ENTREGADO";
-    const hasDiscount = isClosed && Math.random() < 0.12;
+    const hasDiscount = Math.random() < 0.12;
     const discountAmount = hasDiscount
       ? Math.min(Math.round(total * rand(5, 20) / 100), total)
       : 0;
 
     // Pagos: EFECTIVO 45% · QR 40% · TARJETA 15%, con pagos divididos ocasionales.
     const method = weighted([[0.45, "EFECTIVO"], [0.4, "QR"], [0.15, "TARJETA"]]);
-    let paymentMethod = null, paymentMethod2 = null, paymentAmount2 = null;
-    if (isClosed) {
-      paymentMethod = method;
-      if (Math.random() < 0.08) {
-        const second = weighted([[0.5, "EFECTIVO"], [0.3, "QR"], [0.2, "TARJETA"]]);
-        if (second !== method) {
-          paymentMethod2 = second;
-          paymentAmount2 = Math.max(1, Math.round(total * rand(15, 50) / 100));
-        }
+    let paymentMethod = method, paymentMethod2 = null, paymentAmount2 = null;
+    if (Math.random() < 0.08) {
+      const second = weighted([[0.5, "EFECTIVO"], [0.3, "QR"], [0.2, "TARJETA"]]);
+      if (second !== method) {
+        paymentMethod2 = second;
+        paymentAmount2 = Math.max(1, Math.round(total * rand(15, 50) / 100));
       }
     }
 
     ordersData.push({
       seq: seq++,
       status,
-      customerName: status === "ANULADO" ? null : pick(CUSTOMERS),
+      customerName: pick(CUSTOMERS),
       deliveryType: pick(["MESA", "LLEVAR"]),
       total,
       createdAt,
       paidAt,
       deliveredAt,
-      cancelledAt,
-      cancelReason,
       userId: users.length ? pick(users).id : null,
       paymentMethod,
       paymentMethod2,
@@ -182,7 +165,6 @@ async function main() {
       discountReason: hasDiscount ? pick(DISCOUNT_REASONS) : null,
       discountedAt: hasDiscount ? deliveredAt : null,
       discountedById: hasDiscount && users.length ? pick(users).id : null,
-      canceledById: status === "ANULADO" && users.length ? pick(users).id : null,
       delayNotified: false,
       items,
     });

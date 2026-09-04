@@ -1,6 +1,6 @@
 {
-  "name": "Bubba Mesero — Toma de pedidos",
-  "short_name": "Bubba Mesero",
+  "name": "BBSPOS Mesero — Toma de pedidos",
+  "short_name": "BBSPOS Mesero",
   "description": "Terminal de toma de pedidos del mesero.",
   "start_url": "/",
   "display": "standalone",

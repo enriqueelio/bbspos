@@ -14,7 +14,7 @@ export default async function LoginPage({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700 text-lg font-bold text-white">
             B
           </div>
-          <h1 className="text-2xl font-bold">Bubba Cajero</h1>
+          <h1 className="text-2xl font-bold">BBSPOS Cajero</h1>
           <p className="text-sm text-muted-foreground">
             Acceso exclusivo del personal de mostrador.
           </p>

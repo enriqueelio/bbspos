@@ -29,7 +29,7 @@ export interface PosCartSnapshot {
 
 const listeners = new Set<() => void>();
 
-const STORAGE_KEY = "bubba-pos-cart";
+const STORAGE_KEY = "bbspos-pos-cart";
 
 function loadFromStorage(): Partial<PosCartSnapshot> {
   if (typeof window === "undefined") return {};

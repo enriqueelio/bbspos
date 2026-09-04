@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bubba Cajero — Mostrador",
+  title: "BBSPOS Cajero — Mostrador",
   description: "Pantalla del cajero: preparar, entregar y reporte del día.",
 };
 

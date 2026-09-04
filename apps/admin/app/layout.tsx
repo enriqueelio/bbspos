@@ -3,8 +3,8 @@ import { Toaster } from "@bbspos/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bubba Admin — Panel del restaurante",
-  description: "Panel de administración de Bubba Drinks.",
+  title: "BBSPOS Admin — Panel del restaurante",
+  description: "Panel de administración de BBSPOS Drinks.",
 };
 
 export default function RootLayout({

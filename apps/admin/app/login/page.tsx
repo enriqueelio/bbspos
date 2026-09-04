@@ -14,7 +14,7 @@ export default async function LoginPage({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-700 text-lg font-bold text-white">
             B
           </div>
-          <h1 className="text-2xl font-bold">Bubba Admin</h1>
+          <h1 className="text-2xl font-bold">BBSPOS Admin</h1>
           <p className="text-sm text-muted-foreground">
             Inicia sesión para gestionar tu restaurante.
           </p>

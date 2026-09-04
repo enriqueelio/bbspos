@@ -10,7 +10,7 @@ const withPWA = withPWAInit({
       urlPattern: /^https?.*\/api\/catalog/,
       handler: "NetworkFirst",
       options: {
-        cacheName: "bubba-catalog",
+        cacheName: "bbspos-catalog",
         expiration: {
           maxEntries: 1,
           maxAgeSeconds: 60 * 60 * 24,
@@ -25,7 +25,7 @@ const withPWA = withPWAInit({
       urlPattern: /^https?.*\/build/,
       handler: "NetworkFirst",
       options: {
-        cacheName: "bubba-build-page",
+        cacheName: "bbspos-build-page",
         expiration: {
           maxEntries: 1,
           maxAgeSeconds: 60 * 60 * 24,
@@ -40,7 +40,7 @@ const withPWA = withPWAInit({
       urlPattern: /^https?.*\/(?!api\/|_next\/|build\/).*/,
       handler: "NetworkFirst",
       options: {
-        cacheName: "bubba-pages",
+        cacheName: "bbspos-pages",
         expiration: {
           maxEntries: 10,
           maxAgeSeconds: 60 * 60 * 24,
@@ -55,7 +55,7 @@ const withPWA = withPWAInit({
       urlPattern: /\/_next\/static.+\.js$/,
       handler: "CacheFirst",
       options: {
-        cacheName: "bubba-static-js",
+        cacheName: "bbspos-static-js",
         expiration: {
           maxEntries: 60,
           maxAgeSeconds: 60 * 60 * 24 * 30,
@@ -66,7 +66,7 @@ const withPWA = withPWAInit({
       urlPattern: /^https?.*\/images\/.*/,
       handler: "CacheFirst",
       options: {
-        cacheName: "bubba-images",
+        cacheName: "bbspos-images",
         expiration: {
           maxEntries: 50,
           maxAgeSeconds: 60 * 60 * 24 * 30,

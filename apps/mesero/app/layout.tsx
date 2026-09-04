@@ -3,13 +3,13 @@ import "./globals.css";
 import ServiceWorkerRegister from "@/components/service-worker-register";
 
 export const metadata: Metadata = {
-  title: "Bubba Mesero — Toma de pedidos",
+  title: "BBSPOS Mesero — Toma de pedidos",
   description: "Terminal de toma de pedidos del mesero.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Bubba Mesero",
+    title: "BBSPOS Mesero",
   },
   icons: {
     icon: "/icon.svg",

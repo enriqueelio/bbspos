@@ -3,7 +3,7 @@ import { getRequiredSession } from "@/lib/session";
 import { UsersClient } from "./users-client";
 
 export const metadata = {
-  title: "Usuarios — Bubba Admin",
+  title: "Usuarios — BBSPOS Admin",
 };
 
 export default async function UsersPage() {

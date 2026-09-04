@@ -6,7 +6,7 @@ import {
 import { OrdersClient } from "./orders-client";
 
 export const metadata = {
-  title: "Pedidos — Bubba Admin",
+  title: "Pedidos — BBSPOS Admin",
 };
 
 export default async function OrdersPage({

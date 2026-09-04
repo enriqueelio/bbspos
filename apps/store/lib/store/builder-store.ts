@@ -48,7 +48,7 @@ export const useBuilderStore = create<BuilderState>()(
         }),
     }),
     {
-      name: "bubba-builder-v2",
+      name: "bbspos-builder-v2",
     },
   ),
 );

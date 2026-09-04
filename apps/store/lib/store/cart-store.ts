@@ -86,7 +86,7 @@ export const useCartStore = create<CartState>()(
       clear: () => set({ items: [], customerName: null, deliveryType: null }),
     }),
     {
-      name: "bubba-cart-v2",
+      name: "bbspos-cart-v2",
     },
   ),
 );

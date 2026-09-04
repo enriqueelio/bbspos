@@ -107,7 +107,7 @@ export function AdminNav({ userName }: { userName: string }) {
     <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
       <div className="flex items-center gap-2 font-bold">
         <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-700" />
-        <span>Bubba Admin</span>
+        <span>BBSPOS Admin</span>
       </div>
       <nav className="flex items-center gap-1">
         <NavLink href="/">Dashboard</NavLink>

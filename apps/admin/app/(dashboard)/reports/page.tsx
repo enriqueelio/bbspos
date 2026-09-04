@@ -1,7 +1,7 @@
 import { ReportsClient } from "./reports-client";
 
 export const metadata = {
-  title: "Reportes — Bubba Admin",
+  title: "Reportes — BBSPOS Admin",
 };
 
 export default async function ReportsPage({

@@ -1,7 +1,7 @@
 import { prisma } from "@bbspos/db";
 import { PaymentsClient } from "./payments-client";
 
-export const metadata = { title: "Pagos — Bubba Admin" };
+export const metadata = { title: "Pagos — BBSPOS Admin" };
 
 export default async function PaymentsPage() {
   const config = await prisma.paymentConfig.findUnique({

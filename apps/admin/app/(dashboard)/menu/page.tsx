@@ -2,7 +2,7 @@ import { prisma } from "@bbspos/db";
 import { MenuManager } from "./menu-manager";
 
 export const metadata = {
-  title: "Menú — Bubba Admin",
+  title: "Menú — BBSPOS Admin",
 };
 
 export default async function MenuPage() {

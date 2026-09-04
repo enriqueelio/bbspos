@@ -69,7 +69,7 @@ const REPORT_GROUPS: ReportCategory[] = [
     key: "financiero",
     label: "Financiero",
     tabs: [
-      { key: "dashboard", label: "Resumen", needsRange: false },
+      { key: "dashboard", label: "Resumen", needsRange: true },
       { key: "daily", label: "Cierre diario", needsRange: false },
       { key: "sales-range", label: "Evolución de ventas", needsRange: true },
       { key: "payments", label: "Métodos de pago", needsRange: true },
@@ -209,8 +209,8 @@ export function ReportsClient({
     ? (initialReport as ReportKey)
     : "dashboard";
   const [report, setReport] = useState<ReportKey>(validInitial);
-  const [rangePreset, setRangePreset] = useState<RangePreset>("last7");
-  const [from, setFrom] = useState(daysAgoStr(6));
+  const [rangePreset, setRangePreset] = useState<RangePreset>("today");
+  const [from, setFrom] = useState(todayStr());
   const [to, setTo] = useState(todayStr());
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [hourFrom, setHourFrom] = useState(11);
@@ -290,7 +290,9 @@ export function ReportsClient({
       let result: unknown = null;
       switch (report) {
         case "dashboard":
-          result = await fetchData<DashboardSummaryData>("dashboard-summary");
+          result = await fetchData<DashboardSummaryData>(
+            `dashboard-summary?${rangeQuery}`,
+          );
           break;
         case "daily":
           result = await fetchData<DailyReportData>(
@@ -874,62 +876,98 @@ function DataTable<T>({
 }
 
 function DashboardView({ data }: { data: DashboardSummaryData }) {
-  const today = data.today ?? { revenue: 0, orders: 0, avgTicket: 0 };
-  const delta = data.deltaPct ?? { revenue: null, orders: null };
-  const last7 =
-    data.last7Days ?? { revenue: 0, orders: 0, avgTicket: 0 };
-
   const payments = data.paymentsToday ?? [];
   const totalPaid = payments.reduce((acc, p) => acc + p.revenue, 0);
   const shareOf = (revenue: number) =>
     totalPaid > 0 ? Math.round((revenue / totalPaid) * 100) : 0;
   const cash = payments.find((p) => p.method === "EFECTIVO");
   const qr = payments.find((p) => p.method === "QR");
+  const tarjeta = payments.find((p) => p.method === "TARJETA");
   const cashPct = shareOf(cash?.revenue ?? 0);
   const qrPct = shareOf(qr?.revenue ?? 0);
+  const tarjetaPct = shareOf(tarjeta?.revenue ?? 0);
+
+  const peakHourLabel =
+    data.peakHour != null ? `${String(data.peakHour).padStart(2, "0")}:00` : "—";
+  const bestCatLabel = data.bestCategory
+    ? FlavorCategoryLabel[data.bestCategory] ?? data.bestCategory
+    : "—";
+
+  const staff = data.staffPerformance ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Row 1 — Core financial */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Ventas hoy"
-          value={formatPrice(today.revenue)}
-          hint={`vs ayer ${pct(delta.revenue)}`}
+          label="Ventas netas"
+          value={formatPrice(data.netSales)}
+          hint={`vs periodo anterior ${pct(data.growthPct)}`}
         />
         <KpiCard
-          label="Pedidos hoy"
-          value={String(today.orders)}
-          hint={`vs ayer ${pct(delta.orders)}`}
+          label="Ticket promedio"
+          value={formatPrice(data.avgTicket)}
         />
-        <KpiCard label="Ticket promedio hoy" value={formatPrice(today.avgTicket)} />
-        <KpiCard label="Pedidos pendientes" value={String(data.pendingOrders ?? 0)} />
+        <KpiCard
+          label="Ordenes procesadas"
+          value={String(data.ordersVolume)}
+        />
+        <KpiCard
+          label="Pedidos pendientes"
+          value={String(data.pendingOrders)}
+          hint="KDS live"
+        />
       </div>
 
+      {/* Row 2 — Operational KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Anuladas hoy"
-          value={`${data.cancelledPct ?? 0}%`}
-          hint="tasa de pedidos anulados"
+          label="Tasa anulaciones"
+          value={`${data.cancelledPct}%`}
+          hint={`Costo: ${formatPrice(data.cancellationsCost)}`}
         />
         <KpiCard
-          label="Descuentos hoy"
-          value={formatPrice(data.discountsToday ?? 0)}
-          hint="promociones y cortesías"
+          label="Descuentos"
+          value={formatPrice(data.discountsTotal)}
         />
         <KpiCard
           label="Entrega promedio"
-          value={`${data.avgDeliveryMinutes ?? 0} min`}
+          value={`${data.avgDeliveryMinutes} min`}
           hint="createdAt → deliveredAt"
         />
         <KpiCard
-          label="Método preferido"
-          value={formatPrice(totalPaid)}
-          hint={`Efectivo ${cashPct}% · QR ${qrPct}%`}
+          label="Hora pico"
+          value={peakHourLabel}
+          hint="Mayor facturacion"
         />
       </div>
 
+      {/* Row 3 — Category + Toppings + Menu */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Categoria estrella" value={bestCatLabel} />
+        <KpiCard
+          label="Toppings / Extras"
+          value={`${data.toppingsMarginPct}%`}
+          hint="Participacion sobre venta total"
+        />
+        <KpiCard
+          label="Rotacion del menu"
+          value={`${data.menuRotationPct}%`}
+          hint="Catalogo sin movimiento"
+        />
+        <KpiCard
+          label="Desc. vs ayer"
+          value={pct(data.deltaPct.revenue)}
+          hint="Crecimiento facturacion"
+        />
+      </div>
+
+      {/* Payment method breakdown */}
       {payments.length > 0 && (
-        <div className="space-y-2">
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 space-y-2">
+          <p className="text-sm font-medium text-muted-foreground mb-2">
+            Metodo de pago preferido
+          </p>
           {payments.map((p) => {
             const pctv = shareOf(p.revenue);
             return (
@@ -943,20 +981,51 @@ function DashboardView({ data }: { data: DashboardSummaryData }) {
                     style={{ width: `${pctv}%` }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right text-sm text-white">
+                <span className="w-32 shrink-0 text-right text-sm text-white">
                   {pctv}% · {formatPrice(p.revenue)}
                 </span>
               </div>
             );
           })}
+          <p className="text-xs text-muted-foreground pt-1">
+            Efectivo {cashPct}% · QR {qrPct}%
+            {tarjetaPct > 0 ? ` · Tarjeta ${tarjetaPct}%` : ""}
+          </p>
         </div>
       )}
 
-      <KpiCard
-        label="Últimos 7 días"
-        value={formatPrice(last7.revenue)}
-        hint={`${last7.orders} pedidos · ticket promedio ${formatPrice(last7.avgTicket)}`}
-      />
+      {/* Staff performance table */}
+      {staff.length > 0 && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4">
+          <p className="text-sm font-medium text-muted-foreground mb-3">
+            Rendimiento por empleado
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 text-left text-muted-foreground">
+                  <th className="pb-2 font-medium">Empleado</th>
+                  <th className="pb-2 font-medium text-right">Ordenes</th>
+                  <th className="pb-2 font-medium text-right">Recaudado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staff.map((s) => (
+                  <tr key={s.userId} className="border-b border-slate-800/50">
+                    <td className="py-2 text-white">{s.userName}</td>
+                    <td className="py-2 text-right text-white">
+                      {s.ordersProcessed}
+                    </td>
+                    <td className="py-2 text-right text-white">
+                      {formatPrice(s.revenueTotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

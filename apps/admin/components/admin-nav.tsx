@@ -28,8 +28,9 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 
 const SETTINGS_ITEMS = [
   { href: "/slideshow", label: "Carrusel" },
-  { href: "/payments", label: "Pagos" },
   { href: "/printer", label: "Impresora" },
+  { href: "/menu", label: "Menú" },
+  { href: "/payments", label: "Pagos" },
   { href: "/users", label: "Usuarios" },
 ];
 
@@ -110,7 +111,6 @@ export function AdminNav({ userName }: { userName: string }) {
       </div>
       <nav className="flex items-center gap-1">
         <NavLink href="/">Dashboard</NavLink>
-        <NavLink href="/menu">Menú</NavLink>
         <NavLink href="/orders">Pedidos</NavLink>
         <NavLink href="/reports">Reportes</NavLink>
       </nav>

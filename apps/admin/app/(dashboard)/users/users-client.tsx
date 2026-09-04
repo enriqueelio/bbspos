@@ -13,7 +13,10 @@ import {
 import {
   RoleLabel,
   RoleList,
+  ShiftLabel,
+  ShiftList,
   type Role,
+  type Shift,
   type StaffUser,
 } from "@bubba/types";
 import {
@@ -87,6 +90,7 @@ export function UsersClient({
                 <th className="px-4 py-2 font-medium">Nombre</th>
                 <th className="px-4 py-2 font-medium">Usuario</th>
                 <th className="px-4 py-2 font-medium">Rol</th>
+                <th className="px-4 py-2 font-medium">Turno</th>
                 <th className="px-4 py-2 font-medium">Estado</th>
                 <th className="px-4 py-2 font-medium text-right">Acciones</th>
               </tr>
@@ -104,6 +108,11 @@ export function UsersClient({
                   <td className="px-4 py-2">
                     <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>
                       {RoleLabel[user.role]}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge variant={user.shift === "SIN_TURNO" ? "secondary" : "default"}>
+                      {ShiftLabel[user.shift]}
                     </Badge>
                   </td>
                   <td className="px-4 py-2">
@@ -195,6 +204,7 @@ function UserDialog({
   const [name, setName] = useState(target?.name ?? "");
   const [username, setUsername] = useState(target?.username ?? "");
   const [role, setRole] = useState<Role>(target?.role ?? "CAJERO");
+  const [shift, setShift] = useState<Shift>(target?.shift ?? "SIN_TURNO");
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -210,10 +220,11 @@ function UserDialog({
           userId: target.id,
           name,
           role,
+          shift,
           newPassword: newPassword || undefined,
         });
       } else {
-        await createUser({ name, username, password, role });
+        await createUser({ name, username, password, role, shift });
       }
       onClose();
     }, (msg) => {
@@ -273,6 +284,22 @@ function UserDialog({
                 {RoleList.map((r) => (
                   <option key={r} value={r}>
                     {RoleLabel[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="u-shift">Turno</Label>
+              <select
+                id="u-shift"
+                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+                value={shift}
+                onChange={(e) => setShift(e.target.value as Shift)}
+              >
+                {ShiftList.map((s) => (
+                  <option key={s} value={s}>
+                    {ShiftLabel[s]}
                   </option>
                 ))}
               </select>

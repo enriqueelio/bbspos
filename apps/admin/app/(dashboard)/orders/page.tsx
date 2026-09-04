@@ -1,7 +1,6 @@
 import { prisma } from "@bubba/db";
 import {
   OrderStatus,
-  OrderStatusLabel,
   type Order,
 } from "@bubba/types";
 import { OrdersClient } from "./orders-client";
@@ -24,6 +23,7 @@ export default async function OrdersPage({
   const rawOrders = await prisma.order.findMany({
     include: {
       items: { include: { toppings: true } },
+      user: { select: { name: true, shift: true } },
       canceledBy: { select: { name: true, role: true } },
       discountedBy: { select: { name: true, role: true } },
     },
@@ -52,6 +52,8 @@ export default async function OrdersPage({
       })),
     })),
     userId: o.userId,
+    userName: o.user?.name ?? null,
+    userShift: (o.user?.shift as Order["userShift"]) ?? null,
     paymentMethod: o.paymentMethod ?? null,
     paymentMethod2: o.paymentMethod2 ?? null,
     paymentAmount2: o.paymentAmount2 ?? null,
@@ -71,7 +73,6 @@ export default async function OrdersPage({
     <OrdersClient
       orders={orders}
       currentStatus={currentStatus}
-      statusLabels={OrderStatusLabel}
     />
   );
 }

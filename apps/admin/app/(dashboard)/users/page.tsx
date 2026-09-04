@@ -16,6 +16,7 @@ export default async function UsersPage() {
         username: true,
         name: true,
         role: true,
+        shift: true,
         active: true,
       },
     }),

@@ -138,11 +138,28 @@ export const RoleLabel: Record<Role, string> = {
 
 export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO, Role.MESERO];
 
+export const Shift = {
+  MANANA: "MANANA",
+  TARDE: "TARDE",
+  SIN_TURNO: "SIN_TURNO",
+} as const;
+
+export type Shift = (typeof Shift)[keyof typeof Shift];
+
+export const ShiftLabel: Record<Shift, string> = {
+  MANANA: "Mañana",
+  TARDE: "Tarde",
+  SIN_TURNO: "Sin turno",
+};
+
+export const ShiftList: Shift[] = [Shift.MANANA, Shift.TARDE, Shift.SIN_TURNO];
+
 export interface StaffUser {
   id: string;
   username: string;
   name: string;
   role: Role;
+  shift: Shift;
   active: boolean;
 }
 
@@ -207,6 +224,7 @@ export interface Order {
   items: OrderItem[];
   userId?: string | null;
   userName?: string | null;
+  userShift?: Shift | null;
   paymentMethod?: PaymentMethod | null;
   paymentMethod2?: PaymentMethod | null;
   paymentAmount2?: number | null;
@@ -457,20 +475,49 @@ export interface CategorySalesData {
   bestCategory: FlavorCategory | null;
 }
 
+export interface DashboardEmployeeRow {
+  userId: string;
+  userName: string;
+  ordersProcessed: number;
+  revenueTotal: number;
+}
+
 export interface DashboardSummaryData {
   today: { revenue: number; orders: number; avgTicket: number };
   yesterday: { revenue: number; orders: number; avgTicket: number };
   deltaPct: { revenue: number | null; orders: number | null };
   last7Days: { revenue: number; orders: number; avgTicket: number };
-  pendingOrders: number;
-  /** % de órdenes anuladas hoy sobre el total de órdenes (incl. anuladas). */
+
+  /** 1. Ventas netas totales del periodo (Bs). */
+  netSales: number;
+  /** 2. Crecimiento vs periodo anterior (%). */
+  growthPct: number | null;
+  /** 3. Ticket promedio por orden (Bs). */
+  avgTicket: number;
+  /** 4. Volumen de ordenes procesadas. */
+  ordersVolume: number;
+  /** 5. Tasa de ordenes anuladas (%). */
   cancelledPct: number;
-  /** Suma de descuentos emitidos hoy (Bs). */
-  discountsToday: number;
-  /** Desglose de ingresos/órdenes por método de pago hoy (pagos divididos incluidos). */
+  /** 6. Monto total en descuentos (Bs). */
+  discountsTotal: number;
+  /** 7. Hora de mayor facturacion (0-23, null si sin datos). */
+  peakHour: number | null;
+  /** 8. Categoria estrella (MILK/WATER/SPECIAL, null si sin datos). */
+  bestCategory: FlavorCategory | null;
+  /** 9. Metodo de pago preferido (desglose porcentual). */
   paymentsToday: PaymentBreakdownRow[];
-  /** Promedio de minutos entre createdAt y deliveredAt de hoy (0 si no hay). */
+  /** 10. Tiempo promedio de entrega (minutos). */
   avgDeliveryMinutes: number;
+  /** 11. Pedidos pendientes / en cola (KDS live). */
+  pendingOrders: number;
+  /** 12. Rendimiento por empleado. */
+  staffPerformance: DashboardEmployeeRow[];
+  /** 13. Costo de anulaciones (Bs). */
+  cancellationsCost: number;
+  /** 14. Rotacion del menu (% sin movimiento). */
+  menuRotationPct: number;
+  /** 15. Margen de toppings / extras (% sobre venta total). */
+  toppingsMarginPct: number;
 }
 
 /** Zona horaria del negocio (acorde a lib/day.ts y al worker de cierre). */

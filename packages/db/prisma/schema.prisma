@@ -13,6 +13,7 @@ model User {
   name      String
   password  String
   role      Role     @default(CAJERO)
+  shift     Shift    @default(SIN_TURNO)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   orders    Order[]
@@ -170,6 +171,12 @@ enum Role {
   ADMIN
   CAJERO
   MESERO
+}
+
+enum Shift {
+  MANANA
+  TARDE
+  SIN_TURNO
 }
 
 enum PaymentMethod {

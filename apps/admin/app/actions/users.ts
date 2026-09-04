@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@bubba/db";
 import { hash } from "bcryptjs";
-import { Role, type Role as RoleType } from "@bubba/types";
+import { Role, Shift, type Role as RoleType, type Shift as ShiftType } from "@bubba/types";
 import { getRequiredSession } from "@/lib/session";
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -13,6 +13,13 @@ function parseRole(value: string): RoleType {
     throw new Error("Rol no válido.");
   }
   return value as RoleType;
+}
+
+function parseShift(value: string): ShiftType {
+  if (!Object.values(Shift).includes(value as ShiftType)) {
+    throw new Error("Turno no válido.");
+  }
+  return value as ShiftType;
 }
 
 async function requireAdminSession() {
@@ -95,6 +102,7 @@ export async function createUser(input: {
   username: string;
   password: string;
   role: string;
+  shift: string;
 }) {
   await requireAdminSession();
 
@@ -102,6 +110,7 @@ export async function createUser(input: {
   const username = input.username.trim().toLowerCase();
   const password = validatePassword(input.password);
   const role = parseRole(input.role);
+  const shift = parseShift(input.shift);
 
   if (!/^[a-z0-9_]+$/.test(username)) {
     throw new Error(
@@ -120,6 +129,7 @@ export async function createUser(input: {
       username,
       password: await hash(password, 10),
       role,
+      shift,
       active: true,
     },
   });
@@ -131,12 +141,14 @@ export async function updateUser(input: {
   userId: string;
   name: string;
   role: string;
+  shift: string;
   newPassword?: string;
 }) {
   const session = await requireAdminSession();
 
   const name = validateName(input.name);
   const role = parseRole(input.role);
+  const shift = parseShift(input.shift);
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
@@ -158,6 +170,7 @@ export async function updateUser(input: {
     data: {
       name,
       role,
+      shift,
       ...(input.newPassword
         ? { password: await hash(validatePassword(input.newPassword), 10) }
         : {}),

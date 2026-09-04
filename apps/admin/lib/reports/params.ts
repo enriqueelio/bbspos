@@ -78,6 +78,11 @@ export const categorySalesQuerySchema = rangeObject({ format: formatSchema });
 
 export const dayTotalQuerySchema = rangeObject({ format: formatSchema });
 
+export const dashboardQuerySchema = z.object({
+  from: localDate.optional(),
+  to: localDate.optional(),
+});
+
 export const paymentsQuerySchema = rangeObject({ format: formatSchema });
 
 export const topProductsQuerySchema = rangeObject({
@@ -116,6 +121,7 @@ export const adjustmentsQuerySchema = rangeObject({
   format: formatSchema,
 });
 
+export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
 export type DailyQuery = z.infer<typeof dailyQuerySchema>;
 export type SalesRangeQuery = z.infer<typeof salesRangeQuerySchema>;
 export type PeakHoursQuery = z.infer<typeof peakHoursQuerySchema>;

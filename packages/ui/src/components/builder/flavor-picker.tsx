@@ -1,5 +1,5 @@
-import type { Flavor, FlavorCategory } from "@bubba/types";
-import { FlavorCategoryLabel } from "@bubba/types";
+import type { Flavor, FlavorCategory } from "@bbspos/types";
+import { FlavorCategoryLabel } from "@bbspos/types";
 import { cn } from "../../lib/utils";
 import { Icon } from "@iconify/react";
 

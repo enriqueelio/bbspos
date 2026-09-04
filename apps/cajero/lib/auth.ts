@@ -1,8 +1,8 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
-import { prisma } from "@bubba/db";
-import { Role } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { Role } from "@bbspos/types";
 
 export const authOptions: NextAuthOptions = {
   session: {

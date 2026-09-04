@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { Catalog } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { Catalog } from "@bbspos/types";
 
 export async function getCatalog(): Promise<Catalog> {
   const [sizes, flavors, bobaTypes, drinkPrices, toppings] = await Promise.all([
@@ -37,4 +37,4 @@ export async function getCatalog(): Promise<Catalog> {
   };
 }
 
-export type { Catalog } from "@bubba/types";
+export type { Catalog } from "@bbspos/types";

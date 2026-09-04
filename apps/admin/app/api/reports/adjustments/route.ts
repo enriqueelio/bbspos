@@ -1,9 +1,9 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   OrderStatus,
   type AdjustmentItem,
   type AdjustmentsData,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

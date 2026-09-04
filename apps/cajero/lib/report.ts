@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import { OrderStatus, type CashierDailyData } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { OrderStatus, type CashierDailyData } from "@bbspos/types";
 import { dayBounds, todayKey } from "@/lib/day";
 
 function avgDeliveryMinutes(

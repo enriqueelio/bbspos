@@ -6,7 +6,7 @@ Monorepo de la tienda de bubble drinks "Bubba": una app de clientes para armar y
 
 - **Monorepo**: pnpm workspaces + Turborepo
 - **Apps**: Next.js 15 (App Router, TypeScript, Tailwind CSS)
-- **Paquetes compartidos**: `@bubba/config`, `@bubba/types`, `@bubba/db`, `@bubba/ui`
+- **Paquetes compartidos**: `@bbspos/config`, `@bbspos/types`, `@bbspos/db`, `@bbspos/ui`
 - **Base de datos**: Prisma (SQLite en desarrollo, configurable a Postgres)
 
 ## Estructura

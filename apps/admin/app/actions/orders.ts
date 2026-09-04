@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   AcceptablePayment,
   OrderStatus,
   type PaymentMethod as PaymentMethodType,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import {
   formatComanda,

@@ -5,7 +5,7 @@ import {
   type CashierDailyData,
   formatDurationMinutes,
   PaymentMethodLabel,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 const CONFIG_PATH = join(process.cwd(), "..", "store", "printing.json");
 

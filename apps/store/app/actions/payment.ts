@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 
 export async function getPaymentQr(): Promise<{ qrImage: string } | null> {
   const config = await prisma.paymentConfig.findUnique({

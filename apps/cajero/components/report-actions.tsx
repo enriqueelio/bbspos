@@ -2,8 +2,8 @@
 
 import { useEffect, useTransition, useState } from "react";
 import { Printer, FileDown, Send } from "lucide-react";
-import { Button } from "@bubba/ui";
-import { MANUAL_REPORT_CUTOFF, MANUAL_REPORT_CUTOFF_MINUTES, zonedClockMinutes } from "@bubba/types";
+import { Button } from "@bbspos/ui";
+import { MANUAL_REPORT_CUTOFF, MANUAL_REPORT_CUTOFF_MINUTES, zonedClockMinutes } from "@bbspos/types";
 import { printDailyReport } from "@/app/actions/printing";
 import { sendDailyReportToBot } from "@/app/actions/report";
 

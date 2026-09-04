@@ -42,7 +42,7 @@ Router refresh cada 15 s más refresh tras cada acción de entrega. *Alternativa
 
 ### D6. Reutilización de UI
 
-La app del cajero consume `@bubba/ui` (Badge, Button, Card, Input, Label), `@bubba/types` y `@bubba/db`; copia el patrón de estructura de `apps/admin` (layout con nav simple, página login, carpeta app router). Dos pestañas por query param `?tab=` (preparar | reporte), igual que el patrón existente.
+La app del cajero consume `@bbspos/ui` (Badge, Button, Card, Input, Label), `@bbspos/types` y `@bbspos/db`; copia el patrón de estructura de `apps/admin` (layout con nav simple, página login, carpeta app router). Dos pestañas por query param `?tab=` (preparar | reporte), igual que el patrón existente.
 
 ## Risks / Trade-offs
 

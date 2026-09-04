@@ -1,4 +1,4 @@
-import type { ReportMeta } from "@bubba/types";
+import type { ReportMeta } from "@bbspos/types";
 import { ZodError } from "zod";
 
 export const ERROR_CODES = {

@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
-import type { FlavorCategory } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { FlavorCategory } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 export async function createSize(input: { name: string; oz: number }) {

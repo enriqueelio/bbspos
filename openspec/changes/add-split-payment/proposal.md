@@ -8,7 +8,7 @@ Los clientes a veces pagan dividiendo el monto entre efectivo y QR (por ejemplo,
 - La Server Action `acceptOrder` acepta parámetros opcionales `method2` y `amount2` para soportar pagos divididos.
 - La interfaz del cajero (queue-view) agrega un botón "Cobro dividido" que abre un modal donde el cajero selecciona dos métodos de pago y asigna montos que sumen el total del pedido.
 - Los reportes de pago (daily, cashier report) contabilizan ambos métodos de pago: el monto de `paymentMethod` se registra completo y el monto de `paymentMethod2` se suma por separado.
-- El tipo `Order` en `@bubba/types` se extiende con los nuevos campos.
+- El tipo `Order` en `@bbspos/types` se extiende con los nuevos campos.
 
 ## Capabilities
 

@@ -1,5 +1,5 @@
-import type { CartItem } from "@bubba/types";
-import { formatPrice, sumToppings } from "@bubba/types";
+import type { CartItem } from "@bbspos/types";
+import { formatPrice, sumToppings } from "@bbspos/types";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card";
 
 export interface CartSummaryProps {

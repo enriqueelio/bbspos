@@ -9,7 +9,7 @@ import type {
   Flavor,
   FlavorCategory,
   Size,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 export interface AddItemInput {
   size: Size;

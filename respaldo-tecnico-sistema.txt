@@ -22,15 +22,15 @@ Configuracion      : pnpm-workspace.yaml
 
   bubba/
   ├── apps/
-  │   ├── store/        @bubba/store     (Puerto 3000 / HTTPS 8443)
-  │   ├── admin/        @bubba/admin     (Puerto 3001 / HTTPS 8444)
-  │   ├── cajero/       @bubba/cajero    (Puerto 3002 / HTTPS 8445)
-  │   └── mesero/       @bubba/mesero    (Puerto 3003 / HTTPS 8446)
+  │   ├── store/        @bbspos/store     (Puerto 3000 / HTTPS 8443)
+  │   ├── admin/        @bbspos/admin     (Puerto 3001 / HTTPS 8444)
+  │   ├── cajero/       @bbspos/cajero    (Puerto 3002 / HTTPS 8445)
+  │   └── mesero/       @bbspos/mesero    (Puerto 3003 / HTTPS 8446)
   ├── packages/
-  │   ├── config/       @bubba/config    (Preset Tailwind compartido + tsconfigs)
-  │   ├── db/           @bubba/db        (Prisma client, schema, seed, workers)
-  │   ├── types/        @bubba/types     (Enums, interfaces, helpers de formato)
-  │   └── ui/           @bubba/ui        (Componentes shadcn/ui + builder)
+  │   ├── config/       @bbspos/config    (Preset Tailwind compartido + tsconfigs)
+  │   ├── db/           @bbspos/db        (Prisma client, schema, seed, workers)
+  │   ├── types/        @bbspos/types     (Enums, interfaces, helpers de formato)
+  │   └── ui/           @bbspos/ui        (Componentes shadcn/ui + builder)
   ├── scripts/          (db-sync.bat, setup-env.mjs, https-proxy/)
   ├── docs/
   ├── indicaciones/     (Notas de diseno, prompts maestros, SQL de respaldo)
@@ -82,11 +82,11 @@ Cada app (store, admin, cajero, mesero) sigue:
 
 1.4 PAQUETES COMPARTIDOS
 -------------------------
-@bubba/config:
+@bbspos/config:
   - packages/config/src/tailwind.ts  (preset de tema: colores boba, tokens HSL)
   - tsconfig.base.json / tsconfig.next.json / tsconfig.json
 
-@bubba/db:
+@bbspos/db:
   - prisma/schema.prisma             (10 modelos, 7 enums, 19 migraciones)
   - prisma/seed.ts                   (Sizes, Flavors, BobaTypes, Prices, Users)
   - src/index.ts                     (PrismaClient singleton + re-exports)
@@ -95,11 +95,11 @@ Cada app (store, admin, cajero, mesero) sigue:
   - scripts/daily-report-worker.ts   (Worker loop 60s — cierre diario)
   - scripts/telegram-alert-worker.ts (Worker loop 60s — pedidos atrasados)
 
-@bubba/types:
+@bbspos/types:
   - src/index.ts                     (Enums, interfaces, BUSINESS_TIME_ZONE,
                                       helpers: zonedClockMinutes, formatCurrency, etc.)
 
-@bubba/ui:
+@bbspos/ui:
   - src/components/ui/               (badge, button, card, dialog, input, label, select, toast)
   - src/components/builder/          (boba-picker, flavor-picker, size-selector, step-indicator)
   - src/components/cart/             (cart-item, cart-summary, quantity-control)
@@ -695,7 +695,7 @@ A. REPORTE DIARIO DE CIERRE
     - Calcula fecha objetivo: dia actual si ya paso DAILY_REPORT_HOUR, sino dia anterior
       (recupera dias perdidos si el container estuvo caido)
     - Flags CLI: --date=YYYY-MM-DD (envio especifico), --dry-run=YYYY-MM-DD (sin enviar)
-    - Soporte en pnpm: pnpm daily-report (root) → pnpm --filter @bubba/db daily-report
+    - Soporte en pnpm: pnpm daily-report (root) → pnpm --filter @bbspos/db daily-report
 
   Triggers manuales (habilitados solo despues de 23:10):
     - Cajero: apps/cajero/app/actions/report.ts → sendDailyReportToBot()

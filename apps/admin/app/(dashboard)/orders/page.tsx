@@ -1,8 +1,8 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   OrderStatus,
   type Order,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { OrdersClient } from "./orders-client";
 
 export const metadata = {

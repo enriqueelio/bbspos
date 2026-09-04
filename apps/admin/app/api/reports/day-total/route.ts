@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { DayTotalData, DayTotalOrderRow } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { DayTotalData, DayTotalOrderRow } from "@bbspos/types";
 import {
   dayTotalQuerySchema,
   parseSearchParams,

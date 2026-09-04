@@ -26,7 +26,7 @@ import {
   CardTitle,
   Input,
   Label,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import type {
   AdjustmentsData,
   CategorySalesData,
@@ -41,7 +41,7 @@ import type {
   SlowMoverRow,
   StaffPerformanceRow,
   TopProductRow,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   FlavorCategoryLabel,
   formatPrice,
@@ -49,7 +49,7 @@ import {
   MANUAL_REPORT_CUTOFF,
   MANUAL_REPORT_CUTOFF_MINUTES,
   zonedClockMinutes,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
 
 interface ReportTab {

@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import { FlavorCategoryList, type CategorySalesData } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { FlavorCategoryList, type CategorySalesData } from "@bbspos/types";
 import {
   assertRange,
   categorySalesQuerySchema,

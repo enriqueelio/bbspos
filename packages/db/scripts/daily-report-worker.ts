@@ -1,7 +1,7 @@
 // Worker de cierre de caja: envía el reporte del día a Telegram cuando el
 // reloj local supera DAILY_REPORT_HOUR (default 23:20). Corre en segundo plano
 // dentro del contenedor (docker-entrypoint.sh). Toda la lógica vive en
-// @bubba/db/src/daily-report.ts (misma fuente que los botones manuales).
+// @bbspos/db/src/daily-report.ts (misma fuente que los botones manuales).
 //
 // Uso:
 //   tsx daily-report-worker.ts                    -> bucle del servicio

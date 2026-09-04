@@ -8,7 +8,7 @@ import type {
   Flavor,
   FlavorCategory,
   Size,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 export type PosDeliveryType = "MESA" | "LLEVAR";
 

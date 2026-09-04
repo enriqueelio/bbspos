@@ -78,7 +78,7 @@ const withPWA = withPWAInit({
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@bubba/db", "@bubba/ui", "@bubba/types"],
+  transpilePackages: ["@bbspos/db", "@bbspos/ui", "@bbspos/types"],
 };
 
 export default withPWA(nextConfig);

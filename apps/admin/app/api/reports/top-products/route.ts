@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { TopProductRow, TopProductsGroupBy } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { TopProductRow, TopProductsGroupBy } from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

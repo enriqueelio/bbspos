@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { PeakHoursData } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { PeakHoursData } from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

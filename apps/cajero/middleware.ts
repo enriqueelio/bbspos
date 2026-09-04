@@ -1,5 +1,5 @@
 import { withAuth } from "next-auth/middleware";
-import { Role } from "@bubba/types";
+import { Role } from "@bbspos/types";
 
 // Debe coincidir con la configuración de cookies de lib/auth.ts para que
 // el middleware lea el mismo sessionToken personalizado.

@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { prisma } from "@bubba/db";
-import { OrderStatusLabel, formatPrice, formatOrderCode } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { OrderStatusLabel, formatPrice, formatOrderCode } from "@bbspos/types";
 import {
   Badge,
   Button,
   Card,
   CardContent,
   CardTitle,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 
 function statusVariant(status: string) {
   switch (status) {

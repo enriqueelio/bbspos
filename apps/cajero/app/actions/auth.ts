@@ -2,7 +2,7 @@
 
 import { getServerSession } from "next-auth";
 import { compare } from "bcryptjs";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { authOptions } from "@/lib/auth";
 import { hasCashierAccess } from "@/lib/session";
 

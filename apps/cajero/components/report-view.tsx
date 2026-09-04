@@ -3,13 +3,13 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   formatPrice,
   formatDurationMinutes,
   PaymentMethodLabel,
   type CashierDailyData,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (

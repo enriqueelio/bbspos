@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { getRequiredSession } from "@/lib/session";
 
 const MAX_QR_BYTES = 2 * 1024 * 1024;

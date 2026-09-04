@@ -30,13 +30,13 @@ importers:
 
   apps/admin:
     dependencies:
-      '@bubba/db':
+      '@bbspos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@bubba/types':
+      '@bbspos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@bubba/ui':
+      '@bbspos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       bcryptjs:
@@ -70,7 +70,7 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@bubba/config':
+      '@bbspos/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/bcryptjs':
@@ -106,13 +106,13 @@ importers:
 
   apps/cajero:
     dependencies:
-      '@bubba/db':
+      '@bbspos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@bubba/types':
+      '@bbspos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@bubba/ui':
+      '@bbspos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       bcryptjs:
@@ -134,7 +134,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
-      '@bubba/config':
+      '@bbspos/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/bcryptjs':
@@ -170,13 +170,13 @@ importers:
 
   apps/mesero:
     dependencies:
-      '@bubba/db':
+      '@bbspos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@bubba/types':
+      '@bbspos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@bubba/ui':
+      '@bbspos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       bcryptjs:
@@ -198,7 +198,7 @@ importers:
         specifier: ^19.0.0
         version: 19.2.8(react@19.2.8)
     devDependencies:
-      '@bubba/config':
+      '@bbspos/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/bcryptjs':
@@ -234,13 +234,13 @@ importers:
 
   apps/store:
     dependencies:
-      '@bubba/db':
+      '@bbspos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@bubba/types':
+      '@bbspos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@bubba/ui':
+      '@bbspos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@ducanh2912/next-pwa':
@@ -262,7 +262,7 @@ importers:
         specifier: ^5.0.3
         version: 5.0.15(@types/react@19.2.18)(react@19.2.8)
     devDependencies:
-      '@bubba/config':
+      '@bbspos/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/node':
@@ -356,7 +356,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@bubba/types':
+      '@bbspos/types':
         specifier: workspace:*
         version: link:../types
       '@radix-ui/react-dialog':

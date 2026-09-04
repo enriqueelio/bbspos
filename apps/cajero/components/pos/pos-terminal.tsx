@@ -14,7 +14,7 @@ import {
   type Role as RoleType,
   type Size,
   type Topping,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { createPosOrder } from "@/actions/pos";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 

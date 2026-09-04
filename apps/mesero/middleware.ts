@@ -1,5 +1,5 @@
 import { withAuth } from "next-auth/middleware";
-import { Role } from "@bubba/types";
+import { Role } from "@bbspos/types";
 
 const sessionCookie = {
   name:

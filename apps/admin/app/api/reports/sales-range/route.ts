@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { SalesRangeData, SalesRangePoint } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { SalesRangeData, SalesRangePoint } from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

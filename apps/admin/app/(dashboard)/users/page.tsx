@@ -1,4 +1,4 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { getRequiredSession } from "@/lib/session";
 import { UsersClient } from "./users-client";
 

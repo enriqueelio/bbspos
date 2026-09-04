@@ -26,7 +26,7 @@ if /i "%MODE%"=="migrate" (
         if errorlevel 1 goto :fail
     ) else (
         echo [db-sync] Creando migracion "%MIGNAME%"...
-        call pnpm --filter @bubba/db exec prisma migrate dev --name "%MIGNAME%"
+        call pnpm --filter @bbspos/db exec prisma migrate dev --name "%MIGNAME%"
         if errorlevel 1 goto :fail
     )
 ) else (

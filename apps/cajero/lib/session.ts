@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { Role, type Role as RoleType } from "@bubba/types";
+import { Role, type Role as RoleType } from "@bbspos/types";
 
 export async function getRequiredSession() {
   const session = await getServerSession(authOptions);

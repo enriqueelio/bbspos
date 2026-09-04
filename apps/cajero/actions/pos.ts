@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   OrderStatus,
   sumToppings,
   type CartItem,
   type Catalog,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 

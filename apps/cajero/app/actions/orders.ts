@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   AcceptablePayment,
   OrderStatus,
   Role,
   type PaymentMethod as PaymentMethodType,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 /** Registra el pago de un pedido. Al cobrar un pedido RECIBIDO (proveniente

@@ -1,6 +1,6 @@
 ## Context
 
-La app del cajero (`apps/cajero`) es una aplicación Next.js + TypeScript + Tailwind que usa NextAuth (JWT) para autenticación por rol. Comparte tipos y esquema Prisma con el monorepo (`@bubba/db`, `@bubba/types`, `@bubba/ui`). El estado actual incluye cola de pedidos (`queue-view.tsx`), reporte diario, impresión térmica (`lib/printing.ts`), y persistencia de impresora en `apps/store/printing.json`. Los roles actuales `ADMIN | CAJERO` se extienden para incluir `MESERO`.
+La app del cajero (`apps/cajero`) es una aplicación Next.js + TypeScript + Tailwind que usa NextAuth (JWT) para autenticación por rol. Comparte tipos y esquema Prisma con el monorepo (`@bbspos/db`, `@bbspos/types`, `@bbspos/ui`). El estado actual incluye cola de pedidos (`queue-view.tsx`), reporte diario, impresión térmica (`lib/printing.ts`), y persistencia de impresora en `apps/store/printing.json`. Los roles actuales `ADMIN | CAJERO` se extienden para incluir `MESERO`.
 
 ## Goals / Non-Goals
 

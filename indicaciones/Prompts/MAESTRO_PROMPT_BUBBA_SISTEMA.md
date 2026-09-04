@@ -18,7 +18,7 @@ Actúa como un desarrollador full-stack de Next.js. Recrea EXACTAMENTE el sistem
   - `apps/cajero` — aplicación principal (puerto distinto), contiene el Módulo Mesero y el Módulo Cajero.
   - `apps/admin` — panel de administración.
   - `apps/store` — tienda pública del cliente.
-- Las apps comparten `@bubba/db`, `@bubba/types`, `@bubba/ui`.
+- Las apps comparten `@bbspos/db`, `@bbspos/types`, `@bbspos/ui`.
 
 ### Autenticación
 - Login por **username** (no email), case-insensitive (se normaliza a minúsculas en la búsqueda) + password.
@@ -278,7 +278,7 @@ App pública orientada al **kiosco táctil** del local, donde el cliente arma su
 - El cliente añade bebidas al carrito (store global tipo Zustand, persistido en localStorage — `lib/store/cart-store`), con una sola reutilización de la selección para agregar varios.
 
 ### Carrito y checkout (`app/cart/page.tsx`)
-- **"Mi carrito"**: lista de ítems (fila `CartItemRow` de `@bubba/ui`) con cantidad/eliminar, contador de bebidas, botón "Cancelar" (limpia y vuelve al inicio).
+- **"Mi carrito"**: lista de ítems (fila `CartItemRow` de `@bbspos/ui`) con cantidad/eliminar, contador de bebidas, botón "Cancelar" (limpia y vuelve al inicio).
 - **Tipo de entrega**: botones "Para Servirse" (MESA) / "Para Llevar" (LLEVAR).
 - **Total a pagar** calculado sobre ítems + toppings (`unitPrice + sumToppings(toppings)) * quantity`).
 - **Checkout**: exige nombre del cliente ("Escribe tu nombre para que podamos entregarte el pedido."), invoca `createOrder(items, customerName, deliveryType)`, y tras confirmar muestra pantalla **"¡Pedido confirmado!"** con:

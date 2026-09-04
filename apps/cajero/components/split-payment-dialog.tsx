@@ -1,19 +1,19 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Button } from "@bubba/ui";
+import { Button } from "@bbspos/ui";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   PaymentMethod,
   PaymentMethodLabel,
   formatPrice,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 interface SplitPaymentDialogProps {
   total: number;

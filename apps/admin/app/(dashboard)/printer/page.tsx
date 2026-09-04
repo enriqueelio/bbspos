@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import { Loader2, Printer } from "lucide-react";
 
 interface PrinterInfo {

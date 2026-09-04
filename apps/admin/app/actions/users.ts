@@ -1,9 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { hash } from "bcryptjs";
-import { Role, Shift, type Role as RoleType, type Shift as ShiftType } from "@bubba/types";
+import { Role, Shift, type Role as RoleType, type Shift as ShiftType } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 const MIN_PASSWORD_LENGTH = 6;

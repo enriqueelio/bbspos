@@ -13,7 +13,7 @@ import {
   Input,
   Label,
   useToast,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   formatPrice,
   formatOrderCode,
@@ -24,7 +24,7 @@ import {
   type Order,
   type OrderStatus,
   type Shift,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   acceptOrder,
   applyDiscount,

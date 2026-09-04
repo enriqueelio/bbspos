@@ -11,7 +11,7 @@ import {
   type FlavorCategory as FlavorCategoryType,
   type Size,
   type Topping,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { createPosOrder } from "@/actions/pos";
 import { usePosCart } from "./pos-cart-store";
 

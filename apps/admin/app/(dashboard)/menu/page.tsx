@@ -1,4 +1,4 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { MenuManager } from "./menu-manager";
 
 export const metadata = {

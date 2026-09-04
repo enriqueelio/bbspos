@@ -41,7 +41,7 @@ migrar explícitamente (ver sección 10).
 STACK REAL
   - Next.js 15.1 (App Router, server + client components), React 19, React DOM 19.
   - TypeScript 5.6 (strict mode por defecto de Next).
-  - Tailwind CSS 3.4 + preset propio en `@bubba/config` (colores basados en CSS
+  - Tailwind CSS 3.4 + preset propio en `@bbspos/config` (colores basados en CSS
     variables HSL de shadcn/ui).
   - Prisma 6 (`@prisma/client`) sobre SQLite.
   - NextAuth 4.24 (estrategia JWT, provider Credentials con bcryptjs).
@@ -105,7 +105,7 @@ bubba/
 │   ├── admin/                  # <-- APP DE ESTE DOCUMENTO (puerto 3001)
 │   ├── cajero/                 # app del cajero (puerto 3002)
 └── packages/
-    ├── db/                     # @bubba/db: prisma schema, migrations, client, seed
+    ├── db/                     # @bbspos/db: prisma schema, migrations, client, seed
     │   ├── prisma/
     │   │   ├── schema.prisma
     │   │   ├── migrations/     # 13 migraciones (init ... split_payment, delivery_type)
@@ -113,29 +113,29 @@ bubba/
     │   │   └── dev.db          # LA BASE DE DATOS SQLite única
     │   ├── src/index.ts        # exporta PrismaClient singleton
     │   └── scripts/            # scripts de prueba (NO COMMITEADOS)
-    ├── types/                  # @bubba/types: enums, labels, tipos de dominio
+    ├── types/                  # @bbspos/types: enums, labels, tipos de dominio
     │   └── src/index.ts
-    ├── ui/                     # @bubba/ui: componentes shadcn (Button, Badge, Card, ...)
+    ├── ui/                     # @bbspos/ui: componentes shadcn (Button, Badge, Card, ...)
     │   └── src/
     │       ├── index.ts        # export * de components + cn()
     │       ├── components/ui/  # badge, button, card, dialog, input, label, select
     │       ├── components/builder/  # step-indicator, size-selector, flavor-picker,
     │       │                       #   boba-picker (usados por store/cajero)
     │       └── components/cart/     # quantity-control, cart-item, cart-summary
-    └── config/                 # @bubba/config: preset de Tailwind (colores + radius)
+    └── config/                 # @bbspos/config: preset de Tailwind (colores + radius)
         └── src/tailwind.ts
 
 ÁRBOL COMPLETO DE apps/admin:
 
 apps/admin/
-├── package.json                # name @bubba/admin; dev: next dev -p 3001 -H 0.0.0.0
+├── package.json                # name @bbspos/admin; dev: next dev -p 3001 -H 0.0.0.0
 ├── .env.example                # DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET
 ├── .env                        # (existe, no commitear)
 ├── .eslintrc.cjs
 ├── middleware.ts               # withAuth: exige rol ADMIN; matcher (ver sección 4)
-├── next.config.mjs             # transpilePackages: @bubba/db, @bubba/ui, @bubba/types
+├── next.config.mjs             # transpilePackages: @bbspos/db, @bbspos/ui, @bbspos/types
 ├── postcss.config.mjs
-├── tailwind.config.ts          # presets: [@bubba/config/tailwind]; content apps + ui pkg
+├── tailwind.config.ts          # presets: [@bbspos/config/tailwind]; content apps + ui pkg
 ├── tsconfig.json
 ├── types/
 │   └── next-auth.d.ts          # extiende Session.user {id, role} y JWT {id, role}
@@ -623,7 +623,7 @@ print-report.ts:
 ================================================================================
 5. COMPONENTES CLAVE (packages/ui y apps/admin/components)
 ================================================================================
-Desde @bubba/ui (package exports * desde index.ts + cn()):
+Desde @bbspos/ui (package exports * desde index.ts + cn()):
   - Button: variantes default | secondary | destructive | outline | ghost |
     link; sizes default | sm | lg | icon; soporta asChild (Radix Slot).
   - Badge: variantes default | secondary | destructive | outline | success |
@@ -744,7 +744,7 @@ No hay otras variables. NO hay claves de terceros (sin SMS/pagos externos).
 Desde la raíz del repo (Windows + PowerShell/cmd):
   pnpm install                 # instala workspaces
   pnpm dev                     # arranca store(3000)+admin(3001)+cajero(3002) con -r
-  pnpm --filter @bubba/admin dev        # solo admin (puerto 3001, bind 0.0.0.0)
+  pnpm --filter @bbspos/admin dev        # solo admin (puerto 3001, bind 0.0.0.0)
   pnpm build                   # build -r todas las apps
   pnpm lint / pnpm typecheck   # -r
   pnpm db:generate             # prisma generate (después de tocar schema)

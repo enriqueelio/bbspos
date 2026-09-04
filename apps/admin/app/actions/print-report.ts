@@ -1,7 +1,7 @@
 "use server";
 
-import { prisma } from "@bubba/db";
-import { FlavorCategoryList } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { FlavorCategoryList } from "@bbspos/types";
 import { requireSession } from "@/lib/reports/guard";
 import { notCancelled } from "@/lib/reports/sales";
 import { dayBounds, isValidLocalDate } from "@/lib/reports/range";

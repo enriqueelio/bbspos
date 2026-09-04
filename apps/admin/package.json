@@ -1,5 +1,5 @@
 {
-  "name": "@bubba/admin",
+  "name": "@bbspos/admin",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@bubba/db": "workspace:*",
-    "@bubba/types": "workspace:*",
-    "@bubba/ui": "workspace:*",
+    "@bbspos/db": "workspace:*",
+    "@bbspos/types": "workspace:*",
+    "@bbspos/ui": "workspace:*",
     "bcryptjs": "^2.4.3",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -25,7 +25,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@bubba/config": "workspace:*",
+    "@bbspos/config": "workspace:*",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.2",

@@ -10,10 +10,10 @@ import {
   Card,
   CardContent,
   CartItemRow,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
-import { formatPrice, formatOrderCode, sumToppings } from "@bubba/types";
+import { formatPrice, formatOrderCode, sumToppings } from "@bbspos/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
 

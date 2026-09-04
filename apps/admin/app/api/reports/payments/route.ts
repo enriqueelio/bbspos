@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import type { PaymentsData } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import type { PaymentsData } from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

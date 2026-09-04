@@ -1,7 +1,7 @@
 import type { Session } from "next-auth";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { ApiError } from "./response";
 
 export async function requireSession(): Promise<Session> {

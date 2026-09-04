@@ -9,7 +9,7 @@ import {
   CardContent,
   Input,
   Label,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   RoleLabel,
   RoleList,
@@ -18,7 +18,7 @@ import {
   type Role,
   type Shift,
   type StaffUser,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   createUser,
   setUserActive,

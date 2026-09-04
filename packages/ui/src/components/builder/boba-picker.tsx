@@ -1,5 +1,5 @@
-import type { BobaType } from "@bubba/types";
-import { BobaKindLabel } from "@bubba/types";
+import type { BobaType } from "@bbspos/types";
+import { BobaKindLabel } from "@bbspos/types";
 import { cn } from "../../lib/utils";
 import { Badge } from "../ui/badge";
 

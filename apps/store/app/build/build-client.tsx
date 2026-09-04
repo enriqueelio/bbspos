@@ -9,7 +9,7 @@ import {
   CardContent,
   FlavorPicker,
   StepIndicator,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import { Droplets, Milk, Sparkles } from "lucide-react";
 import {
   FlavorCategory,
@@ -18,11 +18,11 @@ import {
   computeBasePrice,
   formatPrice,
   sumToppings,
-} from "@bubba/types";
+} from "@bbspos/types";
 import type { Catalog } from "@/lib/catalog";
 import { useBuilderStore } from "@/lib/store/builder-store";
 import { useCartStore } from "@/lib/store/cart-store";
-import { cn } from "@bubba/ui";
+import { cn } from "@bbspos/ui";
 
 const STEPS = ["Categoría y sabor", "Tamaño y boba", "Toppings"];
 

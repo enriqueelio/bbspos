@@ -1,4 +1,4 @@
-import type { Size } from "@bubba/types";
+import type { Size } from "@bbspos/types";
 import { cn } from "../../lib/utils";
 
 export interface SizeSelectorProps {

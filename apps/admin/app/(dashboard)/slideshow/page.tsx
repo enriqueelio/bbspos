@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Button, Card, CardContent, Input, Label } from "@bubba/ui";
-import { cn } from "@bubba/ui";
+import { Button, Card, CardContent, Input, Label } from "@bbspos/ui";
+import { cn } from "@bbspos/ui";
 import {
   ChevronUp,
   ChevronDown,

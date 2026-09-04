@@ -1,8 +1,8 @@
 "use server";
 
 import { after } from "next/server";
-import { prisma } from "@bubba/db";
-import { sumToppings, type CartItem } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { sumToppings, type CartItem } from "@bbspos/types";
 import { formatComanda, getPrinterName, printText } from "@/lib/printing";
 
 export async function createOrder(

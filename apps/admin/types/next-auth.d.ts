@@ -1,5 +1,5 @@
 import { DefaultSession } from "next-auth";
-import type { Role } from "@bubba/types";
+import type { Role } from "@bbspos/types";
 
 declare module "next-auth" {
   interface Session {

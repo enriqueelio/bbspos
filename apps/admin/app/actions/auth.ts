@@ -1,7 +1,7 @@
 "use server";
 
 import { compare } from "bcryptjs";
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 
 /**
  * Indica si unas credenciales correctas pertenecen a una cuenta desactivada.

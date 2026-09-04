@@ -5,7 +5,7 @@ import {
   sendDailyReportToTelegram,
   zonedDateKey,
   zonedMinutes,
-} from "@bubba/db";
+} from "@bbspos/db";
 import { getRequiredSession } from "@/lib/session";
 
 /** Envía (una sola vez) el cierre de caja del día actual al bot de Telegram.

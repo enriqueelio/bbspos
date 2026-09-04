@@ -28,12 +28,12 @@ STACK
 - Next.js 15 (App Router, Server/Client Components)
 - React 19
 - TypeScript (strict, extends tsconfig de packages/config)
-- Tailwind CSS (preset proveniente de @bubba/config/tailwind)
+- Tailwind CSS (preset proveniente de @bbspos/config/tailwind)
 - next-auth v4 (JWT strategy, Credentials provider, cookies personalizadas)
-- Prisma + SQLite (paquete compartido @bubba/db en packages/db)
+- Prisma + SQLite (paquete compartido @bbspos/db en packages/db)
 - bcryptjs (hash de contraseñas)
-- Paquete UI compartido @bubba/ui (shadcn-style: Button, Card, Input, etc.)
-- Tipos y helpers compartidos en @bubba/types
+- Paquete UI compartido @bbspos/ui (shadcn-style: Button, Card, Input, etc.)
+- Tipos y helpers compartidos en @bbspos/types
 - Impresión térmica: PowerShell + System.Drawing (spawn de powershell.exe)
 - MonoTrabajo: next/cache (revalidatePath), next/navigation (router.refresh)
 - ESLint: next/core-web-vitals + next/typescript
@@ -107,8 +107,8 @@ apps/cajero/
 │  ├─ report.ts   (getCashierDailyData — datos del reporte)
 │  └─ printing.ts (getPrinterName, printText, formatComanda, formatReportText)
 ├─ middleware.ts  (next-auth withAuth, protege rutas por rol)
-├─ next.config.mjs (transpilePackages: @bubba/db, @bubba/ui, @bubba/types)
-├─ tailwind.config.ts (presets de @bubba/config/tailwind)
+├─ next.config.mjs (transpilePackages: @bbspos/db, @bbspos/ui, @bbspos/types)
+├─ tailwind.config.ts (presets de @bbspos/config/tailwind)
 ├─ postcss.config.mjs (tailwindcss + autoprefixer)
 ├─ .eslintrc.cjs      (next/core-web-vitals + next/typescript)
 ├─ tsconfig.json      (extends packages/config/tsconfig.next.json, @/* = ./*)
@@ -347,11 +347,11 @@ Además, la impresión térmica depende del archivo store/printing.json con
 ========================================================================
 Monorepo (pnpm):
 - Instalar:            pnpm install
-- Dev del cajero:      pnpm --filter @bubba/cajero dev
+- Dev del cajero:      pnpm --filter @bbspos/cajero dev
                        (o pnpm dev desde apps/cajero)
-- Build:               pnpm --filter @bubba/cajero build
-- Lint:                pnpm --filter @bubba/cajero lint
-- Typecheck:           pnpm --filter @bubba/cajero typecheck
+- Build:               pnpm --filter @bbspos/cajero build
+- Lint:                pnpm --filter @bbspos/cajero lint
+- Typecheck:           pnpm --filter @bbspos/cajero typecheck
 - Prisma (shared db):  desde packages/db,
                        pnpm prisma generate / prisma migrate / prisma db seed
 

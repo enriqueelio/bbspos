@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 
 const INACTIVITY_MS = 45_000;

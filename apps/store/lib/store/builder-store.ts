@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { FlavorCategory } from "@bubba/types";
+import type { FlavorCategory } from "@bbspos/types";
 
 interface BuilderState {
   category: FlavorCategory | null;

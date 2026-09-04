@@ -9,7 +9,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   formatOrderCode,
   formatPrice,
@@ -20,7 +20,7 @@ import {
   Role,
   type Order,
   type Role as RoleType,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { acceptOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";

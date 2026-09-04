@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@bubba/db";
-import { OrderStatus, type Order } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { OrderStatus, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";

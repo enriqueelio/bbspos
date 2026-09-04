@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Settings } from "lucide-react";
-import { Button } from "@bubba/ui";
-import { cn } from "@bubba/ui";
+import { Button } from "@bbspos/ui";
+import { cn } from "@bbspos/ui";
 
 function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   const pathname = usePathname();

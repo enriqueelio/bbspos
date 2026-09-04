@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
   useToast,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import {
   BobaKind,
   BobaKindLabel,
@@ -33,7 +33,7 @@ import {
   type FlavorCategory as FlavorCategoryType,
   type Size,
   type Topping,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   createBoba,
   createFlavor,

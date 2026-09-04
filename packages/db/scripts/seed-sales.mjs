@@ -3,7 +3,7 @@
  * reutilizando el catálogo real (tamaños, sabores, bobas, toppings, precios y
  * usuarios). Conserva los pedidos ya existentes y continúa la secuencia `seq`.
  *
- * Uso: pnpm --filter @bubba/db tsx scripts/seed-sales.mjs
+ * Uso: pnpm --filter @bbspos/db tsx scripts/seed-sales.mjs
  */
 import { PrismaClient } from "@prisma/client";
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { isAccountInactive } from "@/app/actions/auth";
-import { Button, Input, Label } from "@bubba/ui";
+import { Button, Input, Label } from "@bbspos/ui";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();

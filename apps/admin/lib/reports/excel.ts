@@ -12,7 +12,7 @@ import {
   type SlowMoverRow,
   type StaffPerformanceRow,
   type TopProductRow,
-} from "@bubba/types";
+} from "@bbspos/types";
 
 export type ReportKey =
   | "dashboard"

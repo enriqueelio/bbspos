@@ -2,7 +2,7 @@
 // todos los pedidos activos que superan el límite de minutos (default 10) y
 // envía un aviso, una sola vez por pedido. Corre en segundo plano dentro del
 // contenedor (docker-entrypoint.sh). Toda la lógica vive en
-// @bubba/db/src/telegram-alert.ts (misma fuente que el botón de prueba manual).
+// @bbspos/db/src/telegram-alert.ts (misma fuente que el botón de prueba manual).
 //
 // Uso:
 //   tsx telegram-alert-worker.ts          -> bucle del servicio (cada 60s)

@@ -1,9 +1,9 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import {
   FlavorCategoryList,
   type DailyReportData,
   type CategoryBreakdownRow,
-} from "@bubba/types";
+} from "@bbspos/types";
 import { dailyQuerySchema, parseSearchParams } from "@/lib/reports/params";
 import { handleReportRoute, jsonOk, reportEnvelope } from "@/lib/reports/response";
 import { requireSession } from "@/lib/reports/guard";

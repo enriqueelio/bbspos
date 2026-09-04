@@ -547,7 +547,7 @@ GET /api/auth/[...nextauth]  Handler de autenticacion NextAuth (credentials prov
                     5. COMPONENTES CLAVE
 ================================================================================
 
---- COMPONENTES DEL PAQUETE @bubba/ui ---
+--- COMPONENTES DEL PAQUETE @bbspos/ui ---
 
 Button                      Boton con variantes (default, destructive, outline, secondary, ghost, link)
                             y tamanos (default, sm, lg, icon). Soporta asChild para usar como Link.
@@ -805,9 +805,9 @@ MIGRACION DE BASE DE DATOS:
   pnpm db:seed           Crea datos iniciales (sabores, precios, usuarios)
 
   Alternativa manual:
-  npx prisma generate --filter=@bubba/db
-  npx prisma migrate dev --filter=@bubba/db
-  npx prisma db seed --filter=@bubba/db
+  npx prisma generate --filter=@bbspos/db
+  npx prisma migrate dev --filter=@bbspos/db
+  npx prisma db seed --filter=@bbspos/db
 
 DESARROLLO:
   pnpm dev               Inicia las 3 apps simultaneamente

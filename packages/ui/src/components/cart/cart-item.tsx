@@ -1,5 +1,5 @@
-import type { CartItem } from "@bubba/types";
-import { FlavorCategoryLabel, formatPrice, sumToppings } from "@bubba/types";
+import type { CartItem } from "@bbspos/types";
+import { FlavorCategoryLabel, formatPrice, sumToppings } from "@bbspos/types";
 import { Trash2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";

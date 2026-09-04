@@ -11,7 +11,7 @@ import {
   CardTitle,
   Input,
   Label,
-} from "@bubba/ui";
+} from "@bbspos/ui";
 import { getPaymentQr, removePaymentQr, savePaymentQr } from "@/app/actions/payment";
 
 export function PaymentsClient({

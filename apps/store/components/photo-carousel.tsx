@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { cn } from "@bubba/ui";
+import { cn } from "@bbspos/ui";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface PhotoCarouselProps {

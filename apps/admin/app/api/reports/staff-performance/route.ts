@@ -1,5 +1,5 @@
-import { prisma } from "@bubba/db";
-import { OrderStatus, type StaffPerformanceRow } from "@bubba/types";
+import { prisma } from "@bbspos/db";
+import { OrderStatus, type StaffPerformanceRow } from "@bbspos/types";
 import {
   assertRange,
   parseSearchParams,

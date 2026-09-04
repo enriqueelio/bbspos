@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, CardContent, cn } from "@bubba/ui";
+import { Button, Card, CardContent, cn } from "@bbspos/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 
 export function StartBuilderButton({ className }: { className?: string }) {

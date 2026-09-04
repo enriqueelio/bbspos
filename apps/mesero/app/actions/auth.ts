@@ -2,8 +2,8 @@
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { Role } from "@bubba/types";
-import { prisma } from "@bubba/db";
+import { Role } from "@bbspos/types";
+import { prisma } from "@bbspos/db";
 import { compare } from "bcryptjs";
 
 /** Roles que pueden operar el terminal de toma de pedidos del mesero. */

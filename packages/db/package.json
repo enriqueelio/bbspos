@@ -1,5 +1,5 @@
 {
-  "name": "@bubba/db",
+  "name": "@bbspos/db",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",

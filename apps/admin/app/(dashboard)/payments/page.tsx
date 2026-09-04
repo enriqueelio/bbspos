@@ -1,4 +1,4 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import { PaymentsClient } from "./payments-client";
 
 export const metadata = { title: "Pagos — Bubba Admin" };

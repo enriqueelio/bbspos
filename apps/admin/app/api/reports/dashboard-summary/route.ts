@@ -1,10 +1,10 @@
-import { prisma } from "@bubba/db";
+import { prisma } from "@bbspos/db";
 import type {
   DashboardSummaryData,
   DashboardEmployeeRow,
   PaymentBreakdownRow,
   FlavorCategory,
-} from "@bubba/types";
+} from "@bbspos/types";
 import {
   handleReportRoute,
   jsonOk,

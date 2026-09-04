@@ -5,7 +5,7 @@ const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? "")
   .filter(Boolean);
 
 const nextConfig = {
-  transpilePackages: ["@bubba/db", "@bubba/ui", "@bubba/types"],
+  transpilePackages: ["@bbspos/db", "@bbspos/ui", "@bbspos/types"],
   ...(allowedDevOrigins.length > 0 ? { allowedDevOrigins } : {}),
 };
 

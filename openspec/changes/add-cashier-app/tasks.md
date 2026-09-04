@@ -14,7 +14,7 @@
 
 ## 3. App del cajero
 
-- [x] 3.1 Scaffold de `apps/cajero`: Next.js + TypeScript + Tailwind en puerto 3002, dependencias compartidas (`@bubba/db`, `@bubba/ui`, `@bubba/types`), `.env` propio y script dev/build
+- [x] 3.1 Scaffold de `apps/cajero`: Next.js + TypeScript + Tailwind en puerto 3002, dependencias compartidas (`@bbspos/db`, `@bbspos/ui`, `@bbspos/types`), `.env` propio y script dev/build
 - [x] 3.2 Configurar NextAuth credentials con cookie y secreto propios; middleware de rutas que exige sesión con rol `CAJERO` o `ADMIN`
 - [x] 3.3 Página de login del cajero con mensaje específico cuando la cuenta no tiene permisos
 - [x] 3.4 Pestaña Preparar: server component con cola de pedidos `INGRESADO` del día (más antiguo primero) con detalle completo y antigüedad; estado vacío

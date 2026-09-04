@@ -1,5 +1,5 @@
 {
-  "name": "bubba",
+  "name": "bbspos",
   "private": true,
   "packageManager": "pnpm@11.21.0",
   "engines": {
@@ -10,12 +10,12 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter @bubba/db generate",
-    "db:migrate": "pnpm --filter @bubba/db migrate",
-    "db:seed": "pnpm --filter @bubba/db seed",
-    "daily-report": "pnpm --filter @bubba/db daily-report",
-    "telegram-alert": "pnpm --filter @bubba/db telegram-alert",
-    "rename-toppings": "pnpm --filter @bubba/db rename-toppings",
+    "db:generate": "pnpm --filter @bbspos/db generate",
+    "db:migrate": "pnpm --filter @bbspos/db migrate",
+    "db:seed": "pnpm --filter @bbspos/db seed",
+    "daily-report": "pnpm --filter @bbspos/db daily-report",
+    "telegram-alert": "pnpm --filter @bbspos/db telegram-alert",
+    "rename-toppings": "pnpm --filter @bbspos/db rename-toppings",
     "db:sync": "scripts\\db-sync.bat",
     "setup-env": "node scripts/setup-env.mjs",
     "proxy": "node scripts/https-proxy/proxy.mjs"

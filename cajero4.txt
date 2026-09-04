@@ -12,20 +12,20 @@ El sistema es el módulo "cajero" (punto de venta de mostrador) de una tienda de
 
 El flujo principal de una venta tiene tres fases. Primero, en la pestaña "Nueva Venta", el cajero arma un carrito tocando sabores: elige tamaño, tipo de boba, categoría de bebida y extras; el sistema calcula el precio unitario automáticamente a partir de una matriz de precios. Puede poner hasta dos métodos de pago (dividido) y un nombre de cliente opcional, y al confirmar se crea un pedido en estado "Recibido" y se muestra en la cola. Segundo, en la pestaña "Dashboard", el pedido aparece en cola con su número (secuencia), artículos, total y antigüedad; el cajero registra el cobro (Efectivo, QR, o dividido) lo que pasa el pedido a "Aceptado", y luego lo marca como "Entregado" cuando sale. Tercero, en la pestaña "Reporte del día", se ven los KPI del día (ingresos, pedidos entregados, ticket promedio, tiempos) y el rendimiento individual del cajero, que puede imprimirse en ticket o enviarse a Telegram al cierre.
 
-La aplicación usa autenticación exclusiva para el personal: solo usuarios con rol CAJERO o ADMIN pueden entrar. El resto de la lógica (impresión de comandas en impresora térmica de 80mm, alertas por Telegram cuando un pedido se retrasa más de 10 minutos, y el cierre de caja automático) se apoya en la base de datos SQLite del paquete @bubba/db.
+La aplicación usa autenticación exclusiva para el personal: solo usuarios con rol CAJERO o ADMIN pueden entrar. El resto de la lógica (impresión de comandas en impresora térmica de 80mm, alertas por Telegram cuando un pedido se retrasa más de 10 minutos, y el cierre de caja automático) se apoya en la base de datos SQLite del paquete @bbspos/db.
 
 ------------------------------------------------------------
 2. ARQUITECTURA Y CARPETAS
 ------------------------------------------------------------
 
-La app cajero vive dentro de un monorepo con pnpm workspaces. Las rutas con "@bubba/..." apuntan a paquetes internos.
+La app cajero vive dentro de un monorepo con pnpm workspaces. Las rutas con "@bbspos/..." apuntan a paquetes internos.
 
 Arbol de carpetas de la app cajero:
 
 apps/cajero/
   .env.example            Variables de entorno de ejemplo (copiar a .env)
-  package.json            Nombre @bubba/cajero, scripts (dev en puerto 3002)
-  next.config.mjs         Transpila paquetes internos (@bubba/db, @bubba/ui, @bubba/types)
+  package.json            Nombre @bbspos/cajero, scripts (dev en puerto 3002)
+  next.config.mjs         Transpila paquetes internos (@bbspos/db, @bbspos/ui, @bbspos/types)
   middleware.ts           Protege rutas: exige sesion con rol CAJERO o ADMIN
   tsconfig.json           Configuracion TypeScript (alias @/ -> raiz de la app)
   actions/
@@ -62,16 +62,16 @@ apps/cajero/
     next-auth.d.ts        Extiende los tipos de la sesion (role, id)
 
 Paquetes compartidos del monorepo (en packages/):
-  @bubba/db    Cliente Prisma + schema + semilla + reportes diarios (SQLite)
-  @bubba/types Tipos y constantes compartidas (Catalog, Order, enums, helpers)
-  @bubba/ui    Componentes de UI reutilizables (Button, Card, Badge, Dialog...)
-  @bubba/config Config de Tailwind y TypeScript compartida
+  @bbspos/db    Cliente Prisma + schema + semilla + reportes diarios (SQLite)
+  @bbspos/types Tipos y constantes compartidas (Catalog, Order, enums, helpers)
+  @bbspos/ui    Componentes de UI reutilizables (Button, Card, Badge, Dialog...)
+  @bbspos/config Config de Tailwind y TypeScript compartida
 
 ------------------------------------------------------------
 3. MODELO DE DATOS / PRISMA SCHEMA
 ------------------------------------------------------------
 
-Base: SQLite. Archivo del schema: packages/db/prisma/schema.prisma. Cliente exportado como "prisma" desde @bubba/db.
+Base: SQLite. Archivo del schema: packages/db/prisma/schema.prisma. Cliente exportado como "prisma" desde @bbspos/db.
 
 TABLAS:
 
@@ -312,7 +312,7 @@ REPORTE DIARIO (lib/report.ts):
 ALERTA DE RETRASO (notifications.ts):
   - Un pedido en RECIBIDO/ACEPTADO con mas de 10 min dispara una notificacion en Telegram. Reclamo atomico de flag delayNotified (updateMany con condicion) para evitar duplicados entre pestanas. Si el envio falla, libera el flag para reintentar en el siguiente tick.
 
-CIERRE DE CAJA (app/actions/report.ts + @bubba/db daily-report):
+CIERRE DE CAJA (app/actions/report.ts + @bbspos/db daily-report):
   - sendDailyReportToBot envia el cierre del dia a Telegram, pero solo se habilita a partir de las 23:10 hora local (MANUAL_REPORT_CUTOFF). Envios anteriores lanzan error.
   - Tambien existe DAILY_REPORT_HOUR (23:20) para el cierre automatico via worker.
 
@@ -350,11 +350,11 @@ MANUAL_REPORT_HOUR="23:10"
 
 pnpm install          Instala dependencias de todo el monorepo (pnpm workspaces).
 pnpm dev              Corre TODAS las apps en paralelo (admin 3001, cajero 3002, store 3000).
-pnpm --filter @bubba/cajero dev      Solo el cajero en el puerto 3002.
-pnpm --filter @bubba/db generate     Genera el cliente Prisma.
-pnpm --filter @bubba/db migrate      Aplica migraciones de la base de datos.
-pnpm --filter @bubba/db seed         Sembrar catalogo, matriz de precios, admin y cajero.
-pnpm --filter @bubba/db daily-report Ejecuta el cierre de caja diario (worker).
+pnpm --filter @bbspos/cajero dev      Solo el cajero en el puerto 3002.
+pnpm --filter @bbspos/db generate     Genera el cliente Prisma.
+pnpm --filter @bbspos/db migrate      Aplica migraciones de la base de datos.
+pnpm --filter @bbspos/db seed         Sembrar catalogo, matriz de precios, admin y cajero.
+pnpm --filter @bbspos/db daily-report Ejecuta el cierre de caja diario (worker).
 pnpm build / pnpm lint / pnpm typecheck   Build, lint y typecheck de todo el monorepo.
 
 Nota: Next.js 15 con App Router. El paquete usa npm/yarn/pnpm pero el monorepo esta hecho con pnpm.

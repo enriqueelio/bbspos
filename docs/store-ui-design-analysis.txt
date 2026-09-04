@@ -419,7 +419,7 @@
   Nota: text-xs text-muted-foreground
 
 
-5. COMPONENTES COMPARTIDOS (@bubba/ui)
+5. COMPONENTES COMPARTIDOS (@bbspos/ui)
 ================================================================================
 
 5.1 Button
@@ -620,7 +620,7 @@
     apps/store/components/photo-carousel.tsx
     apps/store/components/start-builder-button.tsx
 
-  UI Compartida (@bubba/ui):
+  UI Compartida (@bbspos/ui):
     packages/ui/src/components/ui/button.tsx
     packages/ui/src/components/ui/card.tsx
     packages/ui/src/components/ui/badge.tsx

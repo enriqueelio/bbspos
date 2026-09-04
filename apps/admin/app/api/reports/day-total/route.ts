@@ -1,5 +1,5 @@
 import { prisma } from "@bubba/db";
-import type { DayTotalData } from "@bubba/types";
+import type { DayTotalData, DayTotalOrderRow } from "@bubba/types";
 import {
   dayTotalQuerySchema,
   parseSearchParams,
@@ -9,15 +9,6 @@ import { requireSession } from "@/lib/reports/guard";
 import { buildCsv, csvResponse } from "@/lib/reports/csv";
 import { rangeBounds, localDateKey } from "@/lib/reports/range";
 
-// Ítems vendidos en el rango (incluso de órdenes anuladas): SUM de quantity
-// sobre todos los items, filtrando por la fecha de la orden padre.
-const ITEMS_SQL = `
-  SELECT COALESCE(SUM(oi."quantity"), 0) AS units
-  FROM "OrderItem" oi
-  JOIN "Order" o ON o.id = oi."orderId"
-  WHERE o."createdAt" >= ? AND o."createdAt" < ?
-`;
-
 export async function GET(request: Request) {
   return handleReportRoute(async () => {
     await requireSession();
@@ -26,62 +17,74 @@ export async function GET(request: Request) {
     const query = dayTotalQuerySchema.parse(parseSearchParams(url.searchParams));
     const { gte, lt } = rangeBounds(query.from, query.to);
 
-    // Ventas brutas del rango sin discriminar nada: TODAS las órdenes,
-    // incluidas las ANULADAS.
-    const [gross, cancelledAgg, itemsRows] = await Promise.all([
+    const [orders, agg] = await Promise.all([
+      prisma.order.findMany({
+        where: { createdAt: { gte, lt } },
+        select: {
+          seq: true,
+          createdAt: true,
+          customerName: true,
+          total: true,
+          discountAmount: true,
+          discountReason: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
       prisma.order.aggregate({
         where: { createdAt: { gte, lt } },
-        _sum: { total: true },
+        _sum: { total: true, discountAmount: true },
         _count: { _all: true },
       }),
-      prisma.order.aggregate({
-        where: { createdAt: { gte, lt }, status: "ANULADO" },
-        _sum: { total: true },
-        _count: { _all: true },
-      }),
-      prisma.$queryRawUnsafe<{ units: number | bigint }[]>(ITEMS_SQL, gte, lt),
     ]);
 
-    const revenueTotal = Number(gross._sum.total ?? 0);
-    const ordersTotal = gross._count._all;
-    const cancellationsCount = cancelledAgg._count._all;
-    const cancellationsRevenue = Number(cancelledAgg._sum.total ?? 0);
-    const validRevenue = revenueTotal - cancellationsRevenue;
-    const avgTicket = ordersTotal > 0 ? Math.round(revenueTotal / ordersTotal) : 0;
-    const itemsSold = Number(itemsRows[0]?.units ?? 0);
+    const revenueTotal = Number(agg._sum.total ?? 0);
+    const discountsTotal = Number(agg._sum.discountAmount ?? 0);
+    const ordersTotal = agg._count._all;
+    const netTotal = revenueTotal - discountsTotal;
+
+    const orderRows: DayTotalOrderRow[] = orders.map((o) => ({
+      seq: o.seq,
+      createdAt: o.createdAt.toISOString(),
+      customerName: o.customerName,
+      total: o.total,
+      discountAmount: o.discountAmount,
+      discountReason: o.discountReason,
+    }));
 
     const data: DayTotalData = {
-      revenueTotal,
-      ordersTotal,
-      cancellationsCount,
-      cancellationsRevenue,
-      validRevenue,
-      avgTicket,
-      itemsSold,
+      orders: orderRows,
+      summary: { ordersTotal, revenueTotal, discountsTotal, netTotal },
     };
 
     if (query.format === "csv") {
       const headers = [
-        "Ingresos totales (bruto)",
-        "Órdenes totales",
-        "Ingresos válidos",
-        "Anulaciones",
-        "Ingreso anulado",
-        "Ticket promedio",
-        "Ítems vendidos",
+        "# Ticket",
+        "Fecha",
+        "Hora",
+        "Cliente",
+        "Monto",
+        "Descuento",
+        "Motivo descuento",
       ];
-      const rows = [[
-        revenueTotal,
-        ordersTotal,
-        validRevenue,
-        cancellationsCount,
-        cancellationsRevenue,
-        avgTicket,
-        itemsSold,
-      ]];
+      const csvRows = orderRows.map((o) => {
+        const d = new Date(o.createdAt);
+        return [
+          o.seq ?? "—",
+          localDateKey(query.from),
+          d.toLocaleTimeString("es-BO", {
+            timeZone: "America/La_Paz",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          o.customerName ?? "—",
+          o.total,
+          o.discountAmount || "",
+          o.discountReason ?? "",
+        ];
+      });
       return csvResponse(
-        `venta-total-${localDateKey(query.from)}_${localDateKey(query.to)}.csv`,
-        buildCsv(headers, rows),
+        `ventas-totales-${localDateKey(query.from)}_${localDateKey(query.to)}.csv`,
+        buildCsv(headers, csvRows),
       );
     }
 

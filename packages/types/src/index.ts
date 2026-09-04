@@ -351,18 +351,26 @@ export interface DailyReportData {
 }
 
 /**
- * Venta bruta del rango sin discriminar nada: incluye TODAS las órdenes,
- * incluidas las ANULADAS. Es la contraparte "total bruto" de los demás
- * reportes que excluyen anulaciones.
+ * Lista de todas las ventas del rango con detalle por orden + resumen.
+ * Incluye TODAS las órdenes (incluidas anuladas).
  */
+export interface DayTotalOrderRow {
+  seq: number | null;
+  createdAt: string;
+  customerName: string | null;
+  total: number;
+  discountAmount: number;
+  discountReason: string | null;
+}
+
 export interface DayTotalData {
-  revenueTotal: number;
-  ordersTotal: number;
-  cancellationsCount: number;
-  cancellationsRevenue: number;
-  validRevenue: number;
-  avgTicket: number;
-  itemsSold: number;
+  orders: DayTotalOrderRow[];
+  summary: {
+    ordersTotal: number;
+    revenueTotal: number;
+    discountsTotal: number;
+    netTotal: number;
+  };
 }
 
 export interface SalesRangePoint {

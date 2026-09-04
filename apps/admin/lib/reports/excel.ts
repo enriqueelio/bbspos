@@ -75,19 +75,30 @@ function handleDaily(data: DailyReportData, to: string) {
 
 function handleDayTotal(data: DayTotalData, from: string, to: string) {
   const wb = XLSX.utils.book_new();
+  const s = data.summary;
 
   const summaryRows = [
-    { Concepto: "Ingresos totales (bruto)", Valor: data.revenueTotal },
-    { Concepto: "Órdenes totales", Valor: data.ordersTotal },
-    { Concepto: "Ingresos válidos (sin anuladas)", Valor: data.validRevenue },
-    { Concepto: "Anulaciones", Valor: data.cancellationsCount },
-    { Concepto: "Ingreso anulado", Valor: data.cancellationsRevenue },
-    { Concepto: "Ticket promedio", Valor: data.avgTicket },
-    { Concepto: "Ítems vendidos", Valor: data.itemsSold },
+    { Concepto: "Órdenes totales", Valor: s.ordersTotal },
+    { Concepto: "Ingresos brutos", Valor: s.revenueTotal },
+    { Concepto: "Descuentos", Valor: s.discountsTotal },
+    { Concepto: "Neto cobrado", Valor: s.netTotal },
   ];
   XLSX.utils.book_append_sheet(wb, sheetFromRows("Resumen", summaryRows).ws, "Resumen");
 
-  download(wb, `venta-total-${from}_${to}`);
+  if (data.orders.length > 0) {
+    const rows = data.orders.map((r) => ({
+      "Nº Ticket": r.seq ?? "—",
+      Fecha: new Date(r.createdAt).toLocaleDateString("es-BO"),
+      Hora: new Date(r.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }),
+      Cliente: r.customerName ?? "—",
+      Monto: r.total,
+      Descuento: r.discountAmount || "",
+      "Motivo descuento": r.discountReason ?? "",
+    }));
+    XLSX.utils.book_append_sheet(wb, sheetFromRows("Detalle", rows).ws, "Detalle");
+  }
+
+  download(wb, `ventas-totales-${from}_${to}`);
 }
 
 function handleSalesRange(data: SalesRangeData, from: string, to: string) {

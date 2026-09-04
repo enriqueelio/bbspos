@@ -82,7 +82,7 @@ const REPORT_GROUPS: ReportCategory[] = [
       { key: "peak-hours", label: "Horas pico", needsRange: true },
       { key: "top-products", label: "Top productos", needsRange: true },
       { key: "category-sales", label: "Por categoría", needsRange: true },
-      { key: "day-total", label: "Toda la venta del día", needsRange: true },
+      { key: "day-total", label: "Ventas totales", needsRange: true },
     ],
   },
   {
@@ -1263,39 +1263,73 @@ function PaymentsView({ data }: { data: PaymentsData }) {
 }
 
 function DayTotalView({ data }: { data: DayTotalData }) {
-  const cancellationsPct =
-    data.revenueTotal > 0
-      ? Math.round((data.cancellationsRevenue / data.revenueTotal) * 100)
-      : 0;
+  const summary = data.summary ?? {
+    ordersTotal: 0,
+    revenueTotal: 0,
+    discountsTotal: 0,
+    netTotal: 0,
+  };
+  const orders = data.orders ?? [];
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Órdenes" value={String(summary.ordersTotal)} />
         <KpiCard
-          label="Ingresos totales (bruto)"
-          value={formatPrice(data.revenueTotal)}
-        />
-        <KpiCard label="Órdenes totales" value={String(data.ordersTotal)} />
-        <KpiCard
-          label="Ingresos válidos (sin anuladas)"
-          value={formatPrice(data.validRevenue)}
-        />
-        <KpiCard label="Ticket promedio" value={formatPrice(data.avgTicket)} />
-        <KpiCard label="Ítems vendidos" value={String(data.itemsSold)} />
-        <KpiCard
-          label="Anulaciones"
-          value={String(data.cancellationsCount)}
+          label="Ingresos brutos"
+          value={formatPrice(summary.revenueTotal)}
         />
         <KpiCard
-          label="Ingreso anulado"
-          value={formatPrice(data.cancellationsRevenue)}
+          label="Descuentos"
+          value={formatPrice(summary.discountsTotal)}
         />
-        <KpiCard label="% anulado" value={`${cancellationsPct}%`} />
+        <KpiCard
+          label="Neto cobrado"
+          value={formatPrice(summary.netTotal)}
+        />
       </div>
-      <p className="text-sm text-muted-foreground">
-        Venta bruta del rango sin discriminar nada: incluye todas las órdenes,
-        incluso las anuladas. Para la venta neta (excluye anulaciones) revisa
-        Cierre diario.
-      </p>
+      <DataTable
+        columns={[
+          {
+            header: "# Ticket",
+            cell: (r) => `#${String(r.seq ?? 0).padStart(5, "0")}`,
+            sortValue: (r) => r.seq ?? 0,
+          },
+          {
+            header: "Fecha y hora",
+            cell: (r) =>
+              new Date(r.createdAt).toLocaleString("es-BO", {
+                timeZone: "America/La_Paz",
+                dateStyle: "short",
+                timeStyle: "short",
+              }),
+            sortValue: (r) => new Date(r.createdAt).getTime(),
+          },
+          {
+            header: "Cliente",
+            cell: (r) => r.customerName ?? "—",
+            sortValue: (r) => r.customerName ?? "",
+          },
+          {
+            header: "Monto",
+            cell: (r) => formatPrice(r.total),
+            numeric: true,
+            sortValue: (r) => r.total,
+          },
+          {
+            header: "Descuento",
+            cell: (r) => (r.discountAmount > 0 ? formatPrice(r.discountAmount) : "—"),
+            numeric: true,
+            sortValue: (r) => r.discountAmount,
+          },
+          {
+            header: "Motivo",
+            cell: (r) => r.discountReason ?? "—",
+            sortValue: (r) => r.discountReason ?? "",
+          },
+        ]}
+        rows={orders}
+        emptyText="Sin ventas en el rango."
+      />
     </div>
   );
 }

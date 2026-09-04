@@ -1,0 +1,10 @@
+Por favor, actualiza la vista de **"Pedidos"** en el Módulo Admin con las siguientes mejoras de filtrado y diseño en formato acordeón:
+
+1. **Filtro por Turno / Personal:**
+   - Añade un nuevo selector desplegable en la barra superior de filtros que permita filtrar los pedidos según el turno o el personal responsable registrado (por ejemplo: personal de turno de mañana / tarde, o filtrado directo por el usuario/cajero/mesero que atendió).
+
+2. **Diseño de Tabla Tipo Cebra con Acordeón Fluido:**
+   - Reemplaza el listado actual de tarjetas fijas por una **tabla con diseño de filas alternas tipo cebra** (filas con tonos de fondo sutilmente distintos para facilitar la lectura).
+   - **Estado Contraído por Defecto:** Cada fila de pedido, al estar cerrada, debe mostrar en una sola línea horizontal compacta únicamente los datos clave: **Número de ticket**, **Fecha y hora**, **Nombre o Mesa**, y **Monto total** (además del estado e indicadores rápidos si es necesario).
+   - **Comportamiento de Acordeón:** Al hacer clic en cualquier parte de la cabecera/fila del pedido, este debe expandirse o contraerse de manera fluida (con una animación suave).
+   - **Contenido Expandido:** Al desplegarse, la fila debe revelar el detalle completo de la venta (ítems, tamaños, sabores, toppings, extras con sus respectivos precios) y los botones de acción actuales ("Descontar", "Anular", "Reimprimir comanda", etc.).

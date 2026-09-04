@@ -1,0 +1,8 @@
+Por favor, rediseña las secciones de la vista **"Gestión del Menú"** (como "Tamaños de vaso", "Sabores", y secciones similares) para que funcionen con un sistema de acordeón colapsable:
+
+1. **Estado Inicial Contraído (Collapsed):** 
+   - Al cargar la página, todas las secciones deben aparecer contraídas por defecto (ocultando sus tablas, listas y formularios internos) para mantener la interfaz limpia y ordenada.
+2. **Diseño de Encabezados (Sin botones):** 
+   - El título/nombre de cada cuadro (ej. "Tamaños de vaso", "Sabores") debe actuar como el disparador del acordeón usando el mismo estilo visual de tarjeta/cuadro oscuro, añadiendo un indicador visual sutil (como una flecha o chevron a la derecha que apunte hacia abajo o hacia la derecha según corresponda).
+3. **Acción de Despliegue:** 
+   - Al hacer clic en el nombre o en cualquier parte de la cabecera del cuadro, este debe expandirse o contraerse de manera fluida (con animación suave si es posible) mostrando u ocultando su contenido correspondiente.

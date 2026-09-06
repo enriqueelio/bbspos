@@ -64,6 +64,9 @@ export async function GET(request: Request) {
       { unitsSold: number; revenue: number }
     >();
     for (const item of items) {
+      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
+      // este reporte mide rotación solo de bebidas.
+      if (!item.flavorCategory) continue;
       const key = `${item.flavorCategory} · ${item.sizeName} · ${item.bobaTypeName}`;
       const acc = soldByCombo.get(key) ?? { unitsSold: 0, revenue: 0 };
       acc.unitsSold += item.quantity;

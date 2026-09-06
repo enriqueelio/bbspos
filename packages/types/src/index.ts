@@ -19,6 +19,28 @@ export const FlavorCategoryList: FlavorCategory[] = [
   FlavorCategory.MILK,
 ];
 
+/** Sección gastronómica de un platillo del menú (mismo patrón que FlavorCategory). */
+export const MenuCategory = {
+  ALMUERZO: "ALMUERZO",
+} as const;
+
+export type MenuCategory =
+  (typeof MenuCategory)[keyof typeof MenuCategory];
+
+export const MenuCategoryLabel: Record<MenuCategory, string> = {
+  ALMUERZO: "Almuerzos",
+};
+
+export const MenuCategoryList: MenuCategory[] = [MenuCategory.ALMUERZO];
+
+/** Vista de un platillo entregado a las terminales (solo Menú del Día vigente). */
+export interface MenuItemView {
+  id: string;
+  name: string;
+  category: MenuCategory;
+  price: number;
+}
+
 export interface Size {
   id: string;
   name: string;
@@ -73,6 +95,7 @@ export interface Catalog {
   bobaTypes: BobaType[];
   drinkPrices: DrinkPrice[];
   toppings: Topping[];
+  menuItems: MenuItemView[];
 }
 
 export interface DrinkSelection {
@@ -89,7 +112,9 @@ export interface CartTopping {
   price: number;
 }
 
-export interface CartItem {
+/** Bebida del carrito con su configuración completa (sabor/tamaño/boba/extras). */
+export interface DrinkCartItem {
+  kind: "DRINK";
   id: string;
   size: Size;
   flavor: Flavor;
@@ -98,6 +123,26 @@ export interface CartItem {
   unitPrice: number;
   toppings: CartTopping[];
   quantity: number;
+}
+
+/** Platillo del Menú del Día agregado con precio fijo (sin modificadores). */
+export interface MenuItemCartItem {
+  kind: "MENU_ITEM";
+  id: string;
+  menuItemId: string;
+  name: string;
+  category: MenuCategory;
+  unitPrice: number;
+  quantity: number;
+}
+
+export type CartItem = DrinkCartItem | MenuItemCartItem;
+
+/** Suma unitaria (sin multiplicar por cantidad) del ítem de carrito. */
+export function cartItemUnitTotal(item: CartItem): number {
+  return item.kind === "DRINK"
+    ? item.unitPrice + sumToppings(item.toppings)
+    : item.unitPrice;
 }
 
 export const OrderStatus = {
@@ -203,10 +248,12 @@ export interface OrderItemTopping {
 
 export interface OrderItem {
   id: string;
-  sizeName: string;
-  flavorName: string;
-  flavorCategory: FlavorCategory;
-  bobaTypeName: string;
+  sizeName: string | null;
+  flavorName: string | null;
+  flavorCategory: FlavorCategory | null;
+  bobaTypeName: string | null;
+  menuItemName: string | null;
+  menuItemCategory: MenuCategory | null;
   unitPrice: number;
   quantity: number;
   toppings: OrderItemTopping[];
@@ -333,7 +380,7 @@ export interface ReportError {
 }
 
 export interface CategoryBreakdownRow {
-  category: FlavorCategory;
+  category: FlavorCategory | MenuCategory;
   orders: number;
   units: number;
   revenue: number;

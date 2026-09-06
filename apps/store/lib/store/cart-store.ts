@@ -65,6 +65,7 @@ export const useCartStore = create<CartState>()(
           }
           const item: CartItem = {
             id,
+            kind: "DRINK",
             size: input.size,
             flavor: input.flavor,
             category: input.category,
@@ -87,6 +88,28 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "bbspos-cart-v2",
+      merge: (persisted, current) => {
+        const state = {
+          ...(current as object),
+          ...(persisted as object),
+        } as CartState;
+        if (Array.isArray(state.items)) {
+          state.items = state.items.map((item) => {
+            // Ítems guardados antes de la unión discriminada no traían `kind`:
+            // eran siempre bebidas y se normalizan a "DRINK".
+            if (
+              item &&
+              typeof item === "object" &&
+              "kind" in item &&
+              (item as { kind?: string }).kind === "MENU_ITEM"
+            ) {
+              return item as CartItem;
+            }
+            return { kind: "DRINK", ...(item as object) } as CartItem;
+          });
+        }
+        return state;
+      },
     },
   ),
 );

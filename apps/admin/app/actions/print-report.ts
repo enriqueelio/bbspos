@@ -1,7 +1,10 @@
 "use server";
 
 import { prisma } from "@bbspos/db";
-import { FlavorCategoryList } from "@bbspos/types";
+import {
+  FlavorCategoryList,
+  type CategoryBreakdownRow,
+} from "@bbspos/types";
 import { requireSession } from "@/lib/reports/guard";
 import { notCancelled } from "@/lib/reports/sales";
 import { dayBounds, isValidLocalDate } from "@/lib/reports/range";
@@ -157,15 +160,29 @@ export async function printDailyReport(date?: string): Promise<string> {
 
   let itemsSold = 0;
   let toppingsRevenue = 0;
-  const byCategory = new Map<string, { category: string; orders: Set<string>; units: number; revenue: number }>();
-  for (const category of FlavorCategoryList) {
+  const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
+    ...FlavorCategoryList,
+    "ALMUERZO",
+  ];
+  const byCategory = new Map<
+    CategoryBreakdownRow["category"],
+    {
+      category: CategoryBreakdownRow["category"];
+      orders: Set<string>;
+      units: number;
+      revenue: number;
+    }
+  >();
+  for (const category of CATEGORY_ORDER) {
     byCategory.set(category, { category, orders: new Set(), units: 0, revenue: 0 });
   }
   for (const order of orders) {
     for (const item of order.items) {
       itemsSold += item.quantity;
       toppingsRevenue += item.toppings.reduce((acc, t) => acc + t.unitPrice, 0) * item.quantity;
-      const row = byCategory.get(item.flavorCategory);
+      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
+      // se agrupan bajo la categoría ALMUERZO.
+      const row = byCategory.get(item.flavorCategory ?? "ALMUERZO");
       if (row) {
         row.orders.add(order.id);
         row.units += item.quantity;
@@ -181,7 +198,7 @@ export async function printDailyReport(date?: string): Promise<string> {
     avgTicket,
     itemsSold,
     toppingsRevenue,
-    byCategory: FlavorCategoryList.map((c) => {
+    byCategory: CATEGORY_ORDER.map((c) => {
       const r = byCategory.get(c)!;
       return { category: r.category, orders: r.orders.size, units: r.units, revenue: r.revenue };
     }),

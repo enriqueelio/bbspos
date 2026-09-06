@@ -263,8 +263,9 @@ function OrderDetail({
             >
               <div>
                 <p className="font-bold text-white">
-                  {item.quantity}× {item.sizeName} · {item.flavorName} ·{" "}
-                  {item.bobaTypeName}
+                  {item.quantity}×{" "}
+                  {item.menuItemName ??
+                    `${item.sizeName} · ${item.flavorName} · ${item.bobaTypeName}`}
                 </p>
                 {item.toppings.length > 0 && (
                   <p className="pl-2 text-xs text-slate-400">

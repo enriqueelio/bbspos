@@ -211,11 +211,13 @@ function ItemsList({ order }: { order: Order }) {
         >
           <span>
             <span className="font-bold text-white">
-              {item.quantity}× {item.flavorName} ({item.sizeName})
-            </span>{" "}
-            <span className="text-white font-normal">
-              · {item.bobaTypeName}
-            </span>
+{item.quantity}× {item.flavorName ? `${item.flavorName} (${item.sizeName})` : item.menuItemName}
+                        </span>{" "}
+                        {item.flavorName && (
+                          <span className="text-white font-normal">
+                            · {item.bobaTypeName}
+                          </span>
+                        )}
             {item.toppings.length > 0 && (
               <span className="block pl-4 text-white font-normal">
                 + {item.toppings.map((t) => t.toppingName).join(", ")}

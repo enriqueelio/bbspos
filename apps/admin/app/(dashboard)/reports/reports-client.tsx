@@ -44,6 +44,7 @@ import type {
 } from "@bbspos/types";
 import {
   FlavorCategoryLabel,
+  MenuCategoryLabel,
   formatPrice,
   PaymentMethodLabel,
   MANUAL_REPORT_CUTOFF,
@@ -51,6 +52,16 @@ import {
   zonedClockMinutes,
 } from "@bbspos/types";
 import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
+
+// Etiqueta de una fila del desglose por categoría: las bebidas usan el label
+// de sabor y el Menú del Día (ALMUERZO) su propio label en español.
+function categoryLabel(category: string): string {
+  return (
+    (FlavorCategoryLabel as Record<string, string>)[category] ??
+    (MenuCategoryLabel as Record<string, string>)[category] ??
+    category
+  );
+}
 
 interface ReportTab {
   key: ReportKey;
@@ -1065,7 +1076,7 @@ function DailyView({ data }: { data: DailyReportData }) {
       ) : null}
       <DataTable
         columns={[
-          { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category], sortValue: (r) => FlavorCategoryLabel[r.category] },
+{ header: "Categoría", cell: (r) => categoryLabel(r.category), sortValue: (r) => categoryLabel(r.category) },
           { header: "Órdenes", cell: (r) => r.orders, numeric: true, sortValue: (r) => r.orders },
           { header: "Unidades", cell: (r) => r.units, numeric: true, sortValue: (r) => r.units },
           { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },

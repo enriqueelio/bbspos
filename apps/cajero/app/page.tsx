@@ -28,10 +28,12 @@ function toPlainOrder(order: {
   paymentAmount2: number | null;
   items: {
     id: string;
-    sizeName: string;
-    flavorName: string;
-    flavorCategory: string;
-    bobaTypeName: string;
+    sizeName: string | null;
+    flavorName: string | null;
+    flavorCategory: string | null;
+    bobaTypeName: string | null;
+    menuItemName: string | null;
+    menuItemCategory: string | null;
     unitPrice: number;
     quantity: number;
     toppings: { toppingName: string; unitPrice: number }[];
@@ -53,8 +55,17 @@ function toPlainOrder(order: {
       (order.paymentMethod2 as Order["paymentMethod2"]) ?? null,
     paymentAmount2: order.paymentAmount2,
     items: order.items.map((item) => ({
-      ...item,
-      flavorCategory: item.flavorCategory as Order["items"][number]["flavorCategory"],
+      id: item.id,
+      sizeName: item.sizeName,
+      flavorName: item.flavorName,
+      flavorCategory:
+        item.flavorCategory as Order["items"][number]["flavorCategory"],
+      bobaTypeName: item.bobaTypeName,
+      menuItemName: item.menuItemName,
+      menuItemCategory:
+        item.menuItemCategory as Order["items"][number]["menuItemCategory"],
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
       toppings: item.toppings,
     })),
   };

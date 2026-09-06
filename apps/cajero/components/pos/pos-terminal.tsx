@@ -6,6 +6,8 @@ import {
   FlavorCategory,
   FlavorCategoryList,
   FlavorCategoryLabel,
+  MenuCategoryLabel,
+  cartItemUnitTotal,
   formatPrice,
   Role,
   type Catalog,
@@ -25,21 +27,6 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
     CATEGORIES.find((c) =>
       catalog.flavors.some((f) => f.categories.includes(c) && f.available),
     ) ?? FlavorCategory.MILK
-  );
-}
-
-function totalOfItems(items: {
-  unitPrice: number;
-  quantity: number;
-  toppings: { price: number }[];
-}[]): number {
-  return items.reduce(
-    (acc, item) =>
-      acc +
-      (item.unitPrice +
-        item.toppings.reduce((sum, t) => sum + t.price, 0)) *
-        item.quantity,
-    0,
   );
 }
 
@@ -240,7 +227,10 @@ export function PosTerminal({
   }
 
   const selectedSize: Size | undefined = size;
-  const cartTotal = totalOfItems(cart.items);
+  const cartTotal = cart.items.reduce(
+    (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
+    0,
+  );
   // Brillo sutil en el cuadro de nombre cuando ya hay un ticket generado
   // pero aún no se ha ingresado el nombre o la mesa.
   const needsName = cart.items.length > 0 && cart.customerName.trim() === "";
@@ -290,13 +280,12 @@ export function PosTerminal({
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {cart.items.length === 0 && (
             <p className="text-sm text-slate-500">
-              Agrega bebidas tocando un sabor en el catálogo.
+              Agrega bebidas tocando un sabor o un plato del día en el
+              catálogo.
             </p>
           )}
           {cart.items.map((item) => {
-            const unitWithExtras =
-              item.unitPrice +
-              item.toppings.reduce((sum, t) => sum + t.price, 0);
+            const unitWithExtras = cartItemUnitTotal(item);
             return (
               <div
                 key={item.id}
@@ -304,12 +293,15 @@ export function PosTerminal({
               >
                 <div className="min-w-0 text-sm">
                   <p className="font-bold text-white">
-                    {item.quantity}× {item.flavor.name}
+                    {item.quantity}×{" "}
+                    {item.kind === "DRINK" ? item.flavor.name : item.name}
                   </p>
                   <p className="text-slate-400">
-                    {item.size.name} · {item.bobaType.name}
+                    {item.kind === "DRINK"
+                      ? `${item.size.name} · ${item.bobaType.name}`
+                      : MenuCategoryLabel[item.category]}
                   </p>
-                  {item.toppings.length > 0 && (
+                  {item.kind === "DRINK" && item.toppings.length > 0 && (
                     <p className="text-slate-400">
                       + {item.toppings.map((t) => t.name).join(", ")}
                     </p>
@@ -420,6 +412,41 @@ export function PosTerminal({
       {/* ===== Derecha (~66%): Catálogo de menú ===== */}
       <div className="flex-1 overflow-y-auto p-4 bg-slate-950">
         <div className="max-w-4xl mx-auto flex flex-col gap-4">
+          {/* Sección destacada del Menú del Día (platos) */}
+          {catalog.menuItems.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
+                Almuerzos
+                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-black text-amber-500">
+                  DEL DÍA
+                </span>
+              </h3>
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                {catalog.menuItems.map((menuItem) => (
+                  <button
+                    key={menuItem.id}
+                    type="button"
+                    title={`Agregar ${menuItem.name}`}
+                    onClick={() =>
+                      cart.addMenuItem({
+                        menuItemId: menuItem.id,
+                        name: menuItem.name,
+                        category: menuItem.category,
+                        unitPrice: menuItem.price,
+                      })
+                    }
+                    className="relative h-14 w-full rounded-lg border border-amber-500/50 bg-amber-500/10 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
+                  >
+                    {menuItem.name}
+                    <span className="mt-0.5 block text-xs font-semibold text-amber-400">
+                      {formatPrice(menuItem.price)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Pestañas de categorías */}
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((category) => {

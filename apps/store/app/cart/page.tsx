@@ -13,7 +13,7 @@ import {
 } from "@bbspos/ui";
 import { useCartStore } from "@/lib/store/cart-store";
 import { useHasHydrated } from "@/lib/use-has-hydrated";
-import { formatPrice, formatOrderCode, sumToppings } from "@bbspos/types";
+import { formatPrice, formatOrderCode, cartItemUnitTotal } from "@bbspos/types";
 import { createOrder } from "@/app/actions/order";
 import { getPaymentQr } from "@/app/actions/payment";
 
@@ -216,7 +216,7 @@ export default function CartPage() {
               {formatPrice(
                 items.reduce(
                   (acc, item) =>
-                    acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
+                    acc + cartItemUnitTotal(item) * item.quantity,
                   0,
                 ),
               )}

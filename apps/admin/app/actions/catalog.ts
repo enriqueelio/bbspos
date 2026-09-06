@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bbspos/db";
-import type { FlavorCategory } from "@bbspos/types";
+import { prisma, setMenuDelDiaForToday } from "@bbspos/db";
+import type { FlavorCategory, MenuCategory } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 export async function createSize(input: { name: string; oz: number }) {
@@ -188,5 +188,60 @@ export async function saveDrinkPrices(input: {
       }),
     ),
   );
+  revalidatePath("/menu");
+}
+
+export async function createMenuItem(input: {
+  name: string;
+  category: MenuCategory;
+  price: number;
+}) {
+  await getRequiredSession();
+  const name = input.name.trim();
+  if (!name || !input.price || input.price <= 0) {
+    throw new Error("Datos inválidos: nombre y precio son obligatorios.");
+  }
+  await prisma.menuItem.create({
+    data: { name, category: input.category, price: Math.trunc(input.price) },
+  });
+  revalidatePath("/menu");
+}
+
+export async function updateMenuItem(
+  id: string,
+  input: {
+    name: string;
+    category: MenuCategory;
+    price: number;
+    available: boolean;
+  },
+) {
+  await getRequiredSession();
+  const name = input.name.trim();
+  if (!name || !input.price || input.price <= 0) {
+    throw new Error("Datos inválidos: nombre y precio son obligatorios.");
+  }
+  await prisma.menuItem.update({
+    where: { id },
+    data: {
+      name,
+      category: input.category,
+      price: Math.trunc(input.price),
+      available: input.available,
+    },
+  });
+  revalidatePath("/menu");
+}
+
+export async function deleteMenuItem(id: string) {
+  await getRequiredSession();
+  await prisma.menuItem.delete({ where: { id } });
+  revalidatePath("/menu");
+}
+
+/** Activa (ON) o desactiva (OFF) el Menú del Día de un plato para la jornada actual. */
+export async function setMenuItemMenuDelDia(id: string, on: boolean) {
+  await getRequiredSession();
+  await setMenuDelDiaForToday(id, on);
   revalidatePath("/menu");
 }

@@ -27,28 +27,45 @@ import {
   FlavorCategoryLabel,
   FlavorCategoryList,
   formatPrice,
+  MenuCategory,
+  MenuCategoryLabel,
+  MenuCategoryList,
   type BobaType,
   type DrinkPrice,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
+  type MenuCategory as MenuCategoryType,
   type Size,
   type Topping,
 } from "@bbspos/types";
 import {
   createBoba,
   createFlavor,
+  createMenuItem,
   createSize,
   createTopping,
   deleteBoba,
   deleteFlavor,
+  deleteMenuItem,
   deleteSize,
   deleteTopping,
   saveDrinkPrices,
+  setMenuItemMenuDelDia,
   updateBoba,
   updateFlavor,
+  updateMenuItem,
   updateSize,
   updateTopping,
 } from "@/app/actions/catalog";
+
+export interface MenuItemAdminView {
+  id: string;
+  name: string;
+  category: MenuCategoryType;
+  price: number;
+  available: boolean;
+  enMenuDelDiaHoy: boolean;
+}
 
 function CollapsibleCard({
   title,
@@ -240,12 +257,14 @@ export function MenuManager({
   bobaTypes,
   toppings,
   drinkPrices,
+  menuItems,
 }: {
   sizes: Size[];
   flavors: Flavor[];
   bobaTypes: BobaType[];
   toppings: Topping[];
   drinkPrices: DrinkPrice[];
+  menuItems: MenuItemAdminView[];
 }) {
   const [sizeForm, setSizeForm] = useState({ name: "", oz: "" });
   const [flavorForm, setFlavorForm] = useState<{
@@ -257,6 +276,11 @@ export function MenuManager({
     kind: BobaKind;
   }>({ name: "", kind: BobaKind.TAPIOCA });
   const [toppingForm, setToppingForm] = useState({ name: "", price: "" });
+  const [menuItemForm, setMenuItemForm] = useState<{
+    name: string;
+    category: MenuCategoryType;
+    price: string;
+  }>({ name: "", category: MenuCategory.ALMUERZO, price: "" });
   const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
@@ -270,6 +294,13 @@ export function MenuManager({
   }>({ name: "", kind: BobaKind.TAPIOCA });
   const [editingTopping, setEditingTopping] = useState<Topping | null>(null);
   const [toppingEdit, setToppingEdit] = useState({ name: "", price: "" });
+  const [editingMenuItem, setEditingMenuItem] =
+    useState<MenuItemAdminView | null>(null);
+  const [menuItemEdit, setMenuItemEdit] = useState<{
+    name: string;
+    category: MenuCategoryType;
+    price: string;
+  }>({ name: "", category: MenuCategory.ALMUERZO, price: "" });
 
   function run(action: () => Promise<void>) {
     action().catch((e) => {
@@ -312,6 +343,15 @@ export function MenuManager({
     setToppingEdit({ name: topping.name, price: String(topping.price) });
   }
 
+  function openMenuItemEdit(item: MenuItemAdminView) {
+    setEditingMenuItem(item);
+    setMenuItemEdit({
+      name: item.name,
+      category: item.category,
+      price: String(item.price),
+    });
+  }
+
   return (
     <div className="space-y-6">
       <div className="mb-6 border-b border-slate-800 pb-4">
@@ -320,6 +360,147 @@ export function MenuManager({
           Administra tamaños, sabores, bobas, toppings y la matriz de precios.
         </p>
       </div>
+
+      <CollapsibleCard
+        title="Almuerzos · Menú del Día"
+        defaultOpen={menuItems.length > 0}
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="max-w-52"
+              placeholder="Nombre del plato"
+              value={menuItemForm.name}
+              onChange={(e) =>
+                setMenuItemForm({ ...menuItemForm, name: e.target.value })
+              }
+            />
+            <Select
+              value={menuItemForm.category}
+              onValueChange={(v) =>
+                setMenuItemForm({ ...menuItemForm, category: v as MenuCategoryType })
+              }
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MenuCategoryList.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {MenuCategoryLabel[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              className="max-w-28"
+              type="number"
+              min="1"
+              placeholder="Precio (Bs)"
+              value={menuItemForm.price}
+              onChange={(e) =>
+                setMenuItemForm({ ...menuItemForm, price: e.target.value })
+              }
+            />
+            <Button
+              onClick={() =>
+                run(() =>
+                  createMenuItem({
+                    name: menuItemForm.name,
+                    category: menuItemForm.category,
+                    price: Number(menuItemForm.price),
+                  }),
+                )
+              }
+            >
+              <Plus className="h-4 w-4" /> Agregar plato
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {menuItems.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between gap-3 rounded-lg border p-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{item.name}</span>
+                  <Badge variant={item.available ? "success" : "secondary"}>
+                    {item.available ? "Disponible" : "No disponible"}
+                  </Badge>
+                  {item.enMenuDelDiaHoy && (
+                    <Badge variant="warning">DEL DÍA</Badge>
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {formatPrice(item.price)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!item.available}
+                    title={
+                      item.available
+                        ? "Agregar o quitar del Menú del Día de hoy"
+                        : "El plato debe estar disponible"
+                    }
+                    onClick={() =>
+                      run(() =>
+                        setMenuItemMenuDelDia(item.id, !item.enMenuDelDiaHoy),
+                      )
+                    }
+                    className={
+                      item.enMenuDelDiaHoy
+                        ? "border-amber-500 bg-amber-500/10 text-amber-500"
+                        : undefined
+                    }
+                  >
+                    {item.enMenuDelDiaHoy ? "Quitar del día" : "Agregar al día"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      run(() =>
+                        updateMenuItem(item.id, {
+                          name: item.name,
+                          category: item.category,
+                          price: item.price,
+                          available: !item.available,
+                        }),
+                      )
+                    }
+                  >
+                    {item.available ? "Desactivar" : "Activar"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Editar"
+                    onClick={() => openMenuItemEdit(item)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    aria-label="Eliminar"
+                    onClick={() => confirmDelete(() => deleteMenuItem(item.id))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {menuItems.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No hay platos registrados. Agrega el primero arriba.
+              </p>
+            )}
+          </div>
+        </div>
+      </CollapsibleCard>
 
       <CollapsibleCard title="Tamaños de vaso">
         <div className="space-y-4">
@@ -922,6 +1103,83 @@ export function MenuManager({
                     price: Number(toppingEdit.price),
                     available: editingTopping.available,
                   }).then(() => setEditingTopping(null)),
+                )
+              }
+            >
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editingMenuItem !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingMenuItem(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar plato</DialogTitle>
+            <DialogDescription>
+              Actualiza el nombre, la sección y el precio fijo del plato.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Nombre"
+              value={menuItemEdit.name}
+              onChange={(e) =>
+                setMenuItemEdit({ ...menuItemEdit, name: e.target.value })
+              }
+            />
+            <Select
+              value={menuItemEdit.category}
+              onValueChange={(v) =>
+                setMenuItemEdit({
+                  ...menuItemEdit,
+                  category: v as MenuCategoryType,
+                })
+              }
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MenuCategoryList.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {MenuCategoryLabel[c]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              type="number"
+              min="1"
+              placeholder="Precio (Bs)"
+              value={menuItemEdit.price}
+              onChange={(e) =>
+                setMenuItemEdit({ ...menuItemEdit, price: e.target.value })
+              }
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingMenuItem(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() =>
+                editingMenuItem &&
+                run(() =>
+                  updateMenuItem(editingMenuItem.id, {
+                    name: menuItemEdit.name,
+                    category: menuItemEdit.category,
+                    price: Number(menuItemEdit.price),
+                    available: editingMenuItem.available,
+                  }).then(() => setEditingMenuItem(null)),
                 )
               }
             >

@@ -1,5 +1,10 @@
 import type { CartItem } from "@bbspos/types";
-import { FlavorCategoryLabel, formatPrice, sumToppings } from "@bbspos/types";
+import {
+  FlavorCategoryLabel,
+  MenuCategoryLabel,
+  cartItemUnitTotal,
+  formatPrice,
+} from "@bbspos/types";
 import { Trash2 } from "lucide-react";
 import { Card } from "../ui/card";
 import { Button } from "../ui/button";
@@ -16,19 +21,24 @@ export function CartItemRow({
   onUpdateQuantity,
   onRemove,
 }: CartItemRowProps) {
-  const lineTotal = (item.unitPrice + sumToppings(item.toppings)) * item.quantity;
+  const unitTotal = cartItemUnitTotal(item);
+  const lineTotal = unitTotal * item.quantity;
 
   return (
     <Card className="p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="font-semibold">
-            {item.size.name} · {item.flavor.name}
+            {item.kind === "DRINK"
+              ? `${item.size.name} · ${item.flavor.name}`
+              : item.name}
           </div>
           <div className="text-sm text-muted-foreground">
-            {FlavorCategoryLabel[item.category]} · {item.bobaType.name}
+            {item.kind === "DRINK"
+              ? `${FlavorCategoryLabel[item.category]} · ${item.bobaType.name}`
+              : MenuCategoryLabel[item.category]}
           </div>
-          {item.toppings.length > 0 && (
+          {item.kind === "DRINK" && item.toppings.length > 0 && (
             <div className="mt-1 text-xs text-muted-foreground">
               Toppings:{" "}
               {item.toppings
@@ -37,7 +47,7 @@ export function CartItemRow({
             </div>
           )}
           <div className="mt-1 text-sm font-medium text-primary">
-            {formatPrice(item.unitPrice + sumToppings(item.toppings))} c/u
+            {formatPrice(unitTotal)} c/u
           </div>
         </div>
         <div className="flex items-center justify-between gap-4">

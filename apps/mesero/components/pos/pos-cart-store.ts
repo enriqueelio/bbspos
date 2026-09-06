@@ -7,6 +7,7 @@ import type {
   CartTopping,
   Flavor,
   FlavorCategory,
+  MenuCategory,
   Size,
 } from "@bbspos/types";
 
@@ -21,6 +22,13 @@ export interface AddPosItemInput {
   toppings: CartTopping[];
 }
 
+export interface AddPosMenuItemInput {
+  menuItemId: string;
+  name: string;
+  category: MenuCategory;
+  unitPrice: number;
+}
+
 export interface PosCartSnapshot {
   items: CartItem[];
   customerName: string;
@@ -30,6 +38,18 @@ export interface PosCartSnapshot {
 const listeners = new Set<() => void>();
 
 const STORAGE_KEY = "bbspos-pos-cart";
+
+// Los ítems guardados antes de la unión discriminada no traen `kind`: eran
+// siempre bebidas. Se normalizan a "DRINK" para que las sesiones previas
+// sigan funcionando sin perder el carrito.
+function normalizeStoredItem(item: unknown): CartItem | null {
+  if (!item || typeof item !== "object") return null;
+  const raw = item as Record<string, unknown>;
+  if (raw.kind === "MENU_ITEM") {
+    return raw as unknown as CartItem;
+  }
+  return { kind: "DRINK", ...(raw as object) } as CartItem;
+}
 
 function loadFromStorage(): Partial<PosCartSnapshot> {
   if (typeof window === "undefined") return {};
@@ -53,7 +73,11 @@ function persistState() {
 }
 
 const stored = loadFromStorage();
-let items: CartItem[] = Array.isArray(stored.items) ? stored.items : [];
+let items: CartItem[] = Array.isArray(stored.items)
+  ? stored.items
+      .map(normalizeStoredItem)
+      .filter((i): i is CartItem => Boolean(i))
+  : [];
 let customerName =
   typeof stored.customerName === "string" ? stored.customerName : "";
 // El tipo de entrega arranca sin ninguno preseleccionado; el cliente/mesero
@@ -85,6 +109,7 @@ export function addPosItem(input: AddPosItemInput) {
     );
   } else {
     const item: CartItem = {
+      kind: "DRINK",
       id,
       size: input.size,
       flavor: input.flavor,
@@ -92,6 +117,29 @@ export function addPosItem(input: AddPosItemInput) {
       bobaType: input.bobaType,
       unitPrice: input.unitPrice,
       toppings: input.toppings,
+      quantity: 1,
+    };
+    items = [...items, item];
+  }
+  emit();
+  persistState();
+}
+
+export function addPosMenuItem(input: AddPosMenuItemInput) {
+  const id = `menu-item-${input.menuItemId}`;
+  const existing = items.find((i) => i.id === id);
+  if (existing) {
+    items = items.map((i) =>
+      i.id === id ? { ...i, quantity: i.quantity + 1 } : i,
+    );
+  } else {
+    const item: CartItem = {
+      kind: "MENU_ITEM",
+      id,
+      menuItemId: input.menuItemId,
+      name: input.name,
+      category: input.category,
+      unitPrice: input.unitPrice,
       quantity: 1,
     };
     items = [...items, item];
@@ -152,6 +200,7 @@ export function usePosCart() {
   return {
     ...state,
     addItem: addPosItem,
+    addMenuItem: addPosMenuItem,
     updateQuantity: updatePosQuantity,
     removeItem: removePosItem,
     setCustomerName: setPosCustomerName,

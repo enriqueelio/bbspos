@@ -1,11 +1,14 @@
 import * as XLSX from "xlsx";
 import {
   FlavorCategoryLabel,
+  MenuCategoryLabel,
   PaymentMethodLabel,
   type AdjustmentsData,
   type CategorySalesData,
   type DailyReportData,
   type DayTotalData,
+  type FlavorCategory,
+  type MenuCategory,
   type PeakHoursData,
   type PaymentsData,
   type SalesRangeData,
@@ -62,7 +65,9 @@ function handleDaily(data: DailyReportData, to: string) {
 
   if (data.byCategory.length > 0) {
     const rows = data.byCategory.map((r) => ({
-      Categoría: FlavorCategoryLabel[r.category],
+      Categoría:
+        FlavorCategoryLabel[r.category as FlavorCategory] ??
+        MenuCategoryLabel[r.category as MenuCategory],
       Órdenes: r.orders,
       Unidades: r.units,
       Ingresos: r.revenue,

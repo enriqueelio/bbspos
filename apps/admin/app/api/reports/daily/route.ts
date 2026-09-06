@@ -15,12 +15,20 @@ const CATEGORY_LABELS: Record<string, string> = {
   MILK: "Con leche",
   WATER: "Con agua",
   SPECIAL: "Especiales",
+  ALMUERZO: "Almuerzos",
 };
+
+// Orden del desglose: categorías de bebidas y al final el Menú del Día
+// (las líneas de platillos llegan sin flavorCategory, se agrupan como ALMUERZO).
+const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
+  ...FlavorCategoryList,
+  "ALMUERZO",
+];
 
 // Filas devueltas por las consultas SQL nativas (SQLite devuelve agregaciones
 // como números enteros grandes; se normalizan con Number()).
 type CategoryRow = {
-  flavorCategory: string;
+  flavorCategory: string | null;
   orders: number | bigint;
   units: number | bigint;
   revenue: number | bigint;
@@ -111,7 +119,7 @@ export async function GET(request: Request) {
     const discountsTotal = Number(orderAgg._sum.discountAmount ?? 0);
 
     const byCategoryMap = new Map<string, CategoryBreakdownRow & { units: number }>();
-    for (const category of FlavorCategoryList) {
+    for (const category of CATEGORY_ORDER) {
       byCategoryMap.set(category, {
         category,
         orders: 0,
@@ -121,13 +129,15 @@ export async function GET(request: Request) {
     }
     let itemsSold = 0;
     for (const row of catRows) {
-      const entry = byCategoryMap.get(row.flavorCategory);
-      if (!entry) continue;
+      // Las líneas de platillos (incluidas en el total de artículos) llegan
+      // sin flavorCategory: se agrupan bajo la categoría ALMUERZO.
       const units = Number(row.units);
+      itemsSold += units;
+      const entry = byCategoryMap.get(row.flavorCategory ?? "ALMUERZO");
+      if (!entry) continue;
       entry.orders = Number(row.orders);
       entry.units = units;
       entry.revenue = Number(row.revenue);
-      itemsSold += units;
     }
 
     const toppingsRevenue = Number(toppingsRows[0]?.value ?? 0);
@@ -167,7 +177,7 @@ export async function GET(request: Request) {
       avgTicket,
       itemsSold,
       toppingsRevenue,
-      byCategory: FlavorCategoryList.map((c) => {
+      byCategory: CATEGORY_ORDER.map((c) => {
         const row = byCategoryMap.get(c)!;
         return { category: row.category, orders: row.orders, units: row.units, revenue: row.revenue };
       }),
@@ -182,7 +192,7 @@ export async function GET(request: Request) {
         "Ingresos totales",
         "Órdenes totales",
         "Ticket promedio",
-        "Bebidas vendidas",
+        "Artículos vendidos",
         "Ingreso por toppings",
         "Categoría",
         "Órdenes categoría",

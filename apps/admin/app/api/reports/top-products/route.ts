@@ -34,6 +34,7 @@ function drinkGroupSql(groupBy: Exclude<TopProductsGroupBy, "topping">): string 
     FROM "OrderItem" oi
     JOIN "Order" o ON o.id = oi."orderId"
     WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
+      AND oi."menuItemName" IS NULL
     GROUP BY ${keyExpr}
   `;
 }

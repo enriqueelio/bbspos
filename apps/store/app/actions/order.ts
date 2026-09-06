@@ -2,7 +2,7 @@
 
 import { after } from "next/server";
 import { prisma } from "@bbspos/db";
-import { sumToppings, type CartItem } from "@bbspos/types";
+import { cartItemUnitTotal, type CartItem } from "@bbspos/types";
 import { formatComanda, getPrinterName, printText } from "@/lib/printing";
 
 export async function createOrder(
@@ -17,24 +17,30 @@ export async function createOrder(
     throw new Error("Falta el nombre del cliente");
   }
 
-  const orderItems = items.map((item) => ({
-    sizeName: item.size.name,
-    flavorName: item.flavor.name,
-    flavorCategory: item.category,
-    bobaTypeName: item.bobaType.name,
-    unitPrice: item.unitPrice,
-    quantity: item.quantity,
-    toppings: {
-      create: item.toppings.map((t) => ({
-        toppingName: t.name,
-        unitPrice: t.price,
-      })),
-    },
-  }));
+  const orderItems = items.map((item) => {
+    // La tienda pública solo arma bebidas; las líneas de platillos llegan
+    // únicamente desde las terminales POS.
+    if (item.kind !== "DRINK") {
+      throw new Error("Este producto no está disponible en la tienda.");
+    }
+    return {
+      sizeName: item.size.name,
+      flavorName: item.flavor.name,
+      flavorCategory: item.category,
+      bobaTypeName: item.bobaType.name,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      toppings: {
+        create: item.toppings.map((t) => ({
+          toppingName: t.name,
+          unitPrice: t.price,
+        })),
+      },
+    };
+  });
 
   const total = items.reduce(
-    (acc, item) =>
-      acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
+    (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
     0,
   );
 
@@ -80,6 +86,7 @@ export async function createOrder(
             sizeName: item.sizeName,
             flavorName: item.flavorName,
             bobaTypeName: item.bobaTypeName,
+            menuItemName: item.menuItemName,
             unitPrice: item.unitPrice,
             quantity: item.quantity,
             toppings: item.toppings.map((t) => ({

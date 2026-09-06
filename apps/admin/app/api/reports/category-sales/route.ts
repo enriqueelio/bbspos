@@ -49,6 +49,9 @@ export async function GET(request: Request) {
     }
 
     for (const item of items) {
+      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
+      // este reporte desglosa solo bebidas.
+      if (!item.flavorCategory) continue;
       const entry = totals.get(item.flavorCategory);
       if (!entry) continue;
       entry.unitsSold += item.quantity;

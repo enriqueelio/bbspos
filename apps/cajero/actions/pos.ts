@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@bbspos/db";
+import { prisma, todayMenuItems } from "@bbspos/db";
 import {
   OrderStatus,
-  sumToppings,
+  cartItemUnitTotal,
   type CartItem,
   type Catalog,
 } from "@bbspos/types";
@@ -12,28 +12,30 @@ import { getRequiredSession } from "@/lib/session";
 import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 
 /** Catálogo activo para el punto de venta: tamaños, sabores, tipos de boba,
- *  la matriz de precios y los toppings disponibles. */
+ *  la matriz de precios, los toppings disponibles y el Menú del Día vigente. */
 export async function getPosCatalog(): Promise<Catalog> {
-  const [sizes, flavors, bobaTypes, drinkPrices, toppings] = await Promise.all([
-    prisma.size.findMany({
-      where: { available: true },
-      orderBy: { oz: "asc" },
-    }),
-    prisma.flavor.findMany({
-      where: { available: true },
-      include: { categories: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.bobaType.findMany({
-      where: { available: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
-    prisma.topping.findMany({
-      where: { available: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems] =
+    await Promise.all([
+      prisma.size.findMany({
+        where: { available: true },
+        orderBy: { oz: "asc" },
+      }),
+      prisma.flavor.findMany({
+        where: { available: true },
+        include: { categories: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.bobaType.findMany({
+        where: { available: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
+      prisma.topping.findMany({
+        where: { available: true },
+        orderBy: { name: "asc" },
+      }),
+      todayMenuItems(),
+    ]);
 
   return {
     sizes,
@@ -46,6 +48,12 @@ export async function getPosCatalog(): Promise<Catalog> {
     bobaTypes,
     drinkPrices,
     toppings,
+    menuItems: menuItems.map((mi) => ({
+      id: mi.id,
+      name: mi.name,
+      category: mi.category,
+      price: mi.price,
+    })),
   };
 }
 
@@ -71,24 +79,32 @@ export async function createPosOrder(
     select: { id: true },
   });
 
-  const orderItems = items.map((item) => ({
-    sizeName: item.size.name,
-    flavorName: item.flavor.name,
-    flavorCategory: item.category,
-    bobaTypeName: item.bobaType.name,
-    unitPrice: item.unitPrice,
-    quantity: item.quantity,
-    toppings: {
-      create: item.toppings.map((t) => ({
-        toppingName: t.name,
-        unitPrice: t.price,
-      })),
-    },
-  }));
+  const orderItems = items.map((item) =>
+    item.kind === "DRINK"
+      ? {
+          sizeName: item.size.name,
+          flavorName: item.flavor.name,
+          flavorCategory: item.category,
+          bobaTypeName: item.bobaType.name,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          toppings: {
+            create: item.toppings.map((t) => ({
+              toppingName: t.name,
+              unitPrice: t.price,
+            })),
+          },
+        }
+      : {
+          menuItemName: item.name,
+          menuItemCategory: item.category,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+        },
+  );
 
   const total = items.reduce(
-    (acc, item) =>
-      acc + (item.unitPrice + sumToppings(item.toppings)) * item.quantity,
+    (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
     0,
   );
 
@@ -144,6 +160,7 @@ export async function createPosOrder(
               sizeName: item.sizeName,
               flavorName: item.flavorName,
               bobaTypeName: item.bobaTypeName,
+              menuItemName: item.menuItemName,
               unitPrice: item.unitPrice,
               quantity: item.quantity,
               toppings: item.toppings.map((t) => ({

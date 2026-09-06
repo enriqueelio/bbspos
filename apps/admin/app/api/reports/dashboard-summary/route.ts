@@ -289,6 +289,9 @@ export async function GET(request: Request) {
     // Best category
     const catRevenue = new Map<FlavorCategory, number>();
     for (const item of rangeItems) {
+      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
+      // la mejor categoría se calcula solo con bebidas.
+      if (!item.flavorCategory) continue;
       catRevenue.set(
         item.flavorCategory,
         (catRevenue.get(item.flavorCategory) ?? 0) +
@@ -337,7 +340,11 @@ export async function GET(request: Request) {
     }
 
     // Menu rotation (% of catalog with zero orders in range)
-    const soldNames = new Set(soldFlavorNames.map((f) => f.flavorName));
+    const soldNames = new Set(
+      soldFlavorNames
+        .map((f) => f.flavorName)
+        .filter((n): n is string => Boolean(n)),
+    );
     const totalFlavors = catalogFlavors.length;
     const unsoldCount = catalogFlavors.filter(
       (f) => !soldNames.has(f.name),

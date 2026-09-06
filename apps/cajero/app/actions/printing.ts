@@ -52,6 +52,7 @@ export async function reprintOrder(orderId: string): Promise<string> {
         sizeName: item.sizeName,
         flavorName: item.flavorName,
         bobaTypeName: item.bobaTypeName,
+        menuItemName: item.menuItemName,
         unitPrice: item.unitPrice,
         quantity: item.quantity,
         toppings: item.toppings.map((t) => ({

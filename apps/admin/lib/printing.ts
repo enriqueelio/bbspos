@@ -183,9 +183,10 @@ function toAscii(text: string): string {
 }
 
 interface ComandaItem {
-  sizeName: string;
-  flavorName: string;
-  bobaTypeName: string;
+  sizeName: string | null;
+  flavorName: string | null;
+  bobaTypeName: string | null;
+  menuItemName: string | null;
   unitPrice: number;
   quantity: number;
   toppings: { toppingName: string; unitPrice: number }[];
@@ -298,7 +299,13 @@ export function formatComanda(order: ComandaOrder): string {
 
   for (const item of order.items) {
     const quantityLabel = item.quantity > 1 ? `${item.quantity}x ` : "";
-    const baseLabel = `${quantityLabel}${itemLabel(item.flavorName, item.sizeName, item.bobaTypeName)}`;
+    const baseLabel = item.menuItemName
+      ? `${quantityLabel}${item.menuItemName}`
+      : `${quantityLabel}${itemLabel(
+          item.flavorName ?? "",
+          item.sizeName ?? "",
+          item.bobaTypeName ?? "",
+        )}`;
     lines.push(pricedRow(baseLabel, item.unitPrice * item.quantity));
     const toppingGroups = new Map<string, { count: number; total: number }>();
     for (const topping of item.toppings) {
@@ -388,6 +395,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   MILK: "Con leche",
   WATER: "Con agua",
   SPECIAL: "Especiales",
+  ALMUERZO: "Almuerzos",
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -421,7 +429,7 @@ export function formatDailyReport(data: {
   lines.push(row("Ingresos:", money(data.revenueTotal)));
   lines.push(row("Pedidos:", String(data.ordersTotal)));
   lines.push(row("Ticket prom.:", money(data.avgTicket)));
-  lines.push(row("Bebidas:", String(data.itemsSold)));
+  lines.push(row("Artículos:", String(data.itemsSold)));
   lines.push(row("Toppings:", money(data.toppingsRevenue)));
 
   if (data.discountsTotal || data.cancellationsCount) {

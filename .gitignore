@@ -43,3 +43,6 @@ csrf*.txt
 # utilidades de diagnostico locales
 packages/db/checkusers.js
 gen-icons.js
+
+# dump de la base antigua (109 MB, excede limite de GitHub; se mantiene local)
+indicaciones/bbs Antiguo.sql

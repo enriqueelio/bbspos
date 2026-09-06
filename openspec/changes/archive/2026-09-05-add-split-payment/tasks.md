@@ -25,4 +25,4 @@
 
 - [x] 5.1 Ejecutar `pnpm typecheck` desde la raíz del monorepo para verificar que no hay errores de tipo
 - [x] 5.2 Verificar que la migración se aplica correctamente sin pérdida de datos
-- [ ] 5.3 Probar flujo completo: crear pedido -> cobro dividido -> verificar en cola del cajero -> verificar en reporte diario
+- [x] 5.3 Probar flujo completo: crear pedido -> cobro dividido -> verificar en cola del cajero -> verificar en reporte diario

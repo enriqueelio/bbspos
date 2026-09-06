@@ -368,10 +368,9 @@ function OrderCard({
             {order.paymentMethod && (
               <p className="text-base text-white">
                 Pago: {PaymentMethodLabel[order.paymentMethod]}
-                {order.paymentMethod2 &&
-                  order.paymentAmount2 != null &&
-                  ` + ${PaymentMethodLabel[order.paymentMethod2]} ${formatPrice(order.total - order.paymentAmount2)}`}
-                {!order.paymentMethod2 && " ✓"}
+                {order.paymentMethod2 && order.paymentAmount2 != null
+                  ? ` ${formatPrice(order.total - order.paymentAmount2)} + ${PaymentMethodLabel[order.paymentMethod2]} ${formatPrice(order.paymentAmount2)}`
+                  : " ✓"}
               </p>
             )}
           </div>

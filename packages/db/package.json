@@ -14,6 +14,7 @@
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
     "daily-report": "tsx scripts/daily-report-worker.ts",
+    "menu-day-cleanup": "tsx scripts/menu-day-cleanup-worker.ts",
     "telegram-alert": "tsx scripts/telegram-alert-worker.ts",
     "rename-toppings": "tsx scripts/rename-toppings.mjs",
     "typecheck": "tsc --noEmit",

@@ -1,4 +1,6 @@
-import { prisma, zonedDateKey } from "@bbspos/db";
+import { prisma, resetStaleMenuDelDia, zonedDateKey } from "@bbspos/db";
+import { Role } from "@bbspos/types";
+import { getRequiredSession } from "@/lib/session";
 import { MenuManager } from "./menu-manager";
 
 export const metadata = {
@@ -6,6 +8,13 @@ export const metadata = {
 };
 
 export default async function MenuPage() {
+  // Al abrir el módulo del menú, limpia la selección de almuerzos de jornadas
+  // anteriores para que el admin vuelva a elegir los platos del día.
+  await resetStaleMenuDelDia();
+
+  const session = await getRequiredSession();
+  const currentUserRole = session.user.role as Role;
+
   const [sizes, flavors, bobaTypes, toppings, drinkPrices, menuItems] =
     await Promise.all([
       prisma.size.findMany({ orderBy: { oz: "asc" } }),
@@ -26,6 +35,7 @@ export default async function MenuPage() {
 
   return (
     <MenuManager
+      currentUserRole={currentUserRole}
       sizes={sizes}
       flavors={flavors.map((f) => ({
         id: f.id,

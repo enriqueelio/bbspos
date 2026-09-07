@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
@@ -30,6 +30,7 @@ import {
   MenuCategory,
   MenuCategoryLabel,
   MenuCategoryList,
+  Role,
   type BobaType,
   type DrinkPrice,
   type Flavor,
@@ -68,14 +69,6 @@ export interface MenuItemAdminView {
   available: boolean;
   enMenuDelDiaHoy: boolean;
 }
-
-type MenuItemFormState = {
-  name: string;
-  category: MenuCategoryType;
-  price: string;
-  description: string;
-  options: { name: string; price: string }[];
-};
 
 function CollapsibleCard({
   title,
@@ -229,8 +222,8 @@ function PriceMatrixEditor({
     } catch (e) {
       toast({
         variant: "destructive",
-        title: "Acción Denegada",
-        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        title: "AcciÃ³n Denegada",
+        description: e instanceof Error ? e.message : "OcurriÃ³ un error.",
         duration: 100000,
       });
     }
@@ -240,7 +233,7 @@ function PriceMatrixEditor({
     <div className="space-y-4">
       {sizes.length === 0 || bobaTypes.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Registra al menos un tamaño y un tipo de boba para cargar la matriz.
+          Registra al menos un tamaÃ±o y un tipo de boba para cargar la matriz.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -264,7 +257,7 @@ function PriceMatrixEditor({
               {sizes.map((s) => (
                 <tr key={s.id}>
                   <td className="px-2 py-1 font-medium">
-                    {s.name} · {s.oz} oz
+                    {s.name} Â· {s.oz} oz
                   </td>
                   {bobaTypes.map((b) => (
                     <td key={b.id} className="px-2 py-1">
@@ -311,7 +304,7 @@ function MenuItemOptionsEditor({
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-muted-foreground">
-        Variantes (Pollo / Res, etc.) — precio propio por variante
+        Variantes (Pollo / Res, etc.) â€” precio propio por variante
       </p>
       {options.map((opt, i) => (
         <div key={i} className="flex gap-2 items-center">
@@ -343,7 +336,7 @@ function MenuItemOptionsEditor({
             className="h-8 w-8"
             onClick={() => onChange(options.filter((_, j) => j !== i))}
           >
-            ✕
+            âœ•
           </Button>
         </div>
       ))}
@@ -358,179 +351,162 @@ function MenuItemOptionsEditor({
   );
 }
 
-function PlatosGroup({
+function normalize(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function MenuSection({
   title,
-  subtitle,
-  emptyText,
-  defaultOpen,
-  form,
-  setForm,
-  onAdd,
-  categoryOptions,
   items,
-  showDelDia,
-  onToggleDelDia,
-  onToggleAvailable,
+  filteredItems,
+  disponibles,
+  query,
+  onQueryChange,
+  openNew,
+  newButtonLabel,
+  emptyText,
+  showCategory,
+  onToggle,
   onEdit,
   onDelete,
+  isSuperAdmin,
 }: {
   title: string;
-  subtitle?: string;
-  emptyText: string;
-  defaultOpen: boolean;
-  form: MenuItemFormState;
-  setForm: (next: MenuItemFormState) => void;
-  onAdd: () => void;
-  categoryOptions?: readonly MenuCategoryType[];
   items: MenuItemAdminView[];
-  showDelDia?: boolean;
-  onToggleDelDia?: (item: MenuItemAdminView) => void;
-  onToggleAvailable: (item: MenuItemAdminView) => void;
+  filteredItems: MenuItemAdminView[];
+  disponibles: number;
+  query: string;
+  onQueryChange: (q: string) => void;
+  openNew: () => void;
+  newButtonLabel: string;
+  emptyText: string;
+  showCategory: boolean;
+  onToggle: (item: MenuItemAdminView) => void;
   onEdit: (item: MenuItemAdminView) => void;
   onDelete: (item: MenuItemAdminView) => void;
+  isSuperAdmin: boolean;
 }) {
   return (
-    <CollapsibleCard title={title} defaultOpen={defaultOpen}>
+    <CollapsibleCard title={title} defaultOpen={false}>
       <div className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap gap-2 items-end">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="relative w-full max-w-xs">
             <Input
-              className="max-w-52"
-              placeholder="Nombre del plato"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              placeholder="Buscar plato..."
+              className="pl-9"
             />
-            {categoryOptions && (
-              <Select
-                value={form.category}
-                onValueChange={(v) =>
-                  setForm({ ...form, category: v as MenuCategoryType })
-                }
-              >
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categoryOptions.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {MenuCategoryLabel[c]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Input
-              className="max-w-28"
-              type="number"
-              min="1"
-              placeholder="Precio (Bs)"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-            />
-            <Button onClick={onAdd}>
-              <Plus className="h-4 w-4" /> Agregar plato
-            </Button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
           </div>
-          <Input
-            placeholder="Descripción (opcional)"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-          <MenuItemOptionsEditor
-            options={form.options}
-            onChange={(options) => setForm({ ...form, options })}
-          />
+          <Button onClick={openNew}>
+            <Plus className="h-4 w-4" /> {newButtonLabel}
+          </Button>
         </div>
 
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        <div className="flex items-center gap-2">
+          <Badge variant="success">{disponibles} disponibles</Badge>
+          <Badge variant="secondary">{items.length} totales</Badge>
+        </div>
 
-        <div className="space-y-2">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-3 rounded-lg border p-3"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{item.name}</span>
-                <Badge variant={item.available ? "success" : "secondary"}>
-                  {item.available ? "Disponible" : "No disponible"}
-                </Badge>
-                {item.category === MenuCategory.ALMUERZO &&
-                  item.enMenuDelDiaHoy && (
-                    <Badge variant="warning">DEL DÍA</Badge>
-                  )}
-                {categoryOptions && (
-                  <span className="text-sm text-muted-foreground">
-                    {MenuCategoryLabel[item.category]}
-                  </span>
+        <div className="overflow-hidden rounded-lg border border-slate-800">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-800 bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="px-4 py-3 font-medium">Nombre</th>
+                {showCategory && (
+                  <th className="px-4 py-3 font-medium">Categoría</th>
                 )}
-                {item.options.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    Variante:{" "}
-                    {item.options
-                      .map((o) => `${o.name} ${formatPrice(o.price)}`)
-                      .join(" · ")}
-                  </span>
-                )}
-                <span className="text-sm text-muted-foreground">
-                  {formatPrice(item.price)}
-                </span>
-                {item.description && (
-                  <p className="w-full text-xs text-muted-foreground">
-                    {item.description}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {showDelDia && onToggleDelDia && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!item.available}
-                    title={
-                      item.available
-                        ? "Agregar o quitar del Menú del Día de hoy"
-                        : "El plato debe estar disponible"
-                    }
-                    onClick={() => onToggleDelDia(item)}
-                    className={
-                      item.enMenuDelDiaHoy
-                        ? "border-amber-500 bg-amber-500/10 text-amber-500"
-                        : undefined
-                    }
+                <th className="px-4 py-3 text-right font-medium">Precio</th>
+                <th className="px-4 py-3 text-right font-medium">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item, i) => {
+                const isAvailable = item.available;
+                const zebra = i % 2 === 1 ? "bg-slate-900/40" : undefined;
+                return (
+                  <tr
+                    key={item.id}
+                    className={cn("border-b border-slate-800/60", zebra)}
                   >
-                    {item.enMenuDelDiaHoy ? "Quitar del día" : "Agregar al día"}
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onToggleAvailable(item)}
-                >
-                  {item.available ? "Desactivar" : "Activar"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Editar"
-                  onClick={() => onEdit(item)}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  aria-label="Eliminar"
-                  onClick={() => onDelete(item)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-          {items.length === 0 && (
-            <p className="text-sm text-muted-foreground">{emptyText}</p>
-          )}
+                    <td className="px-4 py-2.5 font-medium">
+                      {item.name}
+                    </td>
+                    {showCategory && (
+                      <td className="px-4 py-2.5 text-muted-foreground">
+                        {MenuCategoryLabel[item.category]}
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5 text-right tabular-nums">
+                      {formatPrice(item.price)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onToggle(item)}
+                          className={
+                            isAvailable
+                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                              : undefined
+                          }
+                        >
+                          {isAvailable ? "Desactivar" : "Activar"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Editar"
+                          onClick={() => onEdit(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {isSuperAdmin && (
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            aria-label="Eliminar"
+                            onClick={() => onDelete(item)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredItems.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={showCategory ? 4 : 3}
+                    className="px-4 py-6 text-center text-sm text-muted-foreground"
+                  >
+                    {items.length === 0
+                      ? emptyText
+                      : "No se encontraron platos con ese nombre"}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </CollapsibleCard>
@@ -538,6 +514,7 @@ function PlatosGroup({
 }
 
 export function MenuManager({
+  currentUserRole,
   sizes,
   flavors,
   bobaTypes,
@@ -545,6 +522,7 @@ export function MenuManager({
   drinkPrices,
   menuItems,
 }: {
+  currentUserRole: Role;
   sizes: Size[];
   flavors: Flavor[];
   bobaTypes: BobaType[];
@@ -552,6 +530,7 @@ export function MenuManager({
   drinkPrices: DrinkPrice[];
   menuItems: MenuItemAdminView[];
 }) {
+  const isSuperAdmin = currentUserRole === Role.SUPER_ADMIN;
   const [sizeForm, setSizeForm] = useState({ name: "", oz: "" });
   const [flavorForm, setFlavorForm] = useState<{
     name: string;
@@ -562,20 +541,26 @@ export function MenuManager({
     kind: BobaKind;
   }>({ name: "", kind: BobaKind.TAPIOCA });
   const [toppingForm, setToppingForm] = useState({ name: "", price: "" });
-  const [almuerzoForm, setAlmuerzoForm] = useState<MenuItemFormState>({
-    name: "",
-    category: MenuCategory.ALMUERZO,
-    price: "",
-    description: "",
-    options: [],
-  });
-  const [cartaForm, setCartaForm] = useState<MenuItemFormState>({
+  const [cartaModal, setCartaModal] = useState<{
+    open: boolean;
+    editing: MenuItemAdminView | null;
+  }>({ open: false, editing: null });
+  const [cartaDraft, setCartaDraft] = useState<{
+    name: string;
+    category: MenuCategoryType;
+    price: string;
+    description: string;
+    options: { name: string; price: string }[];
+  }>({
     name: "",
     category: MenuCategoryList[0],
     price: "",
     description: "",
     options: [],
   });
+  const [cartaQuery, setCartaQuery] = useState("");
+  const [bebidasQuery, setBebidasQuery] = useState("");
+  const [cafeteriaQuery, setCafeteriaQuery] = useState("");
   const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
@@ -589,29 +574,83 @@ export function MenuManager({
   }>({ name: "", kind: BobaKind.TAPIOCA });
   const [editingTopping, setEditingTopping] = useState<Topping | null>(null);
   const [toppingEdit, setToppingEdit] = useState({ name: "", price: "" });
-  const [editingMenuItem, setEditingMenuItem] =
-    useState<MenuItemAdminView | null>(null);
-  const [menuItemEdit, setMenuItemEdit] = useState<MenuItemFormState>({
+  const [almuerzoModal, setAlmuerzoModal] = useState<{
+    open: boolean;
+    editing: MenuItemAdminView | null;
+  }>({ open: false, editing: null });
+  const [almuerzoDraft, setAlmuerzoDraft] = useState({
     name: "",
-    category: MenuCategory.ALMUERZO,
     price: "",
     description: "",
-    options: [],
   });
+  const [almuerzosQuery, setAlmuerzosQuery] = useState("");
 
-  const almuerzos = menuItems.filter(
-    (i) => i.category === MenuCategory.ALMUERZO,
-  );
-  const cartaItems = menuItems.filter(
-    (i) => i.category !== MenuCategory.ALMUERZO,
-  );
+  const almuerzos = menuItems
+    .filter((i) => i.category === MenuCategory.ALMUERZO)
+    .sort((a, b) => Number(b.available) - Number(a.available));
+  const CARTA_CATEGORIES: MenuCategoryType[] = [
+    MenuCategory.SANDWICH,
+    MenuCategory.PANINI,
+    MenuCategory.ENSALADA,
+    MenuCategory.PIQUEO,
+    MenuCategory.COMPARTIR,
+    MenuCategory.ALITA,
+    MenuCategory.HAMBURGUESA,
+    MenuCategory.MILANESA,
+    MenuCategory.LOMO,
+    MenuCategory.POLLO,
+    MenuCategory.KIDS,
+  ];
+  const CAFETERIA_CATEGORIES: MenuCategoryType[] = [
+    MenuCategory.PANCAKE,
+    MenuCategory.POSTRE,
+    MenuCategory.WAFFLE,
+    MenuCategory.EXTRAS,
+  ];
+  const cartaItems = menuItems
+    .filter((i) => CARTA_CATEGORIES.includes(i.category))
+    .sort((a, b) => Number(b.available) - Number(a.available));
+  const bebidasItems = menuItems
+    .filter((i) => i.category === MenuCategory.BEBIDA)
+    .sort((a, b) => Number(b.available) - Number(a.available));
+  const cafeteriaItems = menuItems
+    .filter((i) => CAFETERIA_CATEGORIES.includes(i.category))
+    .sort((a, b) => Number(b.available) - Number(a.available));
+  const almuerzosDisponibles = almuerzos.filter((i) => i.available).length;
+  const filteredAlmuerzos = almuerzosQuery
+    ? almuerzos.filter((i) => normalize(i.name).includes(normalize(almuerzosQuery)))
+    : almuerzos;
+  const cartaDisponibles = cartaItems.filter((i) => i.available).length;
+  const filteredCartaItems = cartaQuery
+    ? cartaItems.filter(
+        (i) =>
+          normalize(i.name).includes(normalize(cartaQuery)) ||
+          normalize(MenuCategoryLabel[i.category]).includes(normalize(cartaQuery)),
+      )
+    : cartaItems;
+  const bebidasDisponibles = bebidasItems.filter((i) => i.available).length;
+  const filteredBebidasItems = bebidasQuery
+    ? bebidasItems.filter((i) =>
+        normalize(i.name).includes(normalize(bebidasQuery)),
+      )
+    : bebidasItems;
+  const cafeteriaDisponibles = cafeteriaItems.filter((i) => i.available).length;
+  const filteredCafeteriaItems = cafeteriaQuery
+    ? cafeteriaItems.filter(
+        (i) =>
+          normalize(i.name).includes(normalize(cafeteriaQuery)) ||
+          normalize(MenuCategoryLabel[i.category]).includes(
+            normalize(cafeteriaQuery),
+          ),
+      )
+    : cafeteriaItems;
 
   function run(action: () => Promise<void>) {
     action().catch((e) => {
       toast({
         variant: "destructive",
-        title: "Acción Denegada",
-        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        title: "AcciÃ³n Denegada",
+        description: e instanceof Error ? e.message : "OcurriÃ³ un error.",
         duration: 100000,
       });
     });
@@ -620,26 +659,123 @@ export function MenuManager({
   function confirmDelete(action: () => Promise<void>) {
     if (
       window.confirm(
-        "¿Estás seguro de eliminar este elemento? Esta acción no se puede deshacer.",
+        "Â¿EstÃ¡s seguro de eliminar este elemento? Esta acciÃ³n no se puede deshacer.",
       )
     ) {
       run(action);
     }
   }
 
-  function addMenuItem(form: MenuItemFormState) {
-    run(() =>
-      createMenuItem({
-        name: form.name,
-        category: form.category,
-        price: Number(form.price),
-        description: form.description,
-        options: form.options.map((o) => ({
-          name: o.name,
-          price: Number(o.price),
-        })),
-      }),
-    );
+  function openNewAlmuerzo() {
+    setAlmuerzoDraft({ name: "", price: "", description: "" });
+    setAlmuerzoModal({ open: true, editing: null });
+  }
+
+  function openEditAlmuerzo(item: MenuItemAdminView) {
+    setAlmuerzoDraft({
+      name: item.name,
+      price: String(item.price),
+      description: item.description ?? "",
+    });
+    setAlmuerzoModal({ open: true, editing: item });
+  }
+
+  function saveAlmuerzo() {
+    const name = almuerzoDraft.name.trim();
+    const price = Number(almuerzoDraft.price);
+    if (!name || !price || price <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Datos incompletos",
+        description: "Nombre y precio son obligatorios.",
+      });
+      return;
+    }
+    const editing = almuerzoModal.editing;
+    if (editing) {
+      run(() =>
+        updateMenuItem(editing.id, {
+          name,
+          category: MenuCategory.ALMUERZO,
+          price: Math.trunc(price),
+          available: editing.available,
+          description: almuerzoDraft.description.trim() || null,
+          options: [],
+        }).then(() => setAlmuerzoModal({ open: false, editing: null })),
+      );
+    } else {
+      run(() =>
+        createMenuItem({
+          name,
+          category: MenuCategory.ALMUERZO,
+          price: Math.trunc(price),
+          description: almuerzoDraft.description.trim(),
+          options: [],
+        }).then(() => setAlmuerzoModal({ open: false, editing: null })),
+      );
+    }
+  }
+
+  function openNewCarta(category: MenuCategoryType = MenuCategoryList[0]) {
+    setCartaDraft({
+      name: "",
+      category,
+      price: "",
+      description: "",
+      options: [],
+    });
+    setCartaModal({ open: true, editing: null });
+  }
+
+  function openEditCarta(item: MenuItemAdminView) {
+    setCartaDraft({
+      name: item.name,
+      category: item.category,
+      price: String(item.price),
+      description: item.description ?? "",
+      options: item.options.map((o) => ({
+        name: o.name,
+        price: String(o.price),
+      })),
+    });
+    setCartaModal({ open: true, editing: item });
+  }
+
+  function saveCarta() {
+    const name = cartaDraft.name.trim();
+    const price = Number(cartaDraft.price);
+    if (!name || !price || price <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Datos incompletos",
+        description: "Nombre y precio son obligatorios.",
+      });
+      return;
+    }
+    const editing = cartaModal.editing;
+    const payload = {
+      name,
+      category: cartaDraft.category,
+      price: Math.trunc(price),
+      description: cartaDraft.description.trim() || null,
+      options: cartaDraft.options
+        .filter((o) => o.name.trim() && Number(o.price) > 0)
+        .map((o) => ({ name: o.name.trim(), price: Math.trunc(Number(o.price)) })),
+    };
+    if (editing) {
+      run(() =>
+        updateMenuItem(editing.id, {
+          ...payload,
+          available: editing.available,
+        }).then(() => setCartaModal({ open: false, editing: null })),
+      );
+    } else {
+      run(() =>
+        createMenuItem(payload).then(() =>
+          setCartaModal({ open: false, editing: null }),
+        ),
+      );
+    }
   }
 
   function toggleAvailable(item: MenuItemAdminView) {
@@ -678,66 +814,194 @@ export function MenuManager({
     setToppingEdit({ name: topping.name, price: String(topping.price) });
   }
 
-  function openMenuItemEdit(item: MenuItemAdminView) {
-    setEditingMenuItem(item);
-    setMenuItemEdit({
-      name: item.name,
-      category: item.category,
-      price: String(item.price),
-      description: item.description ?? "",
-      options: item.options.map((o) => ({
-        name: o.name,
-        price: String(o.price),
-      })),
-    });
-  }
-
   return (
     <div className="space-y-6">
       <div className="mb-6 border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold text-white">Gestión del menú</h1>
-        <p className="text-muted-foreground">
-          El menú se organiza en tres secciones: Almuerzos, Platos a la carta y
-          Bubas.
+        <h1 className="text-xl font-bold text-white">GestiÃ³n del menÃº</h1>
+<p className="text-muted-foreground">
+          El menú se organiza en cinco secciones: Almuerzos, Platos a la carta,
+          Bebidas, Cafetería y Bubas.
         </p>
       </div>
 
-      <PlatosGroup
+      <CollapsibleCard
         title="Almuerzos"
-        subtitle="Platos del Menú del Día (sección dinámica por jornada)."
-        emptyText="No hay almuerzos registrados."
-        defaultOpen={almuerzos.length > 0}
-        form={almuerzoForm}
-        setForm={setAlmuerzoForm}
-        onAdd={() => addMenuItem(almuerzoForm)}
-        items={almuerzos}
-        showDelDia
-        onToggleDelDia={(item) =>
-          run(() => setMenuItemMenuDelDia(item.id, !item.enMenuDelDiaHoy))
-        }
-        onToggleAvailable={toggleAvailable}
-        onEdit={openMenuItemEdit}
-        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-      />
-
-      <PlatosGroup
-        title="Platos a la carta"
-        subtitle="Categorías fijas de la carta (todas las que no son almuerzo)."
-        emptyText="No hay platos a la carta registrados."
-        defaultOpen={cartaItems.length > 0}
-        form={cartaForm}
-        setForm={setCartaForm}
-        onAdd={() => addMenuItem(cartaForm)}
-        categoryOptions={MenuCategoryList}
-        items={cartaItems}
-        onToggleAvailable={toggleAvailable}
-        onEdit={openMenuItemEdit}
-        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-      />
-
-      <CollapsibleCard title="Bubas" defaultOpen>
+        defaultOpen={false}
+      >
         <div className="space-y-4">
-          <SubSection title="Tamaños de vaso">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative w-full max-w-xs">
+              <Input
+                value={almuerzosQuery}
+                onChange={(e) => setAlmuerzosQuery(e.target.value)}
+                placeholder="Buscar plato..."
+                className="pl-9"
+              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <Button onClick={openNewAlmuerzo}>
+              <Plus className="h-4 w-4" /> Nuevo Almuerzo
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant="success">{almuerzosDisponibles} disponibles</Badge>
+            <Badge variant="secondary">
+              {almuerzos.length} totales
+            </Badge>
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-800 bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Nombre</th>
+                  <th className="px-4 py-3 text-right font-medium">Precio</th>
+                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAlmuerzos.map((item, i) => {
+                  const isAvailable = item.available;
+                  const zebra = i % 2 === 1 ? "bg-slate-900/40" : undefined;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={cn("border-b border-slate-800/60", zebra)}
+                    >
+                      <td className="px-4 py-2.5 font-medium">
+                        {item.name}
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        {formatPrice(item.price)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              run(() =>
+                                setMenuItemMenuDelDia(item.id, !isAvailable),
+                              )
+                            }
+                            className={
+                              isAvailable
+                                ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                                : undefined
+                            }
+                          >
+                            {isAvailable ? "Desactivar" : "Activar"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Editar"
+                            onClick={() => openEditAlmuerzo(item)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {isSuperAdmin && (
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              aria-label="Eliminar"
+                              onClick={() =>
+                                confirmDelete(() => deleteMenuItem(item.id))
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredAlmuerzos.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={3}
+                      className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    >
+                      {almuerzos.length === 0
+                        ? "No hay almuerzos registrados."
+                        : "No se encontraron platos con ese nombre"}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CollapsibleCard>
+
+      <MenuSection
+        title="Platos a la carta"
+        items={cartaItems}
+        filteredItems={filteredCartaItems}
+        disponibles={cartaDisponibles}
+        query={cartaQuery}
+        onQueryChange={setCartaQuery}
+        openNew={() => openNewCarta(MenuCategoryList[0])}
+        newButtonLabel="Nuevo Plato"
+        emptyText="No hay platos a la carta registrados."
+        showCategory
+        onToggle={toggleAvailable}
+        onEdit={openEditCarta}
+        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+        isSuperAdmin={isSuperAdmin}
+      />
+
+      <MenuSection
+        title="Bebidas"
+        items={bebidasItems}
+        filteredItems={filteredBebidasItems}
+        disponibles={bebidasDisponibles}
+        query={bebidasQuery}
+        onQueryChange={setBebidasQuery}
+        openNew={() => openNewCarta(MenuCategory.BEBIDA)}
+        newButtonLabel="Nueva Bebida"
+        emptyText="No hay bebidas registradas."
+        showCategory={false}
+        onToggle={toggleAvailable}
+        onEdit={openEditCarta}
+        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+        isSuperAdmin={isSuperAdmin}
+      />
+
+      <MenuSection
+        title="Cafetería"
+        items={cafeteriaItems}
+        filteredItems={filteredCafeteriaItems}
+        disponibles={cafeteriaDisponibles}
+        query={cafeteriaQuery}
+        onQueryChange={setCafeteriaQuery}
+        openNew={() => openNewCarta(MenuCategory.PANCAKE)}
+        newButtonLabel="Nuevo Producto"
+        emptyText="No hay productos de cafetería registrados."
+        showCategory
+        onToggle={toggleAvailable}
+        onEdit={openEditCarta}
+        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+        isSuperAdmin={isSuperAdmin}
+      />
+
+      <CollapsibleCard title="Bubas" defaultOpen={false}>
+        <div className="space-y-4">
+          <SubSection title="TamaÃ±os de vaso">
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Input
@@ -824,7 +1088,7 @@ export function MenuManager({
                 ))}
                 {sizes.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    No hay tamaños registrados.
+                    No hay tamaÃ±os registrados.
                   </p>
                 )}
               </div>
@@ -1135,7 +1399,7 @@ export function MenuManager({
           {FlavorCategoryList.map((category) => (
             <SubSection
               key={category}
-              title={`Matriz de precios · ${FlavorCategoryLabel[category]}`}
+              title={`Matriz de precios Â· ${FlavorCategoryLabel[category]}`}
             >
               <PriceMatrixEditor
                 category={category}
@@ -1156,7 +1420,7 @@ export function MenuManager({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar tamaño</DialogTitle>
+            <DialogTitle>Editar tamaÃ±o</DialogTitle>
             <DialogDescription>
               Actualiza el nombre y la medida del vaso.
             </DialogDescription>
@@ -1350,96 +1614,179 @@ export function MenuManager({
       </Dialog>
 
       <Dialog
-        open={editingMenuItem !== null}
+        open={almuerzoModal.open}
         onOpenChange={(o) => {
-          if (!o) setEditingMenuItem(null);
+          if (!o) setAlmuerzoModal({ open: false, editing: null });
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar plato</DialogTitle>
+            <DialogTitle>
+              {almuerzoModal.editing ? "Editar almuerzo" : "Nuevo almuerzo"}
+            </DialogTitle>
             <DialogDescription>
-              Actualiza la información del plato: nombre, sección, precio fijo,
-              descripción y variantes de precio.
+              {almuerzoModal.editing
+                ? "Actualiza la informaciÃ³n del plato."
+                : "Registra un nuevo plato del MenÃº del DÃ­a."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <Input
-              placeholder="Nombre"
-              value={menuItemEdit.name}
-              onChange={(e) =>
-                setMenuItemEdit({ ...menuItemEdit, name: e.target.value })
-              }
-            />
-            <Select
-              value={menuItemEdit.category}
-              onValueChange={(v) =>
-                setMenuItemEdit({
-                  ...menuItemEdit,
-                  category: v as MenuCategoryType,
-                })
-              }
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Nombre
+              </label>
+              <Input
+                placeholder="Nombre del almuerzo"
+                value={almuerzoDraft.name}
+                onChange={(e) =>
+                  setAlmuerzoDraft({ ...almuerzoDraft, name: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Precio (Bs)
+              </label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Precio"
+                value={almuerzoDraft.price}
+                onChange={(e) =>
+                  setAlmuerzoDraft({ ...almuerzoDraft, price: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                DescripciÃ³n (opcional)
+              </label>
+              <Input
+                placeholder="DescripciÃ³n"
+                value={almuerzoDraft.description}
+                onChange={(e) =>
+                  setAlmuerzoDraft({
+                    ...almuerzoDraft,
+                    description: e.target.value,
+                  })
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAlmuerzoModal({ open: false, editing: null })}
             >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[MenuCategory.ALMUERZO, ...MenuCategoryList].map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {MenuCategoryLabel[c]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              min="1"
-              placeholder="Precio (Bs)"
-              value={menuItemEdit.price}
-              onChange={(e) =>
-                setMenuItemEdit({ ...menuItemEdit, price: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Descripción (opcional)"
-              value={menuItemEdit.description}
-              onChange={(e) =>
-                setMenuItemEdit({
-                  ...menuItemEdit,
-                  description: e.target.value,
-                })
-              }
-            />
+              Cancelar
+            </Button>
+            <Button onClick={saveAlmuerzo}>
+              {almuerzoModal.editing ? "Guardar" : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cartaModal.open}
+        onOpenChange={(o) => {
+          if (!o) setCartaModal({ open: false, editing: null });
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {cartaModal.editing ? "Editar producto" : "Nuevo producto"}
+            </DialogTitle>
+            <DialogDescription>
+              {cartaModal.editing
+                ? "Actualiza la información del producto del menú."
+                : "Registra un nuevo producto del menú."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Nombre
+              </label>
+              <Input
+                placeholder="Nombre del plato"
+                value={cartaDraft.name}
+                onChange={(e) =>
+                  setCartaDraft({ ...cartaDraft, name: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                CategorÃ­a
+              </label>
+              <Select
+                value={cartaDraft.category}
+                onValueChange={(v) =>
+                  setCartaDraft({
+                    ...cartaDraft,
+                    category: v as MenuCategoryType,
+                  })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MenuCategoryList.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {MenuCategoryLabel[c]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                Precio (Bs)
+              </label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Precio"
+                value={cartaDraft.price}
+                onChange={(e) =>
+                  setCartaDraft({ ...cartaDraft, price: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">
+                DescripciÃ³n (opcional)
+              </label>
+              <Input
+                placeholder="DescripciÃ³n"
+                value={cartaDraft.description}
+                onChange={(e) =>
+                  setCartaDraft({
+                    ...cartaDraft,
+                    description: e.target.value,
+                  })
+                }
+              />
+            </div>
             <MenuItemOptionsEditor
-              options={menuItemEdit.options}
+              options={cartaDraft.options}
               onChange={(options) =>
-                setMenuItemEdit({ ...menuItemEdit, options })
+                setCartaDraft({ ...cartaDraft, options })
               }
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingMenuItem(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setCartaModal({ open: false, editing: null })}
+            >
               Cancelar
             </Button>
-            <Button
-              onClick={() =>
-                editingMenuItem &&
-                run(() =>
-                  updateMenuItem(editingMenuItem.id, {
-                    name: menuItemEdit.name,
-                    category: menuItemEdit.category,
-                    price: Number(menuItemEdit.price),
-                    available: editingMenuItem.available,
-                    description: menuItemEdit.description,
-                    options: menuItemEdit.options.map((o) => ({
-                      name: o.name,
-                      price: Number(o.price),
-                    })),
-                  }).then(() => setEditingMenuItem(null)),
-                )
-              }
-            >
-              Guardar
+            <Button onClick={saveCarta}>
+              {cartaModal.editing ? "Guardar" : "Registrar"}
             </Button>
           </DialogFooter>
         </DialogContent>

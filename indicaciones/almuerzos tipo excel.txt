@@ -1,0 +1,16 @@
+Por favor, rediseña la sección de **Almuerzos** en el Módulo de Gestión del Menú con los siguientes requerimientos de UI/UX:
+
+1. **Modal / Pop-up para "Agregar Plato":**
+   - Remueve los campos sueltos de formulario ("Nombre del plato", "Precio", "Descripción") y el botón de "+ Agregar variante" de la vista principal de almuerzos.
+   - En su lugar, coloca un botón principal limpio (ej. "+ Nuevo Almuerzo") que al hacerle clic abra un **menú emergente (Modal / Pop-up)** flotante y oscuro con los campos necesarios para registrar el plato (Nombre, Categoría/Subcategoría, Precio y Descripción opcional), eliminando por completo la opción de variantes en esta sección.
+
+2. **Tabla Estilo Excel con Formato Cebra:**
+   - Reemplaza el listado actual en tarjetas individuales por una **tabla tabular limpia tipo Excel con filas alternas (efecto cebra)** para facilitar la lectura visual de los más de 240 platos históricos.
+   - Las columnas de la tabla deben ser estrictamente:
+     - **NOMBRE**
+     - **CATEGORÍA**
+     - **PRECIO**
+   - Alineados a la derecha de cada fila, coloca los botones de acción correspondientes:
+     - **ACTIVAR / DESACTIVAR**
+     - **EDITAR** (abre el modal con los datos cargados)
+     - **ELIMINAR** (botón de papelera condicional: **únicamente visible** si el usuario actual tiene rol de `SUPER_ADMIN`).

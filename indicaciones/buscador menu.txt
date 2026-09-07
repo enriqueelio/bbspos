@@ -1,0 +1,8 @@
+Por favor, añade un buscador interactivo en tiempo real para cada una de las secciones de **Almuerzos** y **Platos a la carta** en el Módulo de Gestión del Menú:
+
+1. **Componente de Búsqueda:**
+   - Agrega un input de búsqueda limpio y estilizado con el tema oscuro de Tailwind (similar a los inputs existentes, con un placeholder como *"Buscar plato..."* o una lupa sutil) justo arriba de la lista de platos de la sección.
+2. **Filtro Dinámico:**
+   - Implementa la lógica de filtrado en el estado local del componente para que, a medida que el usuario escriba (por ejemplo, "parrillá" o "silpancho"), la lista de platos se filtre de manera instantánea y fluida mostrando únicamente los elementos que contengan coincidencia en su nombre (ignorando mayúsculas, minúsculas y tildes si es posible).
+3. **Mensaje de Estado Vacío:**
+   - Si la búsqueda no arroja resultados, muestra un texto sutil dentro de la lista (ej. *"No se encontraron platos con ese nombre"*) para evitar que la sección se vea rota o vacía de forma extraña.

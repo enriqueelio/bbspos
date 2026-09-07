@@ -1,0 +1,73 @@
+PROMPT: Aplicar a "PLATOS A LA CARTA" los mismos cambios hechos en la sección "ALMUERZOS"
+
+Contexto: Los siguientes cambios ya fueron implementados y probados en la sección de
+ALMUERZOS del Módulo de Gestión del Menú (apps/admin/app/(dashboard)/menu/menu-manager.tsx).
+Son las mejoras de UI/UX que queremos replicar ahora en la sección de PLATOS A LA CARTA.
+Revisa este documento, modifica lo que consideres (anota tus ajustes) y aplícalos.
+
+--------------------------------------------------------------------------------
+1) MODAL / POPUP PARA "AGREGAR PLATO"
+--------------------------------------------------------------------------------
+- Quitar de la vista principal los campos sueltos de formulario
+  ("Nombre del plato", "Precio", "Descripción") y el botón "+ Agregar variante".
+- Colocar un botón principal limpio (ej. "+ Nuevo Plato") que abra un modal
+  pop-up flotante y oscuro con los campos: Nombre, Precio y Descripción opcional.
+- El mismo modal sirve para EDITAR (se abre con los datos del plato cargados).
+- NOTA ALMUERZOS: se removió también el campo "Categoría" y las "variantes"
+  (MenuItemOption) porque la sección es explícita (todo es ALMUERZO). Para la
+  carta es distinto: SÍ hay múltiples categorías (SANDWICH, PANINI, ENSALADA,
+  HAMBURGUESA, MILANESA, etc.) y SÍ existen variantes de precio
+  (ej. milanesas Pollo/Res). DECISIÓN PENDIENTE:
+    - ¿Mantener el selector de Categoría en el modal? (recomendado: sí, por
+      defecto conservando la categoría actual del plato)
+    - ¿Mantener el editor de variantes en el modal? (recomendado: sí, pero
+      dentro del modal, no suelto en la página)
+
+--------------------------------------------------------------------------------
+2) TABLA ESTILO EXCEL CON FORMATO CEBRA
+--------------------------------------------------------------------------------
+- Reemplazar el listado en tarjetas individuales por una tabla tabular limpia
+  tipo Excel con filas alternas (efecto cebra) para facilitar la lectura.
+- Columnas usadas en ALMUERZOS: NOMBRE, PRECIO y ACCIONES (a la derecha).
+  Se quitó CATEGORÍA por ser sección explícita. DECISIÓN PENDIENTE para carta:
+    - ¿Mostrar la columna CATEGORÍA? (recomendado: sí, en la carta sí aporta,
+      ej. "Hamburguesa", "Milanesa", "Bebida")
+- Mantener la fila de estado vacío centrada con mensaje, ajustando el colSpan
+  según el número de columnas.
+- Mantener el buscador con lupa (filtro en tiempo real, ignora mayúsculas y
+  tildes) y el mensaje "No se encontraron platos con ese nombre".
+- Añadir contadores de resumen (ej. badge "X disponibles" y "Y totales").
+
+--------------------------------------------------------------------------------
+3) BOTONES DE ACCIÓN EN CADA FILA (a la derecha)
+--------------------------------------------------------------------------------
+- ACTIVAR / DESACTIVAR: con estilo destacado (verde cuando está activo).
+- EDITAR: botón icono lápiz, abre el modal con los datos cargados.
+- ELIMINAR: botón icono papelera (Trash2), SOLO VISIBLE si el rol del usuario
+  actual es SUPER_ADMIN (se pasa la prop currentUserRole desde page.tsx vía
+  getRequiredSession; se compara con Role.SUPER_ADMIN).
+
+--------------------------------------------------------------------------------
+4) COMPORTAMIENTO DE LA LISTA / ESTADO INICIAL
+--------------------------------------------------------------------------------
+- Las secciones principales (Almuerzos, Platos a la carta, Bubas) deben
+  iniciar CONTRÁIDAS al entrar a la página (defaultOpen = false).
+- Ordenar la lista: los platos ACTIVOS (disponibles) deben aparecer ARRIBA,
+  por encima de los inactivos.
+- Comportamiento especial de activación SOLO para ALMUERZOS (NO aplicar en la
+  carta): en almuerzos el botón ACTIVAR/DESACTIVAR equivale a agregar/quitar
+  del Menú del Día de hoy; los almuerzos nunca permanecen activos más de un día
+  y la selección se limpia automáticamente al cambiar la jornada.
+  Para la CARTA es distinto: la disponibilidad (available) es permanente y se
+  controla con updateMenuItem único; no existe el concepto "del día".
+
+--------------------------------------------------------------------------------
+5) ARCHIVOS QUE SE TOCARON EN ALMUERZOS (referencia)
+--------------------------------------------------------------------------------
+- apps/admin/app/(dashboard)/menu/menu-manager.tsx  (componente cliente)
+- apps/admin/app/(dashboard)/menu/page.tsx           (pasa currentUserRole)
+- packages/db/src/menu-day.ts                        (lógica del menú del día
+                                                      y limpieza diaria)
+- packages/db/scripts/menu-day-cleanup-worker.ts     (worker de limpieza diaria,
+                                                      solo aplica a ALMUERZO)
+- packages/db/package.json y docker-entrypoint.sh    (registro del worker)

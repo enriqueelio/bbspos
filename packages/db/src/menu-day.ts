@@ -27,12 +27,32 @@ export async function cartaMenuItems() {
   });
 }
 
-/** Activa (ON) o desactiva (OFF) el Menú del Día de un plato para hoy. */
+/** Activa (ON) o desactiva (OFF) el Menú del Día de un plato para hoy.
+ *  Para los almuerzos el estado "activo" es equivalente a estar disponible hoy:
+ *  al activar se marca como disponible y al desactivar deja de estarlo, de modo
+ *  que ningún almuerzo permanece activo más allá de la jornada. */
 export async function setMenuDelDiaForToday(id: string, on: boolean) {
   return prisma.menuItem.update({
     where: { id },
     data: on
-      ? { enMenuDelDia: true, menuDelDiaDate: zonedDateKey() }
-      : { enMenuDelDia: false, menuDelDiaDate: null },
+      ? { available: true, enMenuDelDia: true, menuDelDiaDate: zonedDateKey() }
+      : { available: false, enMenuDelDia: false, menuDelDiaDate: null },
   });
+}
+
+/** Deja en blanco la selección de almuerzos de jornadas anteriores: desactiva
+ *  la disponibilidad y la bandera del Menú del Día de los platos que quedaron
+ *  marcados con una fecha distinta a la actual, de modo que al arrancar el día
+ *  la lista quede limpia y el admin elija manualmente los nuevos platos. */
+export async function resetStaleMenuDelDia() {
+  const today = zonedDateKey();
+  const result = await prisma.menuItem.updateMany({
+    where: {
+      category: "ALMUERZO",
+      enMenuDelDia: true,
+      menuDelDiaDate: { not: today },
+    },
+    data: { available: false, enMenuDelDia: false, menuDelDiaDate: null },
+  });
+  return result.count;
 }

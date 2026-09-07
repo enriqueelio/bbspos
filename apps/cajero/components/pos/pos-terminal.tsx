@@ -59,6 +59,27 @@ function deliveryLabel(type: PosDeliveryType) {
   return type === "MESA" ? "Para mesa" : "Para llevar";
 }
 
+// ===== Estilos compartidos de botones y contenedores =====
+const TOP_LABEL =
+  "text-sm font-bold uppercase tracking-widest text-slate-400";
+const CHIP_BASE =
+  "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30";
+const CHIP = {
+  selected:
+    "border border-primary bg-primary text-primary-foreground shadow-md shadow-primary/30",
+  idle: "border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-primary/60 hover:bg-slate-800 hover:text-white",
+  amber:
+    "border border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:bg-amber-500/20 hover:shadow-md hover:shadow-amber-500/10",
+};
+const PRODUCT_BASE =
+  "relative flex w-full items-center justify-center rounded-xl border px-2 py-2 text-sm font-semibold capitalize leading-tight tracking-wide whitespace-normal break-words transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30";
+const PRODUCT = {
+  selected: "border-primary bg-primary/15 text-white shadow-md shadow-primary/20",
+  idle: "border-slate-700 bg-slate-900/50 text-slate-100 hover:border-primary/60 hover:bg-slate-800",
+};
+const PAY_BUTTON =
+  "inline-flex h-10 items-center justify-center rounded-xl border text-sm font-bold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40";
+
 export function PosTerminal({
   catalog,
   role,
@@ -363,7 +384,7 @@ export function PosTerminal({
                 selectedFlavorId === null)
             }
             title="Vaciar el pedido si el cliente se arrepiente"
-            className="h-8 shrink-0 rounded-md border border-slate-700 bg-slate-800 px-3 text-xs font-bold text-slate-300 transition-colors hover:border-red-600 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-8 shrink-0 rounded-full border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition-all hover:border-red-500/60 hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Limpiar
           </button>
@@ -401,7 +422,7 @@ export function PosTerminal({
                 className="flex items-start justify-between gap-2 rounded-md bg-slate-800 px-3 py-2"
               >
                 <div className="min-w-0 text-sm">
-                  <p className="font-bold text-white">
+                  <p className="font-semibold capitalize text-white">
                     {item.quantity}×{" "}
                     {item.kind === "DRINK" ? item.flavor.name : item.name}
                   </p>
@@ -427,7 +448,7 @@ export function PosTerminal({
                   <div className="mt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      className="h-8 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
+                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
                       onClick={() =>
                         cart.updateQuantity(item.id, item.quantity - 1)
                       }
@@ -439,7 +460,7 @@ export function PosTerminal({
                     </span>
                     <button
                       type="button"
-                      className="h-8 w-8 rounded-md bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-95 transition-transform"
+                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
                       onClick={() =>
                         cart.updateQuantity(item.id, item.quantity + 1)
                       }
@@ -448,7 +469,7 @@ export function PosTerminal({
                     </button>
                     <button
                       type="button"
-                      className="h-8 px-3 rounded-md bg-red-600 text-white text-xs font-bold active:scale-95 transition-transform"
+                      className="h-8 px-3 rounded-lg bg-red-600/90 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-500"
                       onClick={() => cart.removeItem(item.id)}
                     >
                       Quitar
@@ -470,7 +491,7 @@ export function PosTerminal({
             value={cart.customerName}
             onChange={(e) => cart.setCustomerName(e.target.value)}
             placeholder="Nombre o Mesa"
-            className={`h-10 w-full rounded-md border bg-slate-800 px-3 text-sm text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+            className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
               needsName
                 ? "border-amber-400/70 animate-name-glow"
                 : "border-slate-700 focus:border-primary"
@@ -483,10 +504,10 @@ export function PosTerminal({
                 key={type}
                 type="button"
                 onClick={() => cart.setDeliveryType(type)}
-                className={`h-10 rounded-md border text-sm font-bold transition-colors ${
+                className={`${PAY_BUTTON} ${
                   cart.deliveryType === type
-                    ? "border-primary bg-primary text-white"
-                    : "border-slate-700 bg-slate-800 text-slate-300 hover:border-primary/60"
+                    ? "border-primary bg-primary text-white shadow-md shadow-primary/25"
+                    : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
                 }`}
               >
                 {deliveryLabel(type)}
@@ -507,21 +528,23 @@ export function PosTerminal({
             type="button"
             disabled={busy || cart.items.length === 0}
             onClick={submit}
-            className={`w-full h-12 text-base font-black text-white rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              isBilling ? "bg-blue-600 hover:bg-blue-700" : "bg-slate-700"
+            className={`w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+              isBilling
+                ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/40 hover:from-blue-400 hover:to-blue-600"
+                : "bg-gradient-to-b from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700"
             }`}
           >
             {busy ? (
               "Enviando…"
             ) : isBilling ? (
               <>
-                <span className="text-base font-black">Enviar y Cobrar</span>
-                <span className="font-mono text-lg font-black">
+                <span className="text-base font-bold">Enviar y cobrar</span>
+                <span className="font-mono text-lg font-bold">
                   {formatPrice(cartTotal)}
                 </span>
               </>
             ) : (
-              "Enviar a Caja"
+              "Enviar a caja"
             )}
           </button>
         </div>
@@ -548,10 +571,10 @@ export function PosTerminal({
                         optionName: null,
                       })
                     }
-                    className="h-9 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
+                    className={`${CHIP_BASE} ${CHIP.amber} whitespace-normal break-words leading-tight`}
                   >
                     {menuItem.name}
-                    <span className="ml-1 text-xs font-semibold text-amber-400">
+                    <span className="ml-1 text-xs font-semibold text-amber-300">
                       {formatPrice(menuItem.price)}
                     </span>
                   </button>
@@ -570,10 +593,8 @@ export function PosTerminal({
                   key={pane.key}
                   type="button"
                   onClick={() => switchPane(pane.key)}
-                  className={`h-9 px-3 rounded-lg border text-sm font-bold transition-colors ${
-                    selected
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-slate-800 text-white hover:border-primary/60"
+                  className={`${CHIP_BASE} ${
+                    selected ? CHIP.selected : CHIP.idle
                   }`}
                 >
                   {pane.label}
@@ -601,10 +622,8 @@ export function PosTerminal({
                         type="button"
                         disabled={!enabled}
                         onClick={() => switchBubaCategory(category)}
-                        className={`h-9 px-3 rounded-lg border text-sm font-bold transition-colors disabled:opacity-30 ${
-                          selected
-                            ? "border-primary bg-primary text-white"
-                            : "border-border bg-slate-800 text-white hover:border-primary/60"
+                        className={`${CHIP_BASE} ${
+                          selected ? CHIP.selected : CHIP.idle
                         }`}
                       >
                         {FlavorCategoryLabel[category]}
@@ -622,10 +641,8 @@ export function PosTerminal({
                         key={flavor.id}
                         type="button"
                         onClick={() => selectFlavor(flavor)}
-                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                          selected
-                            ? "border-primary bg-primary/15 text-white"
-                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        className={`${PRODUCT_BASE} h-14 ${
+                          selected ? PRODUCT.selected : PRODUCT.idle
                         }`}
                       >
                         {flavor.name}
@@ -636,19 +653,15 @@ export function PosTerminal({
 
                 {/* Tamaño */}
                 <section className="space-y-2">
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-                    Tamaño
-                  </h3>
+                  <h3 className={TOP_LABEL}>Tamaño</h3>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                     {sizes.map((s) => (
                       <button
                         key={s.id}
                         type="button"
                         onClick={() => setSizeId(s.id)}
-                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                          s.id === sizeId
-                            ? "border-primary bg-primary text-white"
-                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        className={`${PRODUCT_BASE} h-14 ${
+                          s.id === sizeId ? PRODUCT.selected : PRODUCT.idle
                         }`}
                       >
                         {s.name} · {s.oz} oz
@@ -659,19 +672,15 @@ export function PosTerminal({
 
                 {/* Tipo de boba (debajo de tamaño) */}
                 <section className="space-y-2">
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-                    Tipo de boba
-                  </h3>
+                  <h3 className={TOP_LABEL}>Tipo de boba</h3>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                     {sortedBobaTypes.map((b) => (
                       <button
                         key={b.id}
                         type="button"
                         onClick={() => setBobaTypeId(b.id)}
-                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                          b.id === bobaTypeId
-                            ? "border-primary bg-primary text-white"
-                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        className={`${PRODUCT_BASE} h-14 ${
+                          b.id === bobaTypeId ? PRODUCT.selected : PRODUCT.idle
                         }`}
                       >
                         {b.name}
@@ -682,9 +691,7 @@ export function PosTerminal({
 
                 {toppings.length > 0 && (
                   <section className="space-y-2">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-                      Extras
-                    </h3>
+                    <h3 className={TOP_LABEL}>Extras</h3>
                     <div className="flex flex-wrap gap-2">
                       {toppings.map((t) => {
                         const selected = toppingIds.includes(t.id);
@@ -693,10 +700,8 @@ export function PosTerminal({
                             key={t.id}
                             type="button"
                             onClick={() => toggleTopping(t.id)}
-                            className={`h-9 rounded-lg border px-3 text-sm font-bold transition-colors ${
-                              selected
-                                ? "border-primary bg-primary text-white"
-                                : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                            className={`${CHIP_BASE} ${
+                              selected ? CHIP.selected : CHIP.idle
                             }`}
                           >
                             + {t.name} · {formatPrice(t.price)}
@@ -709,12 +714,14 @@ export function PosTerminal({
 
                 {/* Preticket: producto en construcción */}
                 {selectedFlavor ? (
-                  <section className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-                    <h3 className="text-sm font-bold uppercase tracking-wide text-white">
+                  <section className="rounded-xl border border-slate-700 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
+                    <h3 className="text-sm font-bold uppercase tracking-widest text-white">
                       Producto en curso
                     </h3>
                     <div className="mt-2 space-y-1 text-sm text-white">
-                      <p className="font-bold">{selectedFlavor.name}</p>
+                      <p className="font-semibold capitalize">
+                        {selectedFlavor.name}
+                      </p>
                       <p className="text-slate-400">
                         {size?.name
                           ? `${size.name} · ${bobaType?.name ?? ""}`
@@ -730,7 +737,7 @@ export function PosTerminal({
                       <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                         Subtotal
                       </span>
-                      <span className="font-mono text-xl font-black text-white">
+                      <span className="font-mono text-xl font-bold text-white">
                         {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
                       </span>
                     </div>
@@ -738,7 +745,7 @@ export function PosTerminal({
                       type="button"
                       disabled={!selectedSize || !selectedFlavor || !bobaType}
                       onClick={confirmProduct}
-                      className="mt-3 h-11 w-full rounded-lg bg-emerald-600 text-base font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Confirmar producto
                     </button>
@@ -753,7 +760,7 @@ export function PosTerminal({
 
             {isCartaPane && (
               <section className="space-y-2">
-                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
+                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white">
                   {MenuCategoryLabel[activePane as MenuCategoryType]}
                 </h3>
 
@@ -765,10 +772,10 @@ export function PosTerminal({
                       type="button"
                       title={item.description ?? `Agregar ${item.name}`}
                       onClick={() => tapCartaItem(item)}
-                      className="relative h-14 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-primary hover:bg-slate-700"
+                      className={`${PRODUCT_BASE} h-16 flex-col ${PRODUCT.idle} hover:shadow-md hover:shadow-black/30`}
                     >
-                      {item.name}
-                      <span className="mt-0.5 block text-xs font-semibold text-slate-300">
+                      <span className="line-clamp-2 text-center">{item.name}</span>
+                      <span className="mt-1 text-center text-xs font-semibold text-slate-300">
                         {item.options.length > 0
                           ? "Elegir variante"
                           : formatPrice(item.price)}
@@ -779,8 +786,8 @@ export function PosTerminal({
 
                 {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
                 {variantItem && (
-                  <div className="rounded-lg border border-primary/40 bg-slate-800 p-3 space-y-2">
-                    <p className="text-sm font-bold text-white">
+                  <div className="rounded-xl border border-primary/40 bg-slate-900/80 p-4 space-y-2 shadow-lg shadow-black/20">
+                    <p className="text-sm font-bold text-white capitalize">
                       {variantItem.name} — elige variante
                     </p>
                     <div className="grid grid-cols-2 gap-2">
@@ -789,16 +796,19 @@ export function PosTerminal({
                           key={option.id}
                           type="button"
                           onClick={() => confirmVariant(option)}
-                          className="h-12 rounded-lg border border-slate-600 bg-slate-700 text-sm font-bold text-white transition-colors active:scale-95 hover:border-primary hover:bg-slate-600"
+                          className="h-12 rounded-xl border border-slate-600 bg-slate-800 text-sm font-semibold text-white transition-all active:scale-95 hover:border-primary hover:bg-slate-700"
                         >
-                          {option.name} · {formatPrice(option.price)}
+                          <span className="block capitalize">{option.name}</span>
+                          <span className="block text-xs font-semibold text-slate-300">
+                            {formatPrice(option.price)}
+                          </span>
                         </button>
                       ))}
                     </div>
                     <button
                       type="button"
                       onClick={() => setVariantItem(null)}
-                      className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white"
+                      className="w-full rounded-lg pt-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide transition-colors hover:text-white"
                     >
                       Cancelar
                     </button>

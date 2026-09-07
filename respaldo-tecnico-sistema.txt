@@ -1,11 +1,12 @@
 ================================================================================
-          RESPALDO TECNICO MAESTRO — BIBOSI POS (BUBBLE DRINKS)
+        RESPALDO TECNICO MAESTRO — BIBOSI POS (BBSPOS)
 ================================================================================
-Fecha de generacion: 2026-09-04
-Autor: Generado automaticamente via analisis completo del codigo fuente
-Proyecto: Bubba (Bibosi POS) — Punto de Venta para Bolivia
+Fecha de generacion: 2026-09-06
+Autor: Analisis completo del codigo fuente del repositorio bbspos
+Proyecto: Bibosi POS — Punto de Venta integral para Bolivia
 Moneda: Bolivianos (Bs)
-Negocio: Bubble tea shop (Bibosi / Bubble Drinks)
+Negocio: Restaurante Bibosi / Bubble Drinks (bebidas bubble tea + almuerzos
+         ejecutivos con precio fijo)
 ================================================================================
 
 
@@ -18,28 +19,28 @@ Negocio: Bubble tea shop (Bibosi / Bubble Drinks)
 Gestor de paquetes : pnpm 11.21.0
 Orquestador        : Turborepo (turbo ^2.5.0)
 Node               : >= 20.9.0 (imagen Docker: node:22-slim)
-Configuracion      : pnpm-workspace.yaml
+Configuracion      : pnpm-workspace.yaml (workspaces config, types, db, ui)
 
-  bubba/
+  bbspos/
   ├── apps/
-  │   ├── store/        @bbspos/store     (Puerto 3000 / HTTPS 8443)
-  │   ├── admin/        @bbspos/admin     (Puerto 3001 / HTTPS 8444)
-  │   ├── cajero/       @bbspos/cajero    (Puerto 3002 / HTTPS 8445)
-  │   └── mesero/       @bbspos/mesero    (Puerto 3003 / HTTPS 8446)
+  │   ├── store/        @bbspos/store     (Puerto 3000  / HTTPS 8443)
+  │   ├── admin/        @bbspos/admin     (Puerto 3001  / HTTPS 8444)
+  │   ├── cajero/       @bbspos/cajero    (Puerto 3002  / HTTPS 8445)
+  │   └── mesero/       @bbspos/mesero    (Puerto 3003  / HTTPS 8446)
   ├── packages/
   │   ├── config/       @bbspos/config    (Preset Tailwind compartido + tsconfigs)
   │   ├── db/           @bbspos/db        (Prisma client, schema, seed, workers)
   │   ├── types/        @bbspos/types     (Enums, interfaces, helpers de formato)
-  │   └── ui/           @bbspos/ui        (Componentes shadcn/ui + builder)
+  │   └── ui/           @bbspos/ui        (Componentes shadcn/ui reutilizables)
   ├── scripts/          (db-sync.bat, setup-env.mjs, https-proxy/)
   ├── docs/
   ├── indicaciones/     (Notas de diseno, prompts maestros, SQL de respaldo)
-  ├── openspec/         (Especificaciones y tracking de cambios)
+  ├── openspec/         (Especificaciones y tracking de cambios, archivo/archive)
   ├── docker-compose.yml
   ├── Dockerfile
   ├── docker-entrypoint.sh
   ├── server.config.json    (IP/host central + puertos)
-  ├── https-proxy.mjs       (Proxy HTTPS multi-app con mkcert)
+  ├── https-proxy.mjs       (Proxy HTTPS multi-app)
   ├── turbo.json
   └── package.json
 
@@ -47,19 +48,21 @@ Configuracion      : pnpm-workspace.yaml
 ---------------------
 Frontend        : Next.js 15 (App Router), React 19, TypeScript
 Estilos         : Tailwind CSS v4 con preset compartido (shadcn-style HSL tokens)
-Componentes UI  : shadcn/ui (badge, button, card, dialog, input, label, select, toast)
-Estado (store)  : Zustand (apps/store — builder-store, cart-store)
-                : React useState/useReducer (apps/admin, cajero, mesero)
+Componentes UI  : shadcn/ui (badge, button, card, dialog, input, label, select,
+                  toast, table) en @bbspos/ui
+Estado          : Zustand (apps/store — builder-store, cart-store)
+                : React useState/useReducer + localStorage (apps/cajero, mesero)
 Backend         : Next.js Server Actions + API Routes
 ORM             : Prisma ^6.1.0
-Base de datos   : SQLite (prisma/dev.db)
-Auth            : NextAuth v4 (JWT) — providers: Credentials
-                : Sessions distintas por app (admin/cajero/mesero)
+Base de datos   : SQLite (packages/db/prisma/dev.db)
+Auth            : NextAuth v4 (JWT) — providers: Credentials (username+password,
+                  bcryptjs). Sesiones distintas por app (cookie diferenciada)
 Validacion      : Zod (schemas de query params en reportes)
 Exportacion     : xlsx (Excel), jsPDF + html2canvas (PDF), CSV con BOM UTF-8
-Impresion       : PowerShell + System.Drawing.PrintDocument (Windows-only)
+Impresion       : PowerShell + System.Drawing.PrintDocument (Windows-only,
+                  impresora termica, sin ESC/POS nativo)
 Mensajeria      : Telegram Bot API (fetch nativo, sin SDK)
-PWA             : @ducanh2912/next-pwa (store, mesero)
+PWA             : @ducanh2912/next-pwa (store) y PWA manual (mesero)
 HTTPS proxy     : http-proxy (proxy inverso multi-app con certificados mkcert)
 
 1.3 ORGANIZACION DE CARPETAS POR APP
@@ -70,13 +73,13 @@ Cada app (store, admin, cajero, mesero) sigue:
     page.tsx             Pagina principal
     globals.css          Estilos globales Tailwind
     login/               Login form + page
-    actions/             Server Actions (auth, orders, catalog, printing, etc.)
+    actions/             Server Actions (auth, orders, catalog, printing...)
     api/                 API Routes (reports, printer, slideshow, catalog)
-    (dashboard)/         Route group para admin (orders, menu, reports, etc.)
+    (dashboard)/         Route group para admin (orders, menu, reports, users...)
   components/            Componentes de vista (nav, dialogs, POS terminal)
-  lib/                   Utilidades (auth, session, printing, day helpers, reports/)
+  lib/                   Utilidades (auth, session, printing, day, reports/)
   types/                 Declaraciones de tipos (next-auth.d.ts)
-  middleware.ts          Route protection por rol
+  middleware.ts          Proteccion de rutas por rol
   next.config.mjs        Config Next.js (transpilePackages + PWA en store)
   tailwind.config.ts     Preset del package config compartido
 
@@ -87,28 +90,30 @@ Cada app (store, admin, cajero, mesero) sigue:
   - tsconfig.base.json / tsconfig.next.json / tsconfig.json
 
 @bbspos/db:
-  - prisma/schema.prisma             (10 modelos, 7 enums, 19 migraciones)
+  - prisma/schema.prisma             (13 modelos, 8 enums, 21 migraciones)
   - prisma/seed.ts                   (Sizes, Flavors, BobaTypes, Prices, Users)
+  - prisma/seed-test-orders.ts       (Pedidos de prueba por estado — testing)
   - src/index.ts                     (PrismaClient singleton + re-exports)
-  - src/daily-report.ts              (Metricas + envio Telegram cierre diario)
+  - src/daily-report.ts              (Metricas diarias + envio Telegram)
   - src/telegram-alert.ts            (Alerta de pedidos atrasados)
+  - src/menu-day.ts                  (Menuu del Dia: bandera enMenuDelDia +
+                                      vigencia por jornada zonedDateKey)
   - scripts/daily-report-worker.ts   (Worker loop 60s — cierre diario)
   - scripts/telegram-alert-worker.ts (Worker loop 60s — pedidos atrasados)
 
 @bbspos/types:
   - src/index.ts                     (Enums, interfaces, BUSINESS_TIME_ZONE,
-                                      helpers: zonedClockMinutes, formatCurrency, etc.)
+                                      helpers: zonedClockMinutes, formatPrice,
+                                      formatOrderCode, labels de estados, etc.)
 
 @bbspos/ui:
-  - src/components/ui/               (badge, button, card, dialog, input, label, select, toast)
-  - src/components/builder/          (boba-picker, flavor-picker, size-selector, step-indicator)
-  - src/components/cart/             (cart-item, cart-summary, quantity-control)
-  - src/hooks/use-toast.ts
+  - src/components/ui/               (badge, button, card, dialog, input, label,
+                                      select, toast, table)
   - src/lib/utils.ts
 
 1.5 VARIABLES DE ENTORNO CLAVE
--------------------------------
-DATABASE_URL           "file:./dev.db" (SQLite)
+------------------------------
+DATABASE_URL           "file:./dev.db" (SQLite compartida por 4 apps)
 NEXTAUTH_URL           URL de cada app (ej: https://192.168.1.10:8444)
 NEXTAUTH_SECRET        Secreto JWT distinto por app
 TELEGRAM_BOT_TOKEN     Token del bot de Telegram
@@ -150,28 +155,28 @@ Volumen persistente: bubba-data -> /app/packages/db/prisma (contiene dev.db)
 2.1 RESUMEN DEL SCHEMA (packages/db/prisma/schema.prisma)
 ----------------------------------------------------------
 Motor: SQLite via env("DATABASE_URL")
-Modelos: 10 | Enums: 7 | Indices: 6 compuestos en Order + 1 en OrderItem
+Modelos: 13 | Enums: 8 | Indices compuestos en Order + OrderItem
 
 --- MODELOS ---
 
 User
   id              String   @id @default(cuid())
-  username        String   @unique
+  username        String   @unique        (login por username, case-insensitive)
   name            String
-  password        String              (bcrypt hash)
+  password        String                  (bcrypt hash)
   role            Role     @default(CAJERO)
-  shift           Shift    @default(SIN_TURNO)
-  active          Boolean  @default(true)
+  shift           Shift    @default(SIN_TURNO)   (MANANA | TARDE | SIN_TURNO)
+  active          Boolean  @default(true)        (baja logica)
   createdAt       DateTime @default(now())
   -- Relaciones:
-  orders              Order[]           ( quien tomo/creo el pedido )
+  orders              Order[]           (quien creo/ato el pedido)
   cancelledOrders     Order[]           @relation("OrderCanceledBy")
   discountedOrders    Order[]           @relation("OrderDiscountedBy")
 
 Size
   id         String   @id @default(cuid())
-  name       String   @unique
-  oz         Int                     (onzas del vaso)
+  name       String   @unique           (Grande / Extragrande)
+  oz         Int                        (onzas del vaso)
   available  Boolean  @default(true)
   createdAt  DateTime @default(now())
   -- Relaciones:
@@ -183,9 +188,9 @@ Flavor
   available  Boolean              @default(true)
   createdAt  DateTime             @default(now())
   -- Relaciones:
-  categories FlavorCategoryLink[]  (muchos a muchos con enum FlavorCategory)
+  categories FlavorCategoryLink[]   (M2M con enum FlavorCategory)
 
-FlavorCategoryLink  (tabla pivote Flavor <-> FlavorCategory enum)
+FlavorCategoryLink  (pivote Flavor <-> FlavorCategory enum)
   id        String   @id @default(cuid())
   flavorId  String
   flavor    Flavor   @relation onDelete: Cascade
@@ -195,8 +200,8 @@ FlavorCategoryLink  (tabla pivote Flavor <-> FlavorCategory enum)
 
 BobaType
   id        String   @id @default(cuid())
-  name      String   @unique
-  kind      BobaKind              (TAPIOCA | POPPING)
+  name      String   @unique           (Tapioca / Explosivas)
+  kind      BobaKind                    (TAPIOCA | POPPING)
   available Boolean  @default(true)
   createdAt DateTime @default(now())
   -- Relaciones:
@@ -209,7 +214,7 @@ DrinkPrice  (Matriz de precios — categoria x tamano x tipo_boba)
   size       Size          @relation onDelete: Cascade
   bobaTypeId String
   bobaType   BobaType      @relation onDelete: Cascade
-  price      Int                     (precio en Bolivianos x 100 si se usa centavos, o integer directo)
+  price      Int                     (precio en Bolivianos, integer directo)
   createdAt  DateTime      @default(now())
   @@unique([category, sizeId, bobaTypeId])
 
@@ -219,35 +224,48 @@ Topping
   price     Int
   available Boolean  @default(true)
   createdAt DateTime @default(now())
-  -- Sin FK directa a OrderItemTopping (se usa nombre desnormalizado)
+  -- Sin FK directa a OrderItemTopping (nombre desnormalizado)
+
+MenuItem  (platos / almuerzos — Menu del Dia)
+  id             String       @id @default(cuid())
+  name           String
+  category       MenuCategory @default(ALMUERZO)
+  price          Int
+  available      Boolean      @default(true)
+  enMenuDelDia   Boolean      @default(false)   <-- bandera de disponibilidad diaria
+  menuDelDiaDate String?                        <-- fecha de vigencia (YYYY-MM-DD,
+                                                  zona America/La_Paz)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  @@index([category, available])
 
 Order  (MODELO CENTRAL)
-  id               String         @id @default(cuid())
-  seq              Int?           @unique     (numero secuencial de ticket, nullable)
-  status           OrderStatus    @default(RECIBIDO)
-  customerName     String?
-  deliveryType     DeliveryType?              (MESA | LLEVAR)
-  total            Int
-  createdAt        DateTime       @default(now())
-  paidAt           DateTime?
-  deliveredAt      DateTime?
-  paymentMethod    PaymentMethod?
-  paymentMethod2   PaymentMethod?             (para pagos divididos)
-  paymentAmount2   Int?                       (monto del segundo metodo)
-  discountAmount   Int            @default(0)
-  discountReason   String?
-  discountedAt     DateTime?
-  cancelledAt      DateTime?
-  cancelReason     String?
-  delayNotified    Boolean        @default(false)  (anti-spam Telegram)
+  id             String         @id @default(cuid())
+  seq            Int?           @unique   (numero secuencial de ticket)
+  status         OrderStatus    @default(RECIBIDO)
+  customerName   String?
+  deliveryType   DeliveryType?             (MESA | LLEVAR)
+  total          Int
+  createdAt      DateTime       @default(now())
+  paidAt         DateTime?
+  deliveredAt    DateTime?
+  paymentMethod  PaymentMethod?
+  paymentMethod2 PaymentMethod?            (pagos divididos)
+  paymentAmount2 Int?                      (monto del segundo metodo)
+  discountAmount Int            @default(0)
+  discountReason String?
+  discountedAt   DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+  delayNotified  Boolean        @default(false)  (anti-spam Telegram)
   -- FKs y relaciones:
-  userId           String?
-  user             User?          @relation
-  discountedById   String?
-  discountedBy     User?          @relation("OrderDiscountedBy")
-  canceledById     String?
-  canceledBy       User?          @relation("OrderCanceledBy")
-  items            OrderItem[]
+  userId         String?
+  user           User?          @relation
+  discountedById String?
+  discountedBy   User?          @relation("OrderDiscountedBy")
+  canceledById   String?
+  canceledBy     User?          @relation("OrderCanceledBy")
+  items          OrderItem[]
   -- Indices (6):
   @@index([createdAt])
   @@index([createdAt, status])
@@ -256,16 +274,18 @@ Order  (MODELO CENTRAL)
   @@index([userId])
   @@index([userId, status])
 
-OrderItem
-  id             String   @id @default(cuid())
-  orderId        String
-  order          Order    @relation onDelete: Cascade
-  sizeName       String              (desnormalizado — snapshot del catalogo)
-  flavorName     String              (desnormalizado)
-  flavorCategory FlavorCategory      (desnormalizado)
-  bobaTypeName   String              (desnormalizado)
-  unitPrice      Int
-  quantity       Int
+OrderItem  (snapshot desnormalizado del catalogo al momento del pedido)
+  id               String            @id @default(cuid())
+  orderId          String
+  order            Order             @relation onDelete: Cascade
+  sizeName         String?           (desnormalizado)
+  flavorName       String?           (desnormalizado)
+  flavorCategory   FlavorCategory?   (desnormalizado)
+  bobaTypeName     String?           (desnormalizado)
+  menuItemName     String?           (desnormalizado — lineas de almuerzo)
+  menuItemCategory MenuCategory?     (desnormalizado)
+  unitPrice        Int
+  quantity         Int
   -- Relaciones:
   toppings       OrderItemTopping[]
   @@index([orderId])
@@ -287,9 +307,10 @@ DailyReportLog  (control de duplicados para cierre Telegram)
   date   String   @id          (YYYY-MM-DD)
   sentAt DateTime @default(now())
 
---- ENUMS (7) ---
+--- ENUMS (8) ---
 
-FlavorCategory : MILK | WATER | SPECIAL
+FlavorCategory : MILK  | WATER  | SPECIAL
+MenuCategory   : ALMUERZO
 BobaKind       : TAPIOCA | POPPING
 OrderStatus    : RECIBIDO | ACEPTADO | ENTREGADO | ANULADO
 Role           : ADMIN | CAJERO | MESERO
@@ -307,50 +328,81 @@ BobaType 1──→N DrinkPrice   (via bobaTypeId, onDelete Cascade)
 Order 1──→N OrderItem       (via orderId, onDelete Cascade)
 OrderItem 1──→N OrderItemTopping (via orderItemId, onDelete Cascade)
 Flavor M──→N FlavorCategory (via FlavorCategoryLink pivote, @@unique)
-
-Sin self-references.
+MenuItem ── sin FK a pedidos; se copia a OrderItem.menuItemName/menuItemCategory
 
 Patron de desnormalizacion:
-  OrderItem almacena sizeName, flavorName, flavorCategory, bobaTypeName como strings
-  (snapshot del catalogo al momento del pedido, NO como FK).
+  OrderItem almacena sizeName, flavorName, flavorCategory, bobaTypeName,
+  menuItemName y menuItemCategory como strings (snapshot del catalogo al momento
+  del pedido, NO como FK). Esto garantiza precios/inventario historico inmutable
+  aunque el catalogo cambie despues.
   OrderItemTopping almacena toppingName como string (NO FK a Topping).
 
-2.3 HISTORIAL DE MIGRACIONES (19)
-----------------------------------
-01  20260814161439_init                       Schema inicial (User, Size, Flavor, BobaType, Order, OrderItem)
-02  20260814180000_price_matrix               DrinkPrice (matriz), Topping, OrderItemTopping. Precios removidos de Size/Flavor/BobaType
-03  20260814180100_flavor_categories           FlavorCategoryLink (M2M Flavor <-> FlavorCategory enum)
-04  20260814180200_size_ounces                 Size.ml -> Size.oz
-05  20260814190000_payment_config              Tabla singleton PaymentConfig (QR)
-06  20260821173035_order_customer_name         Order.customerName
-07  20260821181500_order_seq                   Order.seq (secuencial ticket)
-08  20260824155140_reports_audit_fields        Order: userId, paymentMethod, discountAmount, discountReason, discountedAt, cancelledAt, cancelReason + idx createdAt
-09  20260824173117_cashier_two_states          User.role, Order.deliveredAt
-10  20260824192133_add_user_active             User.active
-11  20260824201706_aceptado_three_states       Order.paidAt, reverso de estados INGRESADO->RECIBIDO
-12  20260826122907_add_order_indexes           Indices compuestos (createdAt,status), (deliveredAt), (userId,status), OrderItem(orderId)
-13  20260826124904_add_split_payment           Order.paymentMethod2, Order.paymentAmount2
-14  20260826191057_add_delivery_type           Order.deliveryType (MESA/LLEVAR)
-15  20260827223134_add_order_delay_notified    Order.delayNotified (anti-spam alertas Telegram)
-16  20260827224856_add_daily_report_log        Tabla DailyReportLog (control envios cierre diario)
-17  20260828192649_add_username                User.email -> User.username + User.shift
-18  20260831203000_add_order_canceled_by       Order.canceledById -> User (OrderCanceledBy)
-19  20260831205000_add_order_discounted_by     Order.discountedById -> User (OrderDiscountedBy)
+2.3 FLUJO DE VENTAS (ciclo de vida de una Order)
+--------------------------------------------------
+1. Creacion:
+   - Venta publica (apps/store): el cliente arma la bebida en el builder,
+     confirma el pedido; se crea Order con status=RECIBIDO.
+   - Venta manual (POS): cajero/mesero arman el ticket en el terminal
+     (bebidas configurables + platos del Menu del Dia); mesero envia a caja
+     con tipo MESA forzado; cajero/admin puede Enviar y Cobrar.
+2. RECIBIDO  : comanda impresa esperando en caja (impresion termica best-effort).
+   - El cajero registra el pago (EFECTIVO | QR | pago dividido) -> ACEPTADO,
+     registrando metodo, fecha (paidAt) y responsable (userId).
+3. ACEPTADO  : pago registrado por el cajero.
+   - Entrega las bebidas (deliverOrder) -> ENTREGADO, registrando deliveredAt.
+4. ENTREGADO : bebidas entregadas al cliente. Sin acciones posteriores.
+Transicion terminal ANULADO: desde cualquier estado, con motivo (cancelReason) y
+canceledBy. Un pedido anulado no puede avanzar a otro estado.
+Secuencia obligatoria: RECIBIDO -> ACEPTADO -> ENTREGADO, sin retrocesos ni
+saltos (la entrega de un RECIBIDO sin pago es rechazada).
 
-2.4 SEED (packages/db/prisma/seed.ts)
---------------------------------------
+Motivo de la cadena de estados (historial):
+  - Inicialmente 2 estados (INGRESADO/ENTREGADO).
+  - Con cobro en caja se introdujo RECIBIDO -> ACEPTADO (tres estados) que es
+    la secuencia vigente en el codigo y el schema.
+
+2.4 HISTORIAL DE MIGRACIONES (21)
+---------------------------------
+01  20260814161439_init                      Schema inicial (User, Size, Flavor,
+                                             BobaType, Order, OrderItem)
+02  20260814180000_bubble_drinks_price_matrix  DrinkPrice, Topping, OrderItemTopping
+03  20260814180100_flavor_categories          FlavorCategoryLink (M2M)
+04  20260814180200_size_ounces                Size.ml -> Size.oz
+05  20260814190000_payment_config             Tabla singleton PaymentConfig (QR)
+06  20260821173035_order_customer_name        Order.customerName
+07  20260821181500_order_seq                  Order.seq (secuencial ticket)
+08  20260824155140_reports_audit_fields       Order: userId, paymentMethod,
+                                             discount*, cancelled*, cancelReason
+09  20260824173117_cashier_two_states         User.role, Order.deliveredAt
+10  20260824192133_add_user_active            User.active
+11  20260824201706_aceptado_three_states      Order.paidAt + estados
+                                             INGRESADO -> RECIBIDO/ACEPTADO/ENTREGADO
+12  20260826122907_add_order_indexes          Indices compuestos en Order/OrderItem
+13  20260826124904_add_split_payment          Order.paymentMethod2, paymentAmount2
+14  20260826191057_add_delivery_type          Order.deliveryType (MESA/LLEVAR)
+15  20260827223134_add_order_delay_notified   Order.delayNotified
+16  20260827224856_add_daily_report_log       Tabla DailyReportLog
+17  20260828192649_add_username               User.email -> User.username
+18  20260831203000_add_order_canceled_by      Order.canceledById -> User
+19  20260831205000_add_order_discounted_by    Order.discountedById -> User
+20  20260904201519_add_user_shift             User.shift (MANANA|TARDE|SIN_TURNO)
+21  20260906002856_add_menu_item              Modelo MenuItem + enum MenuCategory
+
+2.5 SEED (packages/db/prisma/seed.ts)
+-------------------------------------
 Idempotente con upsert y DELETE de sobrantes:
   - Sizes: Grande (16 oz), Extragrande (21 oz)
   - BobaTypes: Tapioca (TAPIOCA), Explosivas (POPPING)
-  - Flavors: 18 sabores (Capuchino, Oreo, Fruticoco, Matcha, Piña colada,
-    Limonada brasilera, Frutilimon, Taro, Frutilla, Limón, Piña, Manzana,
-    Naranja, Mango, Coco, Vainilla, Chocolate, Mora) con sus FlavorCategoryLinks
-  - DrinkPrice: 12 filas (3 categorías × 2 tamaños × 2 boba types)
+  - Flavors: 18 sabores (Capuchino, Oreo, Fruticoco, Matcha, Pina colada,
+    Limonada brasilera, Frutilimon, Taro, Frutilla, Limon, Pina, Manzana,
+    Naranja, Mango, Coco, Vainilla, Chocolate, Mora) con FlavorCategoryLinks
+  - DrinkPrice: 12 filas (3 categorias x 2 tamanos x 2 boba types)
       SPECIAL: Grande(Tap 20,Expl 25) | Extragrande(Tap 30,Expl 35)
       WATER:   Grande(Tap 16,Expl 20) | Extragrande(Tap 25,Expl 30)
       MILK:    Grande(Tap 18,Expl 22) | Extragrande(Tap 28,Expl 32)
   - Toppings: Tapioca extra (4), Explosiva extra (5)
-  - Users: admin/admin123 (ADMIN), cajero/cajero123 (CAJERO), mesero/mesero123 (MESERO)
+  - Users: admin/admin123 (ADMIN), cajero/cajero123 (CAJERO),
+    mesero/mesero123 (MESERO)
 
 
 ================================================================================
@@ -358,46 +410,52 @@ Idempotente con upsert y DELETE de sobrantes:
 ================================================================================
 
 3.1 MODULO ADMIN / DASHBOARD
------------------------------
+----------------------------
 Archivos clave:
-  apps/admin/app/(dashboard)/page.tsx                  (Dashboard principal — Server Component)
-  apps/admin/app/(dashboard)/layout.tsx                 (Layout auth-guarded, max-w-6xl)
-  apps/admin/components/admin-nav.tsx                   (Nav con dropdown Settings)
-  apps/admin/app/(dashboard)/reports/page.tsx           (Reportes)
+  apps/admin/app/(dashboard)/page.tsx                  (Dashboard — Server Component)
+  apps/admin/app/(dashboard)/layout.tsx                (Layout auth-guarded, max-w-6xl)
+  apps/admin/components/admin-nav.tsx                  (Nav: Dashboard/Pedidos/Reportes
+                                                        + dropdown Settings)
+  apps/admin/app/(dashboard)/reports/page.tsx          (Reportes)
   apps/admin/app/(dashboard)/reports/reports-client.tsx (UI de reportes — cliente)
-  apps/admin/app/api/reports/dashboard-summary/route.ts (API dashboard con 14 queries paralelas)
-  apps/admin/app/api/reports/ (11 endpoints)           (daily, sales-range, top-products, adjustments, etc.)
+  apps/admin/app/api/reports/dashboard-summary/route.ts (Resumen ejecutivo con
+                                                         15 KPIs)
+  apps/admin/app/api/reports/ (11 endpoints)
   apps/admin/lib/reports/ (params, range, guard, response, csv, excel, sales)
 
 Dashboard page.tsx (Server Component):
-  - 3 tarjetas KPI en tiempo real:
-    * "Pedidos hoy"       — prisma.order.count() del dia actual
-    * "Pedidos por cobrar — count(estado = RECIBIDO), amber si > 0
-    * "Ventas del día"    — _sum.total aggregate, emerald
-  - Lista de ultimos 5 pedidos con items + toppings
-  - Badges por estado: RECIBIDO=warning, ACEPTADO=default, ENTREGADO=success, ANULADO=destructive
+  - 3 tarjetas KPI:
+    * "Pedidos hoy"        — prisma.order.count() del dia local
+    * "Pedidos por cobrar" — count(status = RECIBIDO), amber si > 0
+    * "Ventas del dia"     — _sum.total aggregate, emerald
+  - Lista de ultimos 5 pedidos con items + totales y hora
+  - Badges por estado: RECIBIDO=warning, ACEPTADO=default, ENTREGADO=success,
+    ANULADO=destructive
+  - Diseno: header consistente (border-b border-slate-800 pb-4 + h1/h2 bold
+    white + subtitle muted), layout centrado max-w-6xl (directriz simetrica 70%),
+    dark-only (slate-900/800), grid md:grid-cols-3 para KPIs.
 
-API dashboard-summary (14 queries paralelas con Promise.all):
+API dashboard-summary (queries paralelas con Promise.all):
   - todayOrders, yesterdayOrders, rangeOrders, prevRangeOrders
   - pendingOrders (RECIBIDO o ACEPTADO)
   - cancelledToday, cancelledRangeSum
-  - discountsSum
-  - paymentOrders (para desglose por metodo)
-  - deliveries (para tiempo promedio de entrega)
+  - discountsSum, paymentOrders (desglose por metodo)
+  - deliveries (tiempo promedio de entrega)
   - itemAggregates, toppingAggregates
   - availableFlavors, soldFlavors
-  - Calcula: netSales, growthPct, avgTicket, ordersVolume, cancelledPct,
-    discountsTotal, peakHour, bestCategory, paymentsToday, avgDeliveryMinutes,
-    pendingOrders, staffPerformance, cancellationsCost, menuRotationPct,
-    toppingsMarginPct (15 KPIs ejecutivos)
+  - Calcula 15 KPIs ejecutivos (netSales, growthPct, avgTicket, ordersVolume,
+    cancelledPct, discountsTotal, peakHour, bestCategory, paymentsToday,
+    avgDeliveryMinutes, pendingOrders, staffPerformance, cancellationsCost,
+    menuRotationPct, toppingsMarginPct)
   - Cache: CACHE_TTL_MS = 10_000 (memorizado a nivel modulo)
 
 Reportes disponibles (11 API routes):
   /api/reports/dashboard-summary   Resumen ejecutivo
-  /api/reports/daily               Cierre diario detallado
-  /api/reports/sales-range         Ventas por rango (granularity: day|week|month)
-  /api/reports/top-products        Top productos (groupBy: drink|flavor|size|bobaType|topping)
-  /api/reports/adjustments         Descuentos y anulaciones
+  /api/reports/daily               Cierre diario detallado (desglose por
+                                   categoria, incluye seccion ALMUERZO)
+  /api/reports/sales-range         Ventas por rango (day|week|month)
+  /api/reports/top-products        Top productos (drink|flavor|size|bobaType|topping)
+  /api/reports/adjustments         Descuentos y anulaciones (auditoria)
   /api/reports/staff-performance   Rendimiento por personal
   /api/reports/peak-hours          Horas pico
   /api/reports/payments            Desglose por metodo de pago
@@ -406,164 +464,174 @@ Reportes disponibles (11 API routes):
   /api/reports/slow-movers         Productos de baja rotacion
 
 Exportacion:
-  - Excel (xlsx)
-  - CSV (UTF-8 BOM, headers en español)
-  - PDF (jsPDF + html2canvas)
+  - Excel (xlsx), CSV (UTF-8 BOM, headers en espanol), PDF (jsPDF + html2canvas)
   - Telegram (cierre diario manual despues de 23:10)
   - Impresion termica (formatSummaryReport, formatDailyReport)
 
-Diseno:
-  - Layout centrado max-w-6xl (directriz 70% simetrica del doc de diseno)
-  - Header consistente: border-b border-slate-800 pb-4 + h1 bold white + subtitle muted
-  - Dark-only UI (slate-900/800/700 backgrounds)
-  - Dropdown Settings en nav para paginas secundarias (Carrusel, Impresora, Menu, Pagos, Usuarios)
-
 3.2 MODULO DE PEDIDOS (ORDERS)
--------------------------------
+------------------------------
 Archivos clave:
-  apps/admin/app/(dashboard)/orders/page.tsx            (Server loader)
-  apps/admin/app/(dashboard)/orders/orders-client.tsx   (857 lineas — componente cliente)
-  apps/admin/app/actions/orders.ts                      (Server actions: accept, discount, cancel, deliver, reprint)
-  apps/admin/components/split-payment-dialog.tsx        (Dialog de pago dividido)
+  apps/admin/app/(dashboard)/orders/page.tsx           (Server loader)
+  apps/admin/app/(dashboard)/orders/orders-client.tsx  (858 lineas — cliente)
+  apps/admin/app/actions/orders.ts                     (Server actions)
+  apps/admin/components/split-payment-dialog.tsx       (Dialog pago dividido)
 
 Server loader (page.tsx):
-  - prisma.order.findMany con include anidado: items → toppings, user, canceledBy, discountedBy
-  - Serializa a objetos planos con campos desnormalizados: userName, userShift,
-    canceledBy.name/role, discountedBy.name/role
+  - prisma.order.findMany con include anidado: items -> toppings, user,
+    canceledBy, discountedBy
+  - Serializa a objetos planos: userName, userShift, canceledBy.name/role,
+    discountedBy.name/role
   - Lee searchParams.status (default ALL)
 
 Tabla interactiva (orders-client.tsx) — 8 columnas:
-  1. #Ticket        — mono bold (seq del pedido)
-  2. Fecha y hora   — es-MX short date+time
-  3. Cliente / Mesa  — customerName o dash si null
-  4. Atendió        — order.userName
-  5. Monto          — right-aligned, mono, emerald bold (total)
-  6. Descuento      — right-aligned, text-warning "−{amount}" o muted "—" si 0
-                     (columna INDEPENDIENTE del total, no desplaza el monto)
-  7. Estado         — badge de pago (Efectivo+QR para splits) + badge de status
-  8. Scroll         — affordance de scroll horizontal
+  1. #Ticket          — mono bold (seq)
+  2. Fecha y hora     — es-MX short date+time
+  3. Cliente / Mesa   — customerName o dash si null
+  4. Atendio          — order.userName
+  5. Monto            — right-aligned, mono, emerald bold (total)
+  6. Descuento        — columna INDEPENDIENTE: text-warning "-Bs X" o "—" si 0
+  7. Estado           — badge metodo de pago (incluye splits) + badge status
+  8. Scroll           — affordance de scroll horizontal
 
 Filas tipo cebra:
   - index % 2 === 0 ? "bg-slate-900/40" : "bg-slate-900/20"
-  - Fila expandida: "bg-primary/10" + "border-l-2 border-l-primary"
+  - Fila expandida: "bg-primary/10" + border-l-2 primary
 
-Acordeón exclusivo:
-  - Estado expandedId guarda UN solo order.id
-  - Toggle cierra el anterior automaticamente
-  - Transicion: transition-[max-height] duration-300 ease-in-out via contentRef.current?.scrollHeight
-  - Fila detalle: colSpan={8}, p-0, contenido animado
-  - Chevron: glyph "▾" que rota 180° cuando esta abierto
-
-Contenido del acordeón expandido:
-  - Franja de metadatos: paidAt, deliveredAt, cancelledAt+reason+who, discountAmount+reason+who
-  - Lista de items: "{qty}× {sizeName} · {flavorName} · {bobaTypeName}"
-    con toppings inline: "Toppings: X (+Bs), Y (+Bs)"
-    y subtotales right-aligned: (unitPrice + Σ toppings) × quantity
+Acordeon exclusivo:
+  - Estado expandedId guarda UN solo order.id; abrir uno cierra el anterior
+  - Transicion: transition-[max-height] duration-300 ease-in-out
+  - Fila detalle colSpan={8} con metadatos (paidAt, deliveredAt, cancelledAt+
+    motivo+responsable, discountAmount+motivo+responsable) y lista de items
+    "{qty}x {size} {flavor} {boba}" con toppings inline y subtotales
 
 Filtros:
   - Pills de estado: Todos | Recibidos | Aceptados | Entregados | Anulados
-  - Select de turno/personal: "Todos los turnos" + MANANA + TARDE + SIN_TURNO
+  - Select de turno/personal: Todos los turnos + MANANA + TARDE + SIN_TURNO
     (filtra por userShift desnormalizado)
-  - DateRangePicker con Desde/Hasta (native date inputs, color-scheme dark)
-    + atajos cruzados (max={to} / min={from}) + boton "Hoy"
-    Default: rango = dia actual
-  - Predicado combina: status AND shift AND createdAt ∈ [from 00:00, to 23:59:59.999]
+  - DateRangePicker Desde/Hasta (native date inputs, color-scheme dark) con
+    atajos cruzados (max={to}/min={from}) y boton "Hoy". Default: dia actual.
+  - Predicado: status AND shift AND createdAt en [from 00:00, to 23:59:59.999]
 
 Ordenacion por cabeceras:
-  - 7 headers clickeables (cursor-pointer)
-  - Toggle asc/desc via sort.dir
-  - Indicador ▲/▼ en text-primary
-  - useMemo sort por: seq, createdAt, customerName, userName, total, discountAmount, status
+  - 7 headers clickeables con toggle asc/desc, indicador arriba/abajo text-primary
+  - useMemo sort por: seq, createdAt, customerName, userName, total,
+    discountAmount, status
 
-Botones de accion (solo si status ≠ ANULADO):
-  - Descontar (bg-warning amber) → dialog: monto (min 1, max total-1) + reason obligatoria
-  - Anular (bg-red-700) → dialog: reason obligatoria, Enter para submit, confirmacion destructiva
-  - Reimprimir → imprime comanda termica
-  - PrimaryActions segun estado:
-    * RECIBIDO → "Registrar pago" despliega Efectivo / QR / Dividir / ✕
-    * ACEPTADO → boton verde "Entregar"
-  - SplitPaymentDialog: method1/method2 toggles, amount auto-flip, validacion
+Acciones por fila (solo si status != ANULADO):
+  - Descontar (bg-warning) -> monto (1..total-1) + motivo obligatorio
+  - Anular (bg-red-700) -> motivo obligatorio, Enter para submit, confirmacion
+  - Reimprimir -> comanda termica best-effort
+  - Segun estado: RECIBIDO -> "Registrar pago" (Efectivo/QR/Dividir);
+    ACEPTADO -> boton verde "Entregar"
+  - SplitPaymentDialog: method1/method2, amount auto-flip, validacion de montos
 
 Server actions (actions/orders.ts):
-  - resolveSessionUserId() — retorna userId o null (evita P2003 si usuario fue borrado)
-  - acceptOrder(orderId, method, method2?, amount2?) — valida status=RECIBIDO, metodo ∈ Efectivo/QR
+  - resolveSessionUserId() — devuelve userId o null (evita P2003)
+  - acceptOrder(orderId, method, method2?, amount2?) — status debe ser RECIBIDO,
+    metodo Efectivo/QR
   - applyDiscount(orderId, amount, reason)
   - cancelOrder(orderId, reason)
   - deliverOrder(orderId) — status debe ser ACEPTADO
-  - reprintOrder(orderId) — impresion termica best-effort
-  - Todos usan runAction() que captura errores en toast destructivo (100s)
+  - reprintOrder(orderId)
+  - runAction() captura errores y muestra toast destructivo
 
 3.3 MODULO DE MENU
--------------------
+------------------
 Archivos clave:
-  apps/admin/app/(dashboard)/menu/page.tsx              (Server loader)
-  apps/admin/app/(dashboard)/menu/menu-manager.tsx      (935 lineas — CRUD + acordeones)
-  apps/admin/app/actions/catalog.ts                     (Server actions CRUD)
-  apps/store/lib/catalog.ts                             (Catalogo cacheado para tienda)
-  apps/store/app/api/catalog/route.ts                   (API publica del catalogo)
+  apps/admin/app/(dashboard)/menu/page.tsx             (Server loader)
+  apps/admin/app/(dashboard)/menu/menu-manager.tsx     (1193 lineas — CRUD)
+  apps/admin/app/actions/catalog.ts                    (Server actions CRUD)
+  apps/store/lib/catalog.ts                            (Catalogo cacheado tienda)
+  apps/store/app/api/catalog/route.ts                  (API publica del catalogo)
 
 Server loader (page.tsx):
-  - Fetch: sizes (con drinkPrices), flavors (con categories + links), bobaTypes
-    (con drinkPrices), toppings, drinkPrices — todo ordenado
-  - Pasa objetos planos a MenuManager
+  - Fetch: sizes, flavors (con categories), bobaTypes, toppings, drinkPrices,
+    menuItems — todo ordenado. Por cada MenuItem calcula "enMenuDelDiaHoy"
+    (enMenuDelDia && menuDelDiaDate === zonedDateKey()) para el toggle.
 
-CollapsibleCard (acordeón reutilizable para todas las secciones):
-  - <Card> con header = button completo (aria-expanded, hover:bg-slate-900/50)
-  - ChevronDown rota 180° via transition-transform duration-300
-  - DEFAULT: colapsado (defaultOpen = false)
-  - Animacion: grid transition-[grid-template-rows]
-    open ? "grid-rows-[1fr]" : "grid-rows-[0fr]" con overflow-hidden
+CollapsibleCard (acordeon reutilizable para todas las secciones):
+  - Header = boton completo (aria-expanded, hover), chevron rota 180 grados
+  - DEFAULT colapsado (defaultOpen=false), grid-rows-[1fr]/[0fr] con
+    overflow-hidden para la animacion
 
-Secciones del menu (cada una es un CollapsibleCard):
-  1. Tamaños de vaso       — nombre + oz
-  2. Sabores               — con CategoryToggles inline
-  3. Tipos de boba          — nombre + BobaKindLabel
+Secciones del menu (cada una un CollapsibleCard):
+  1. Tamanos de vaso        — nombre + oz
+  2. Sabores                — CategoryToggles inline (MILK/WATER/SPECIAL)
+  3. Tipos de boba           — nombre + BobaKindLabel
   4. Toppings               — nombre + precio
-  5. Matriz de precios · MILK    (PriceMatrixEditor)
-  6. Matriz de precios · WATER   (PriceMatrixEditor)
-  7. Matriz de precios · SPECIAL (PriceMatrixEditor)
+  5. Matriz de precios x MILK / WATER / SPECIAL   (PriceMatrixEditor)
+  6. ALMUERZOS · MENU DEL DIA (MenuManager)       — CRUD de platos + toggle
+     "Agregar al dia / Quitar del dia" (exclusivo rol ADMIN)
 
-CategoryToggles:
-  - Pills multi-select para FlavorCategory (MILK/WATER/SPECIAL)
-  - Activo: filled bg-primary | Inactivo: outlined
-  - Uso doble: en formulario nuevo sabor Y inline en cada sabor existente
-  - Toggle inmediato: cambia categoria sin salir de la lista (llama updateFlavor)
+Gestion jerarquica del catalogo:
+  - FlavorCategory enum (MILK|WATER|SPECIAL) -> un sabor puede pertenecer a
+    multiples categorias (M2M via FlavorCategoryLink)
+  - DrinkPrice = matriz por (category, sizeId, bobaTypeId) en enteros
+  - El POS resuelve precio filtrando DrinksPrice con los ids seleccionados;
+    la tienda usa el catalogo cacheado s-maxage=3600 excluyendo lo indisponible
 
-PriceMatrixEditor:
-  - Grid size × boba de Inputs numericos
-  - Celdas clave: "${sizeId}-${bobaId}"
-  - Inicializado de drinkPrices filtrado por categoria
-  - Boton "Guardar matriz" → saveDrinkPrices({ category, prices })
+ALMUERZOS y MENU DEL DIA (Menu Manager):
+  - CRUD de MenuItem: crear (nombre+categoria+precio), editar, activar/desactivar
+    (available), eliminar — solo rol ADMIN
+  - Toggle de disponibilidad diaria: "Agregar al dia"/"Quitar del dia" llama
+    setMenuItemMenuDelDia(id, on) -> setMenuDelDiaForToday() en packages/db
+    (ON: enMenuDelDia=true + menuDelDiaDate=zonedDateKey(); OFF: ambos vacios)
+  - Badge "DEL DIA" (warning) sobre platos activos en la jornada
+  - Boton bloqueado si el plato no esta disponible (available=false)
+  - Este toggle es la unica via para marcar que platos de la categoria
+    ALMUERZO se venderan HOY; el POS solo lista los activos del dia
 
-Fila CRUD por cada entidad:
-  - Badge "Disponible / No disponible"
-  - Botones: Desactivar/Activar + Editar (pencil) + Eliminar (trash + confirm)
-  - Edit dialog: formulario pre-llenado
-  - Errores Prisma (nombre unico duplicado) → toast destructivo
+Guard de rol en menu (apps/admin/app/actions/catalog.ts):
+  - Toda la app admin esta restringida a rol ADMIN por middleware
+  - setMenuItemMenuDelDia usa requireAdminSession() que valida
+    session.user.role === Role.ADMIN a nivel de server action (rechazo directo
+    si un cajero/mesero intenta invocarla)
 
-Gestion jerarquica de categorias:
-  - FlavorCategory enum = MILK | WATER | SPECIAL
-  - Labels: Con leche / Con agua / Especiales
-  - Un sabor puede pertenecer a MÚLTIPLES categorías (M2M via FlavorCategoryLink)
-  - POS (pos-terminal.tsx): selecciona primera categoría activa, filtra sabores,
-    resuelve precio de DrinkPrice por (category, sizeId, bobaTypeId)
-  - Store: catalogo cacheado (s-maxage=3600), excluye entidades no disponibles
+Filtrado dinamico en POS (mesero y cajero):
+  - getPosCatalog() en apps/cajero/actions/pos.ts y apps/mesero/actions/pos.ts
+    usan todayMenuItems() (packages/db/src/menu-day.ts):
+      WHERE available=true AND enMenuDelDia=true AND menuDelDiaDate=zonedDateKey()
+  - Seccion "Almuerzos · Menu del Dia" solo se renderiza si hay platos activos
+    (catalog.menuItems.length > 0) en el panel derecho del terminal
+  - El catalogo historico (245 almuerzos migrados, enMenuDelDia=false) NO
+    satura las terminales; solo lo que el admin activa hoy es vendible
 
-Catálogo migrado (245 almuerzos históricos):
-  - Documentado en indicaciones/gemini-code-1788542565365.md
-  - Migracion desde bibosi_restaurante_backup.sql (MySQL legacy):
-    170,446 ventas / 291,235 lineas / 613 productos / 34 categorias
-  - "245 almuerzos históricos" bajo categoria ALMUERZO
-  - Solo 6 activos: Silpancho, Arroz chaufa, Tortita de pollo,
-    Pastel de carne, Enrollado de pollo, Pollo a la plancha c/ choclo
-  - 157 productos activos (estado=1) varados en categorias tecnicas inactivas
-  - NOTA: esta migracion es documentacion/prompt — el schema actual todavia
-    usa FlavorCategory (MILK/WATER/SPECIAL) sin ALMUERZO
-  - El prompt maestro describe la arquitectura objetivo completa
+3.4 MODULO DE USUARIOS (ADMIN)
+------------------------------
+Archivos clave:
+  apps/admin/app/(dashboard)/users/page.tsx     (Server loader)
+  apps/admin/app/(dashboard)/users/users-client.tsx
+  apps/admin/app/actions/users.ts               (Server actions con guard ADMIN)
+
+Funcionalidad:
+  - Listado completo: nombre, username, rol, turno, activo + marca del usuario
+    conectado
+  - Alta: nombre, username unico (regex [a-z0-9_]), password (min 6), rol,
+    turno; nace activo
+  - Edicion: nombre, rol, turno + restablecer password (sin conocer anterior)
+  - Baja/reactivacion logica (User.active); los historicos conservan atribucion
+  - Proteccion del ultimo administrador: no se puede desactivar/degradar la
+    propia cuenta ni dejar el sistema sin ADMIN activo
+  - Acceso restringido: requireAdminSession() en cada accion
+
+3.5 MODULOS DE TERMINAL (CAJERO Y MESERO)
+------------------------------------------
+  - apps/cajero (Puerto 3002): login por username; tab preparacion (cola de
+    pedidos RECIBIDO/ACEPTADO con acciones de cobro, entrega, reimpresion),
+    tab reporte personal del dia, tab Nueva Venta (POS terminal)
+  - apps/mesero (Puerto 3003): rol MESERO restringido al POS terminal
+    (tab=vapor); envia pedidos con tipo MESA forzado sin poder cobrar;
+    puede marcar ACEPTADO como entregado y reimprimir comandas
+  - POS terminal compartido (pos-terminal.tsx en cada app): layout dos
+    columnas, selector de categorias/sabores/tamano/boba/toppings,
+    pre-ticket, ticket en curso con cantidad +/- y quitar, nombre de cliente,
+    tipo de entrega MESA/LLEVAR, persistencia en localStorage, feedback
+    tactil (active:scale-95)
+  - Middleware de sesion por rol; consumo de la cola en vivo via polling
 
 
 ================================================================================
-  4. INTEGRACIONES Y SERVICIOS AUXILIARES
+  4. INTEGRACIONES Y CONFIGURACION
 ================================================================================
 
 4.1 LOGICA DE ZONA HORARIA (America/La_Paz)
@@ -579,196 +647,146 @@ Constantes:
 
 Helpers principales:
   packages/db/src/daily-report.ts:
-    - zonedDateKey(date)       → "YYYY-MM-DD" en America/La_Paz
-    - zonedMinutes(date)       → minutos del dia en la zona
-    - shiftDayKey(date)        → dia clave segun turno (manana/tarde)
-    - targetReportDate()       → fecha objetivo del reporte
-    - zonedStartOfDay(date)    → medianoche local via offset fijo -4h
-
+    - zonedDateKey(date)       -> "YYYY-MM-DD" en America/La_Paz
+    - zonedMinutes(date)       -> minutos del dia en la zona
+    - shiftDayKey(date)        -> dia clave segun turno (manana/tarde)
+    - targetReportDate()       -> fecha objetivo del reporte
   apps/admin/lib/reports/range.ts:
-    - REPORT_TIMEZONE = "America/La_Paz"
-    - tzOffsetMs      → offset en milisegundos (-4 * 3600 * 1000)
-    - getZonedParts   → year/month/day/hour/minute/second en la zona
-    - zonedToUtc      → convierte hora local a UTC
-    - dayBounds       → [inicio UTC, fin UTC] de un dia local
-    - rangeBounds     → bounds para un rango de fechas
-    - dayKeyOf        → "YYYY-MM-DD" de un Date en la zona
-    - monthKeyOf      → "YYYY-MM"
-    - isoWeekKeyOf    → "YYYY-Wxx"
-    - hourOfDay       → hora 0-23 en la zona
-    - weekdayIndex    → 0-6 (domingo=0)
-
+    - REPORT_TIMEZONE, tzOffsetMs (-4h)
+    - getZonedParts, zonedToUtc, dayBounds, rangeBounds
+    - dayKeyOf ("YYYY-MM-DD"), monthKeyOf ("YYYY-MM"), isoWeekKeyOf
+    - hourOfDay, weekdayIndex
   apps/cajero/lib/day.ts:
-    - TIME_ZONE = "America/La_Paz"
-    - localDayKey(date)     → "YYYY-MM-DD"
-    - todayKey()            → dia actual
-    - zonedStartOfDay(date) → midnight local via UTC - 4h
-    - dayBounds(date)       → [startOfDay UTC, endOfDay UTC]
-
+    - TIME_ZONE, localDayKey, todayKey, zonedStartOfDay, dayBounds
   packages/types/src/index.ts:
-    - zonedClockMinutes(date, tz) → minutos del dia via Intl
+    - zonedClockMinutes(date, tz) -> minutos del dia
 
 Funcionamiento:
-  - Fechas almacenadas en UTC en SQLite (Prisma DateTime)
-  - Todas las queries de reportes usan dayBounds() para filtrar por dia local
-  - El API dashboard-summary usa Intl.DateTimeFormat("en-CA", {timeZone}) para todayLocal()
-  - No hay conversion risky: offset fijo -4h documentado con comentarios
+  - Las fechas se almacenan en UTC (Prisma DateTime en SQLite)
+  - Todas las queries de reportes/cola usan dayBounds() para filtrar el dia
+    local [start UTC, end UTC]
+  - El Menu del Dia usa zonedDateKey() como clave de vigencia: el plato activo
+    "hoy" deja de serlo al cambiar la fecha en La Paz, sin workers
 
 4.2 IMPRESION TERMICA
 ---------------------
-Mecanismo: PowerShell + System.Drawing.PrintDocument (Windows-only, NO usa escpos)
-No hay paquete npm de impresion — todo es nativo via spawn de powershell.exe
+Mecanismo: PowerShell + System.Drawing.PrintDocument (Windows-only, NO escpos)
+No hay paquete npm de impresion — nativo via spawn de powershell.exe
 
 Configuracion compartida:
   apps/store/printing.json (gitignored) — { "printerName": "..." }
-  Todas las apps leen este archivo:
-    apps/store/lib/printing.ts   → join(process.cwd(), "printing.json")
-    apps/cajero/lib/printing.ts  → join(process.cwd(), "..", "store", "printing.json")
-    apps/mesero/lib/printing.ts  → join(process.cwd(), "..", "store", "printing.json")
-    apps/admin/lib/printing.ts  → join(process.cwd(), "..", "store", "printing.json")
+  Todas las apps leen ese archivo (printText renuncia a ESC/POS):
+    store:  join(process.cwd(), "printing.json")
+    cajero/mesero/admin: join(process.cwd(), "..", "store", "printing.json")
 
-Funcionamiento del nucleo (printText):
+Nucleo (printText):
   1. getPrinterName() lee printing.json
-  2. runPowerShell(script) — timeout 15s, spawn powershell.exe -NoProfile -NonInteractive
-  3. printText(printerName, text):
-     - Base64-encodes UTF-8 text
-     - Divide en lineas, calcula largo maximo
-     - Mide ancho de caracter con Consolas 12pt bold
-     - Auto-dimensiona font: size = Min(12, availW/(maxLen*cw)*12)
-     - Papel ~80mm (300-340 unidades de ancho)
-  4. toAscii(text) — elimina acentos (á→a, ñ→n, etc.) por compatibilidad termica
+  2. runPowerShell(script) — timeout 15s, powershell.exe -NoProfile
+  3. Base64-encode UTF-8, auto-dimensiona fuente Consolas 12pt bold
+     (Max(Min) según ancho), papel ~80mm (300-340 unidades)
+  4. toAscii(text) — elimina acentos (á→a, ñ→n) por compatibilidad termica
 
 Formato de comanda:
-  - Header: "BUBBLE DRINK"
-  - Titulo: "COMANDA #seq"
-  - Ancho: 34 columnas
-  - Abreviaturas: Grande→G, Extragrande→XG, Tapioca→Tap, Explosivas→Expl
-  - Filas con puntos de relleno hasta el precio
-  - Fecha: toLocaleString("es-BO", {dateStyle, timeStyle})
+  Header "BUBBLE DRINK" + "COMANDA #seq", 34 columnas
+  Abreviaturas: Grande→G, Extragrande→XG, Tapioca→Tap, Explosivas→Expl
+  Lineas de almuerzo se imprimen como "Qty x MenuItem" (columna propia)
+  Fecha es-BO con dateStyle/timeStyle
 
 Gestion de impresora (admin):
-  - connectSharedPrinter(uncPath) → Add-Printer -ConnectionName '\\EQUIPO\Printer'
-  - listPrinters() → Get-CimInstance Win32_Printer (nombre, default, offline)
-  - setPrinterConfig(printerName) / getPrinterConfig() → escritura/lectura del JSON
-  - formatTestPage(printerName) → pagina de prueba diagnostica
-  - API routes: /api/printer, /api/printer/connect, /api/printer/test
-  - UI: apps/admin/(dashboard)/printer/page.tsx
+  connectSharedPrinter(uncPath), listPrinters (Win32_Printer), setPrinterConfig,
+  formatTestPage — API routes /api/printer, /api/printer/connect, /api/printer/test
+  UI: apps/admin/(dashboard)/printer/page.tsx
 
-Donde se imprime:
-  - Store: al crear pedido (Next.js after(), best-effort, no bloquea)
-  - Cajero: al crear pedido POS (try/catch, non-blocking)
-  - Mesero: al crear pedido POS (try/catch, non-blocking)
-  - Cajero reprint: reprintOrder(orderId) solo si RECIBIDO/ACEPTADO
-  - Cajero reporte: printDailyReport() — reporte personal diario
-  - Admin: printSummaryReport() y printDailyReport(date)
+Donde se imprime (best-effort, non-blocking):
+  Store (crear pedido), Cajero y Mesero (crear pedido POS), reimpresion desde
+  cola cajero/mesero y admin, reporte diario del cajero, resumen/cierre admin
 
 4.3 CIERRE DIARIO AUTOMATICO A TELEGRAM
-----------------------------------------
+---------------------------------------
 Mecanismo: 2 workers Node.js con loop setInterval(60s) en el contenedor Docker
-No hay cron del SO — todo corre internamente en el container
+No hay cron del SO — todo corre dentro del container
 
 A. REPORTE DIARIO DE CIERRE
-
-  Fuente: packages/db/src/daily-report.ts (341 lineas)
-  Worker:  packages/db/scripts/daily-report-worker.ts
+  Fuente: packages/db/src/daily-report.ts
+  Worker: packages/db/scripts/daily-report-worker.ts
 
   collectReportStats(key):
-    - Revenue de pedidos entregados + avg ticket + desglose por metodo de pago
-      (incluye split payments: total-amount2 para method1, amount2 para method2)
+    - Ingresos de pedidos entregados + ticket promedio + desglose por metodo
+      (incluye splits: total-amount2 para method1, amount2 para method2)
     - Tiempo promedio de entrega (deliveredAt - createdAt)
-    - Hora pico de revenue
-    - Perdidas: anulaciones, descuentos, revenue de toppings
-    - Total de pedidos, pendientes, etc.
-
-  buildReportMessage(key, stats):
-    - Markdown: "CIERRE DIARIO BIBOSI"
-    - Secciones: FINANZAS / OPERACION / FUGAS Y ALERTAS
-    - Montos en Bs (Bolivianos)
-
+    - Hora pico, perdidas (anulaciones, descuentos), desglose por categoria
+      (incluye plata de ALMUERZO con etiqueta compartida)
+  buildReportMessage(key, stats): markdown "CIERRE DIARIO BIBOSI" con
+    secciones FINANZAS / OPERACION / FUGAS Y ALERTAS en Bs
   sendDailyReportToTelegram(key):
-    - Verifica DailyReportLog (si ya fue enviado, no reenvia — anti-duplicado)
-    - POST a https://api.telegram.org/bot<TOKEN>/sendMessage
-    - Envia DailyReportLog en exito
+    - Verifica DailyReportLog (anti-duplicado), POST a Telegram, persiste log
+  Worker loop: intervalo 60s, calcula fecha objetivo (hoy si paso
+    DAILY_REPORT_HOUR, si no dia anterior — recupera dias caidos del container),
+    flags --date=YYYY-MM-DD y --dry-run
 
-  Worker loop (daily-report-worker.ts):
-    - Intervalo: 60 segundos
-    - Calcula fecha objetivo: dia actual si ya paso DAILY_REPORT_HOUR, sino dia anterior
-      (recupera dias perdidos si el container estuvo caido)
-    - Flags CLI: --date=YYYY-MM-DD (envio especifico), --dry-run=YYYY-MM-DD (sin enviar)
-    - Soporte en pnpm: pnpm daily-report (root) → pnpm --filter @bbspos/db daily-report
-
-  Triggers manuales (habilitados solo despues de 23:10):
-    - Cajero: apps/cajero/app/actions/report.ts → sendDailyReportToBot()
-      UI: apps/cajero/components/report-actions.tsx (boton "Enviar a Telegram")
-    - Admin: apps/admin/app/actions/daily-report.ts → sendDailyReportToBot()
-      UI: apps/admin/(dashboard)/reports/reports-client.tsx (boton "Cierre diario")
-      Gating: canSendCierre basado en zonedClockMinutes >= MANUAL_REPORT_CUTOFF_MINUTES
-
-  Configuracion:
-    DAILY_REPORT_HOUR = "23:20" (hora de envio automatico)
-    MANUAL_REPORT_HOUR = "23:10" (hora minimo para envio manual)
+  Triggers manuales (habilitados despues de 23:10 / MANUAL_REPORT_CUTOFF):
+    - Cajero: apps/cajero/app/actions/report.ts (boton "Enviar a Telegram")
+    - Admin: apps/admin/app/actions/daily-report.ts (boton "Cierre diario")
+    - Gating: zonedClockMinutes >= MANUAL_REPORT_CUTOFF_MINUTES
 
 B. ALERTA DE PEDIDOS ATRASADOS
-
   Fuente: packages/db/src/telegram-alert.ts
-  Worker:  packages/db/scripts/telegram-alert-worker.ts
+  Worker: packages/db/scripts/telegram-alert-worker.ts
 
   checkDelayedOrders():
-    - Query: delayNotified=false, paidAt=null, creado hace > DELAY_ALERT_MINUTES
-      y (status=ACEPTADO sin entregar O status=ENTREGADO sin pagar → "caja leak")
-    - Anti-spam atomico: prisma.order.updateMany({where: {id, delayNotified: false},
-      data: {delayNotified: true}}) — solo un worker envia por pedido
+    - Query: delayNotified=false, paidAt=null, hace > DELAY_ALERT_MINUTES y
+      (ACEPTADO sin entregar O ENTREGADO sin pagar -> "caja leak")
+    - Anti-spam atomico via updateMany (solo un worker envia)
     - Si falla Telegram, resetea delayNotified=false para reintento
+  sendAlert(seq, name, minutes, status): markdown "PEDIDO ATRASADO"
+  Worker loop: 60s, flag --once
 
-  sendAlert(seq, name, minutes, status):
-    - Markdown: "PEDIDO ATRASADO" con numero de ticket, nombre cliente,
-      minutos de atraso y estado
-    - parse_mode: "Markdown"
-
-  Worker loop (telegram-alert-worker.ts):
-    - Intervalo: 60 segundos
-    - Flag CLI: --once (una sola pasada)
+  Configuracion:
+    DAILY_REPORT_HOUR = "23:20" / MANUAL_REPORT_HOUR = "23:10"
+    DELAY_ALERT_MINUTES = "10"
 
 4.4 OTROS SERVICIOS AUXILIARES
 -------------------------------
-
-HTTPS Proxy inverso:
-  - Archivos: https-proxy.mjs (raiz, http-proxy), scripts/https-proxy/proxy.mjs (nativo)
-  - Certificados mkcert: ${host}+2.pem / ${host}+2.key
-  - Mapeo: 8443→store, 8444→admin, 8445→cajero, 8446→mesero
-  - WebSocket upgrade soportado
+HTTPS proxy inverso:
+  - https-proxy.mjs + scripts/https-proxy/proxy.mjs (http-proxy, mkcert certs)
+  - Mapeo 8443->store, 8444->admin, 8445->cajero, 8446->mesero, WebSocket
   - Config central: server.config.json
 
 Pagos QR:
-  - NO es gateway real — imagen QR estatica en base64
-  - Modelo: PaymentConfig (singleton, id="default", qrImage data URL)
-  - Admin sube/elimina: apps/admin/app/actions/payment.ts (valida imagen, <=2MB)
-  - Store muestra: apps/store/app/actions/payment.ts → pantalla de confirmacion
-  - Metodos: EFECTIVO | QR | TARJETA + split payments (paymentMethod2/paymentAmount2)
+  - NO es gateway real — imagen QR estatica en base64 (PaymentConfig singleton)
+  - Admin sube/elimina (apps/admin/app/actions/payment.ts, imagen <=2MB)
+  - Store la muestra en la confirmacion del pedido
+  - Metodos EFECTIVO | QR | TARJETA + split (paymentMethod2/paymentAmount2)
 
 Slideshow de tienda:
-  - Admin gestiona: apps/admin/(dashboard)/slideshow/page.tsx
-  - API: /api/slideshow, /api/slideshow/upload, /api/slideshow/media/[name]
-  - Store consume: apps/store/public/slideshow.json
+  - Admin gestiona (slideshow/page.tsx), API /api/slideshow*,
+    store consume public/slideshow.json
 
 PWA:
-  - Store: @ducanh2912/next-pwa (sw.js, manifest.json, icons)
-  - Mesero: PWA manual (sw.js, manifest.json + service-worker-register.tsx + pwa-install-banner.tsx)
+  - Store: @ducanh2912/next-pwa; Mesero: PWA manual (service-worker-register +
+    pwa-install-banner)
 
-Script de setup:
-  - scripts/setup-env.mjs — regenera NEXTAUTH_URL en cada .env desde server.config.json
-    Uso: pnpm setup-env --host 192.168.1.25
-  - scripts/db-sync.bat — mata procesos en puertos 3000/3001, regenera Prisma, reinicia dev
+Scripts de operacion:
+  - scripts/setup-env.mjs — regenera NEXTAUTH_URL en cada .env
+  - scripts/db-sync.bat — mata procesos en 3000/3001, regenera Prisma, reinicia dev
+  - pnpm scripts root: dev, build, lint, typecheck, db:generate/migrate/seed,
+    daily-report, telegram-alert
 
 4.5 SEGURIDAD / AUTH
 --------------------
-  - NextAuth v4 (JWT strategy)
-  - Providers: Credentials (username + password, bcryptjs)
-  - Sessions distintas por app (cookie NAME diferenciada)
-  - middleware.ts en admin, cajero, mesero (proteccion de rutas)
-  - store NO tiene auth (acceso publico)
+  - NextAuth v4 (JWT strategy), providers Credentials (username+password,
+    bcryptjs), login case-insensitive, mensaje diferenciado de cuenta desactivada
+  - Sesiones distintas por app (cookie NAME diferenciada), cookie de navegador
+    sin Expires/Max-Age (se borra al cerrar)
   - Roles: ADMIN, CAJERO, MESERO
-  - Permisos: el middleware valida session y role para cada ruta
+    * ADMIN : acceso al panel admin completo (dashboard, pedidos, reportes,
+      menu, usuarios, pagos, impresora, carrusel)
+    * CAJERO: cola de preparacion + cobro + reporte personal + POS
+    * MESERO: solo POS (tab Nueva Venta), tipo MESA forzado, no cobra, puede
+      entregar y reimprimir
+  - middleware.ts en admin/cajero/mesero protege rutas por rol; store publico
+  - Server actions criticas (usuarios, toggle Menu del Dia, pagos, pedidos)
+    validan sesion y rol
 
 
 ================================================================================
@@ -778,28 +796,31 @@ Script de setup:
   SISTEMA              ESTADO
   ─────────────────    ─────────────────────────────────────
   Apps funcionales     4 (store, admin, cajero, mesero)
-  DB                   SQLite, 10 modelos, 19 migraciones
+  DB                   SQLite, 13 modelos, 8 enums, 21 migraciones
   Auth                 NextAuth JWT, 3 roles, sesiones por app
   Zona horaria         America/La_Paz (UTC-4 fijo) — Intl nativo
   Impresion            PowerShell/System.Drawing (Windows-only)
   Telegram             2 workers (cierre diario + alertas atraso)
   Pagos                QR estatica + Efectivo + Tarjeta + Split
+  Menu del Dia         MenuItem.enMenuDelDia + menuDelDiaDate (vigencia diaria)
+                       toggle exclusivo ADMIN, filtrado en POS cajero/mesero
   PWA                  Store + Mesero
   Despliegue           Docker multi-stage, 4 apps + 2 workers
   UI                   Dark-only, Tailwind, shadcn/ui, simetrica 70%
 
   Lineas de codigo destacadas:
-    orders-client.tsx   857 lineas (tabla + acordeones + filtros + sort)
-    menu-manager.tsx    935 lineas (CRUD + acordeones + matrices)
-    daily-report.ts     341 lineas (metricas + Telegram)
-    schema.prisma       191 lineas (10 modelos + 7 enums)
+    orders-client.tsx   858 lineas (tabla + acordeones + filtros + sort)
+    menu-manager.tsx    1193 lineas (CRUD + acordeones + matrices + almuerzos)
+    daily-report.ts     ~341 lineas (metricas + Telegram)
+    schema.prisma       211 lineas (13 modelos + 8 enums)
 
-  Migraciones pendientes (documentadas):
-    Expansion a restaurante completo (Bibosi):
-    613 productos migrados de MySQL legacy
-    245 almuerzos historicos (6 activos)
-    34 categorias del backup SQL
-    Schema actual: solo FlavorCategory (MILK/WATER/SPECIAL)
+  Contexto de migracion heredada (documentacion en indicaciones/):
+    Sistema migrado desde MySQL legacy (bibosi_restaurante_backup.sql):
+    170,446 ventas / 291,235 lineas / 613 productos / 34 categorias
+    245 almuerzos historicos bajo categoria ALMUERZO (6 activos: Silpancho,
+    Arroz chaufa, Tortita de pollo, Pastel de carne, Enrollado de pollo,
+    Pollo a la plancha c/ choclo) — todos con enMenuDelDia=false por defecto;
+    el admin los activa por jornada desde el panel de Menu
 
 ================================================================================
                     FIN DEL RESPALDO TECNICO MAESTRO

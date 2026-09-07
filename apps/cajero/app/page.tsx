@@ -34,6 +34,7 @@ function toPlainOrder(order: {
     bobaTypeName: string | null;
     menuItemName: string | null;
     menuItemCategory: string | null;
+    menuItemOptionName: string | null;
     unitPrice: number;
     quantity: number;
     toppings: { toppingName: string; unitPrice: number }[];
@@ -64,6 +65,7 @@ function toPlainOrder(order: {
       menuItemName: item.menuItemName,
       menuItemCategory:
         item.menuItemCategory as Order["items"][number]["menuItemCategory"],
+      menuItemOptionName: item.menuItemOptionName,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
       toppings: item.toppings,

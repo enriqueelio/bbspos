@@ -3,6 +3,7 @@
 import { prisma } from "@bbspos/db";
 import {
   FlavorCategoryList,
+  MenuCategoryList,
   type CategoryBreakdownRow,
 } from "@bbspos/types";
 import { requireSession } from "@/lib/reports/guard";
@@ -162,7 +163,7 @@ export async function printDailyReport(date?: string): Promise<string> {
   let toppingsRevenue = 0;
   const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
     ...FlavorCategoryList,
-    "ALMUERZO",
+    ...MenuCategoryList,
   ];
   const byCategory = new Map<
     CategoryBreakdownRow["category"],
@@ -180,9 +181,10 @@ export async function printDailyReport(date?: string): Promise<string> {
     for (const item of order.items) {
       itemsSold += item.quantity;
       toppingsRevenue += item.toppings.reduce((acc, t) => acc + t.unitPrice, 0) * item.quantity;
-      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
-      // se agrupan bajo la categoría ALMUERZO.
-      const row = byCategory.get(item.flavorCategory ?? "ALMUERZO");
+      // Bebidas agrupan por flavorCategory; platillos (carta y Menú del Día)
+      // por menuItemCategory.
+      const key = item.flavorCategory ?? item.menuItemCategory ?? "ALMUERZO";
+      const row = byCategory.get(key);
       if (row) {
         row.orders.add(order.id);
         row.units += item.quantity;

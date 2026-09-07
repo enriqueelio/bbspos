@@ -1,6 +1,9 @@
 import { prisma } from "@bbspos/db";
 import {
+  FlavorCategoryLabel,
   FlavorCategoryList,
+  MenuCategoryLabel,
+  MenuCategoryList,
   type DailyReportData,
   type CategoryBreakdownRow,
 } from "@bbspos/types";
@@ -12,23 +15,23 @@ import { buildCsv, csvResponse } from "@/lib/reports/csv";
 import { dayBounds, localDateKey } from "@/lib/reports/range";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  MILK: "Con leche",
-  WATER: "Con agua",
-  SPECIAL: "Especiales",
-  ALMUERZO: "Almuerzos",
+  ...FlavorCategoryLabel,
+  ...MenuCategoryLabel,
 };
 
-// Orden del desglose: categorías de bebidas y al final el Menú del Día
-// (las líneas de platillos llegan sin flavorCategory, se agrupan como ALMUERZO).
+// Orden del desglose: categorías de bebidas y luego secciones de la carta
+// (las líneas de platillos llegan sin flavorCategory, se agrupan por
+// menuItemCategory).
 const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
   ...FlavorCategoryList,
-  "ALMUERZO",
+  ...MenuCategoryList,
 ];
 
 // Filas devueltas por las consultas SQL nativas (SQLite devuelve agregaciones
 // como números enteros grandes; se normalizan con Number()).
 type CategoryRow = {
   flavorCategory: string | null;
+  menuItemCategory: string | null;
   orders: number | bigint;
   units: number | bigint;
   revenue: number | bigint;
@@ -39,16 +42,18 @@ type ToppingsRow = {
 };
 
 // Desglose por categoría (COUNT DISTINCT de órdenes, unidades e ingresos por
-// producto) delegado por completo a SQLite.
+// producto) delegado por completo a SQLite. Las bebidas se agrupan por
+// flavorCategory; los platillos (carta y Menú del Día) por menuItemCategory.
 const CATEGORY_SQL = `
   SELECT oi."flavorCategory" AS flavorCategory,
+         oi."menuItemCategory" AS menuItemCategory,
          COUNT(DISTINCT oi."orderId") AS orders,
          COALESCE(SUM(oi."quantity"), 0) AS units,
          COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
   FROM "OrderItem" oi
   JOIN "Order" o ON o.id = oi."orderId"
   WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
-  GROUP BY oi."flavorCategory"
+  GROUP BY oi."flavorCategory", oi."menuItemCategory"
 `;
 
 // Ingreso por toppings (cada topping multiplicado por la cantidad del ítem).
@@ -129,11 +134,12 @@ export async function GET(request: Request) {
     }
     let itemsSold = 0;
     for (const row of catRows) {
-      // Las líneas de platillos (incluidas en el total de artículos) llegan
-      // sin flavorCategory: se agrupan bajo la categoría ALMUERZO.
+      // Bebidas agrupan por flavorCategory; platillos (carta y Menú del Día)
+      // por menuItemCategory.
+      const key = row.flavorCategory ?? row.menuItemCategory ?? "ALMUERZO";
       const units = Number(row.units);
       itemsSold += units;
-      const entry = byCategoryMap.get(row.flavorCategory ?? "ALMUERZO");
+      const entry = byCategoryMap.get(key);
       if (!entry) continue;
       entry.orders = Number(row.orders);
       entry.units = units;

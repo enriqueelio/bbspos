@@ -2,8 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma, setMenuDelDiaForToday } from "@bbspos/db";
-import type { FlavorCategory, MenuCategory } from "@bbspos/types";
+import { Role, type FlavorCategory, type MenuCategory } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
+
+async function requireAdminSession() {
+  const session = await getRequiredSession();
+  if (session.user.role !== Role.ADMIN) {
+    throw new Error("Solo los administradores pueden modificar el menú.");
+  }
+  return session;
+}
 
 export async function createSize(input: { name: string; oz: number }) {
   await getRequiredSession();
@@ -195,14 +203,37 @@ export async function createMenuItem(input: {
   name: string;
   category: MenuCategory;
   price: number;
+  description?: string | null;
+  options?: { name: string; price: number }[];
 }) {
   await getRequiredSession();
   const name = input.name.trim();
-  if (!name || !input.price || input.price <= 0) {
-    throw new Error("Datos inválidos: nombre y precio son obligatorios.");
+  const options = (input.options ?? []).filter(
+    (o) => o.name.trim() && o.price > 0,
+  );
+  if (!name) {
+    throw new Error("Datos inválidos: nombre es obligatorio.");
+  }
+  if (!input.price || input.price <= 0) {
+    throw new Error("Datos inválidos: precio es obligatorio.");
+  }
+  const optsValid = options.every((o) => o.price > 0 && Number.isFinite(o.price));
+  if (!optsValid) {
+    throw new Error("Datos inválidos: precio de variante inválido.");
   }
   await prisma.menuItem.create({
-    data: { name, category: input.category, price: Math.trunc(input.price) },
+    data: {
+      name,
+      category: input.category,
+      price: Math.trunc(input.price),
+      description: input.description?.trim() || null,
+      options: {
+        create: options.map((o) => ({
+          name: o.name.trim(),
+          price: Math.trunc(o.price),
+        })),
+      },
+    },
   });
   revalidatePath("/menu");
 }
@@ -214,22 +245,40 @@ export async function updateMenuItem(
     category: MenuCategory;
     price: number;
     available: boolean;
+    description?: string | null;
+    options?: { name: string; price: number }[];
   },
 ) {
   await getRequiredSession();
   const name = input.name.trim();
-  if (!name || !input.price || input.price <= 0) {
-    throw new Error("Datos inválidos: nombre y precio son obligatorios.");
+  const options = (input.options ?? []).filter(
+    (o) => o.name.trim() && o.price > 0,
+  );
+  if (!name) {
+    throw new Error("Datos inválidos: nombre es obligatorio.");
   }
-  await prisma.menuItem.update({
-    where: { id },
-    data: {
-      name,
-      category: input.category,
-      price: Math.trunc(input.price),
-      available: input.available,
-    },
-  });
+  if (!input.price || input.price <= 0) {
+    throw new Error("Datos inválidos: precio es obligatorio.");
+  }
+  await prisma.$transaction([
+    prisma.menuItemOption.deleteMany({ where: { menuItemId: id } }),
+    prisma.menuItem.update({
+      where: { id },
+      data: {
+        name,
+        category: input.category,
+        price: Math.trunc(input.price),
+        available: input.available,
+        description: input.description?.trim() || null,
+        options: {
+          create: options.map((o) => ({
+            name: o.name.trim(),
+            price: Math.trunc(o.price),
+          })),
+        },
+      },
+    }),
+  ]);
   revalidatePath("/menu");
 }
 
@@ -241,7 +290,7 @@ export async function deleteMenuItem(id: string) {
 
 /** Activa (ON) o desactiva (OFF) el Menú del Día de un plato para la jornada actual. */
 export async function setMenuItemMenuDelDia(id: string, on: boolean) {
-  await getRequiredSession();
+  await requireAdminSession();
   await setMenuDelDiaForToday(id, on);
   revalidatePath("/menu");
 }

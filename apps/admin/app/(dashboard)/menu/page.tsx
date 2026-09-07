@@ -16,7 +16,10 @@ export default async function MenuPage() {
       prisma.bobaType.findMany({ orderBy: { name: "asc" } }),
       prisma.topping.findMany({ orderBy: { name: "asc" } }),
       prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
-      prisma.menuItem.findMany({ orderBy: { name: "asc" } }),
+      prisma.menuItem.findMany({
+        include: { options: { orderBy: { name: "asc" } } },
+        orderBy: [{ category: "asc" }, { name: "asc" }],
+      }),
     ]);
 
   const today = zonedDateKey();
@@ -38,6 +41,12 @@ export default async function MenuPage() {
         name: mi.name,
         category: mi.category,
         price: mi.price,
+        description: mi.description,
+        options: mi.options.map((o) => ({
+          id: o.id,
+          name: o.name,
+          price: o.price,
+        })),
         available: mi.available,
         enMenuDelDiaHoy:
           mi.enMenuDelDia && mi.menuDelDiaDate === today,

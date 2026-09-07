@@ -8,21 +8,35 @@ Controla el acceso al panel administrativo del restaurante, permitiendo que solo
 
 ### Requirement: Inicio de sesión del personal
 
-El sistema SHALL autenticar al personal del restaurante mediante credenciales válidas (correo y contraseña) y establecer una sesión persistente.
+El sistema SHALL autenticar al personal del restaurante mediante credenciales válidas (correo y contraseña) y establecer una sesión persistente. Las credenciales de un usuario dado de baja (inactivo) SHALL ser rechazadas aunque sean correctas, sin revelar si el fallo fue el correo o la contraseña.
 
 #### Scenario: Credenciales válidas
 
-- **WHEN** un miembro del personal inicia sesión con credenciales correctas
-- **THEN** el sistema establece una sesión y lo redirige al panel admin
+- **WHEN** un miembro del personal activo inicia sesión con credenciales correctas
+- **THEN** el sistema establece una sesión y lo redirige a su panel correspondiente
 
 #### Scenario: Credenciales inválidas
 
 - **WHEN** un usuario intenta iniciar sesión con credenciales incorrectas
 - **THEN** el sistema rechaza el acceso y muestra un mensaje de error sin revelar si el fallo fue el correo o la contraseña
 
+#### Scenario: Usuario inactivo
+
+- **WHEN** un usuario dado de baja introduce credenciales correctas
+- **THEN** el sistema rechaza el acceso e indica que la cuenta está desactivada
+
+### Requirement: Roles de usuario
+
+El sistema SHALL asignar a cada usuario del personal un rol: `ADMIN` o `CAJERO`. El rol SHALL determinar a qué aplicaciones y operaciones tiene acceso el usuario.
+
+#### Scenario: Usuario con rol definido
+
+- **WHEN** se crea un usuario del personal
+- **THEN** el sistema le asigna un rol `ADMIN` o `CAJERO`
+
 ### Requirement: Protección de rutas del admin
 
-El sistema SHALL impedir el acceso a las rutas del panel admin a usuarios sin sesión activa y redirigirlos al inicio de sesión.
+El sistema SHALL impedir el acceso a las rutas del panel admin a usuarios sin sesión activa y SHALL restringir el panel admin a usuarios con rol `ADMIN`; cualquier otro caso se redirige al inicio de sesión.
 
 #### Scenario: Acceso sin sesión
 
@@ -31,8 +45,13 @@ El sistema SHALL impedir el acceso a las rutas del panel admin a usuarios sin se
 
 #### Scenario: Acceso con sesión activa
 
-- **WHEN** un usuario autenticado abre una ruta del panel admin
+- **WHEN** un usuario autenticado con rol `ADMIN` abre una ruta del panel admin
 - **THEN** el sistema le permite acceder a la ruta
+
+#### Scenario: Acceso de un cajero al admin
+
+- **WHEN** un usuario autenticado con rol `CAJERO` intenta abrir una ruta del panel admin
+- **THEN** el sistema rechaza el acceso y lo redirige a su inicio de sesión correspondiente
 
 ### Requirement: Cierre de sesión
 

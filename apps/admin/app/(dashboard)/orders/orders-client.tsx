@@ -266,6 +266,12 @@ function OrderDetail({
                   {item.quantity}×{" "}
                   {item.menuItemName ??
                     `${item.sizeName} · ${item.flavorName} · ${item.bobaTypeName}`}
+                  {item.menuItemOptionName && (
+                    <span className="font-normal text-slate-300">
+                      {" "}
+                      · {item.menuItemOptionName}
+                    </span>
+                  )}
                 </p>
                 {item.toppings.length > 0 && (
                   <p className="pl-2 text-xs text-slate-400">

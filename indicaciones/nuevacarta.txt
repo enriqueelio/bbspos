@@ -1,0 +1,12 @@
+Por favor, procesa y carga la carta completa de productos "A la Carta" (No Almuerzo) en la base de datos de bbspos, leyendo la información directamente desde el archivo de texto ubicado en la ruta `indicaciones/menu_bibosi.txt`:
+
+1. **Lectura y Mapeo del Archivo (`menu_bibosi.txt`):**
+   - Extrae cada sección (Sandwiches de Milanesa, Paninis, Ensaladas, Piqueos, Para Compartir, Alitas, Hamburguesas, Milanesas, Lomos, Pollos, Menú Kids, Postres y Helados, Bubble Waffles, Pancakes, Topings, y Bebidas).
+   - Asegúrate de capturar el **nombre del producto**, su **precio exacto en Bolivianos (Bs)** y su **descripción detallada** tal como viene redactada en el archivo.
+
+2. **Estructura en Base de Datos (Prisma / SQLite):**
+   - Asegúrate de que los modelos correspondientes guarden la descripción junto con el precio.
+   - Para productos con variantes obligatorias (como las Milanesas que especifican los precios diferenciados de Pollo y de Res), regístralos correctamente con sus respectivas opciones.
+
+3. **Disponibilidad en el POS:**
+   - Deja estos productos activos y disponibles, pero con su boton para activar o descativar para la venta regular en las interfaces de Mesero y Cajero, separados lógicamente de la sección dinámica de Almuerzos diarios del Administrador.

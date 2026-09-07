@@ -19,9 +19,26 @@ export const FlavorCategoryList: FlavorCategory[] = [
   FlavorCategory.MILK,
 ];
 
-/** Sección gastronómica de un platillo del menú (mismo patrón que FlavorCategory). */
+/** Sección gastronómica de un platillo del menú (mismo patrón que FlavorCategory).
+ *  ALMUERZO es la sección dinámica del Menú del Día; el resto forma la carta fija. */
 export const MenuCategory = {
   ALMUERZO: "ALMUERZO",
+  SANDWICH: "SANDWICH",
+  PANINI: "PANINI",
+  ENSALADA: "ENSALADA",
+  PIQUEO: "PIQUEO",
+  COMPARTIR: "COMPARTIR",
+  ALITA: "ALITA",
+  HAMBURGUESA: "HAMBURGUESA",
+  MILANESA: "MILANESA",
+  LOMO: "LOMO",
+  POLLO: "POLLO",
+  KIDS: "KIDS",
+  POSTRE: "POSTRE",
+  WAFFLE: "WAFFLE",
+  PANCAKE: "PANCAKE",
+  EXTRAS: "EXTRAS",
+  BEBIDA: "BEBIDA",
 } as const;
 
 export type MenuCategory =
@@ -29,16 +46,59 @@ export type MenuCategory =
 
 export const MenuCategoryLabel: Record<MenuCategory, string> = {
   ALMUERZO: "Almuerzos",
+  SANDWICH: "Sandwiches de Milanesa",
+  PANINI: "Paninis",
+  ENSALADA: "Ensaladas",
+  PIQUEO: "Piqueos",
+  COMPARTIR: "Para Compartir",
+  ALITA: "Alitas",
+  HAMBURGUESA: "Hamburguesas",
+  MILANESA: "Milanesas",
+  LOMO: "Lomos",
+  POLLO: "Pollos",
+  KIDS: "Menú Kids",
+  POSTRE: "Postres y Helados",
+  WAFFLE: "Bubble Waffles",
+  PANCAKE: "Pancakes",
+  EXTRAS: "Extras",
+  BEBIDA: "Bebidas",
 };
 
-export const MenuCategoryList: MenuCategory[] = [MenuCategory.ALMUERZO];
+export const MenuCategoryList: MenuCategory[] = [
+  MenuCategory.SANDWICH,
+  MenuCategory.PANINI,
+  MenuCategory.ENSALADA,
+  MenuCategory.PIQUEO,
+  MenuCategory.COMPARTIR,
+  MenuCategory.ALITA,
+  MenuCategory.HAMBURGUESA,
+  MenuCategory.MILANESA,
+  MenuCategory.LOMO,
+  MenuCategory.POLLO,
+  MenuCategory.KIDS,
+  MenuCategory.POSTRE,
+  MenuCategory.WAFFLE,
+  MenuCategory.PANCAKE,
+  MenuCategory.EXTRAS,
+  MenuCategory.BEBIDA,
+];
 
-/** Vista de un platillo entregado a las terminales (solo Menú del Día vigente). */
+/** Variante con precio propio de un platillo de la carta (misma base del Menú). */
+export interface MenuItemOptionView {
+  id: string;
+  name: string;
+  price: number;
+}
+
+/** Vista de un platillo entregado a las terminales: solo Menú del Día vigente
+ *  (ALMUERZO) o items de la carta (cualquier otra categoría). */
 export interface MenuItemView {
   id: string;
   name: string;
   category: MenuCategory;
   price: number;
+  description: string | null;
+  options: MenuItemOptionView[];
 }
 
 export interface Size {
@@ -96,6 +156,8 @@ export interface Catalog {
   drinkPrices: DrinkPrice[];
   toppings: Topping[];
   menuItems: MenuItemView[];
+  /** Platazos de la carta fija (categorías distintas de ALMUERZO). */
+  cartaItems: MenuItemView[];
 }
 
 export interface DrinkSelection {
@@ -125,7 +187,8 @@ export interface DrinkCartItem {
   quantity: number;
 }
 
-/** Platillo del Menú del Día agregado con precio fijo (sin modificadores). */
+/** Platillo agregado con precio fijo. Si tiene variante (Pollo/Res) se guarda
+ *  el nombre de la opción elegida y su precio como unitPrice. */
 export interface MenuItemCartItem {
   kind: "MENU_ITEM";
   id: string;
@@ -133,6 +196,7 @@ export interface MenuItemCartItem {
   name: string;
   category: MenuCategory;
   unitPrice: number;
+  optionName: string | null;
   quantity: number;
 }
 
@@ -254,6 +318,7 @@ export interface OrderItem {
   bobaTypeName: string | null;
   menuItemName: string | null;
   menuItemCategory: MenuCategory | null;
+  menuItemOptionName: string | null;
   unitPrice: number;
   quantity: number;
   toppings: OrderItemTopping[];

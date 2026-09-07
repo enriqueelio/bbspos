@@ -8,7 +8,7 @@ Gestiona los pedidos del restaurante: creación de un pedido desde el carrito de
 
 ### Requirement: Creación de pedido desde el carrito
 
-El sistema SHALL permitir crear un pedido con los ítems del carrito, pudiendo ser cada ítem una bebida (con su configuración: categoría, sabor, tamaño y tipo de boba, y sus toppings con precio capturado) o un platillo del menú (con su nombre, sección/categoría y precio fijo capturado), persistiendo en cada caso la cantidad, el precio unitario capturado y el total del pedido en bolivianos.
+El sistema SHALL permitir crear un pedido con los ítems del carrito, pudiendo ser cada ítem una bebida (con su configuración: categoría, sabor, tamaño y tipo de boba, y sus toppings con precio capturado) o un platillo del menú (con su nombre, sección/categoría, su precio fijo capturado y, cuando aplique, su variante con el precio de la variante capturado), persistiendo en cada caso la cantidad, el precio unitario capturado y el total del pedido en bolivianos.
 
 #### Scenario: Pedido creado correctamente
 
@@ -27,8 +27,13 @@ El sistema SHALL permitir crear un pedido con los ítems del carrito, pudiendo s
 
 #### Scenario: Línea de platillo persistida en el pedido
 
-- **WHEN** el carrito incluye un platillo del Menú del Día
+- **WHEN** el carrito incluye un platillo del Menú del Día o de la carta
 - **THEN** el ítem del pedido persiste el nombre del platillo, su sección/categoría, el precio fijo capturado y la cantidad, y se muestra correctamente en la comanda y en el listado de pedidos
+
+#### Scenario: Línea de platillo con variante persistida
+
+- **WHEN** el carrito incluye un platillo de la carta con variante elegida (ej: Milanesa de Res)
+- **THEN** el ítem del pedido persiste además el nombre de la variante y el precio de la variante capturado al momento de la venta
 
 ### Requirement: Identificación del pedido
 
@@ -41,31 +46,56 @@ El sistema SHALL asignar a cada pedido un identificador único y registrar la fe
 
 ### Requirement: Estados de pedido
 
-El sistema SHALL mantener el estado de cada pedido dentro de una secuencia definida: recibido, en preparación y entregado.
+El sistema SHALL mantener el estado de cada pedido dentro de una secuencia definida: `RECIBIDO` (comanda impresa esperando en caja), `ACEPTADO` (pago registrado por el cajero) y `ENTREGADO` (bebidas entregadas al cliente), además del estado terminal `ANULADO`. Todo pedido SHALL pasar obligatoriamente por `ACEPTADO` antes de poder entregarse, sin retrocesos ni saltos de estado. El sistema SHALL permitir anular un pedido desde cualquier estado como transición terminal irreversible, registrando el motivo y el momento de la anulación.
 
 #### Scenario: Avance de estado
 
-- **WHEN** el personal del restaurante marca un pedido recibido como en preparación y luego como entregado
-- **THEN** el estado del pedido avanza en la secuencia definida
+- **WHEN** el personal del restaurante registra el pago de un pedido recibido y luego entrega las bebidas
+- **THEN** el estado del pedido avanza de `RECIBIDO` a `ACEPTADO` y luego a `ENTREGADO`
 
 #### Scenario: No retroceder de estado
 
 - **WHEN** el personal intenta regresar un pedido a un estado anterior
 - **THEN** el sistema rechaza la transición
 
+#### Scenario: Entrega sin pago bloqueada
+
+- **WHEN** el personal intenta entregar un pedido que sigue en `RECIBIDO` sin registrar su pago
+- **THEN** el sistema rechaza la operación e indica que primero debe registrarse el pago
+
+#### Scenario: Pedido anulado no avanza
+
+- **WHEN** el personal intenta marcar como entregado un pedido en estado `ANULADO`
+- **THEN** el sistema rechaza la transición y el estado permanece en `ANULADO`
+
+#### Scenario: Anulación de un pedido
+
+- **WHEN** el personal anula un pedido indicando el motivo
+- **THEN** el pedido pasa al estado anulado con su motivo y momento registrados, y no puede volver a ningún otro estado
+
 ### Requirement: Registro de pago del pedido
 
-El sistema SHALL registrar el método de pago al aceptar un pedido. El cajero puede registrar un pago simple (un método) o un pago dividido (dos métodos con montos explícitos que sumen el total).
+El sistema SHALL permitir al cajero aceptar un pedido en estado `RECIBIDO` registrando el método de pago elegido por el cliente, únicamente **Efectivo** o **QR**, junto con la fecha de pago y el usuario responsable; el pedido pasa a `ACEPTADO`. El cajero puede registrar un pago simple (un método) o un pago dividido (dos métodos con montos explícitos que sumen el total).
 
-#### Scenario: Pago simple
+#### Scenario: Aceptación con Efectivo
 
-- **WHEN** el cajero acepta un pedido seleccionando un método de pago directamente
-- **THEN** el sistema registra el método de pago y marca el pedido como ACEPTADO
+- **WHEN** el cajero registra el pago de un pedido recibido seleccionando Efectivo
+- **THEN** el pedido pasa a `ACEPTADO` con método Efectivo, fecha de pago y responsable registrados
+
+#### Scenario: Aceptación con QR
+
+- **WHEN** el cajero registra el pago de un pedido recibido seleccionando QR
+- **THEN** el pedido pasa a `ACEPTADO` con método QR, fecha de pago y responsable registrados
 
 #### Scenario: Pago dividido
 
 - **WHEN** el cajero acepta un pedido usando la opción de cobro dividido, indicando dos métodos distintos y montos que sumen el total
 - **THEN** el sistema registra ambos métodos de pago con sus montos y marca el pedido como ACEPTADO
+
+#### Scenario: Aceptación exige método
+
+- **WHEN** el cajero intenta aceptar un pedido sin seleccionar un método de pago válido
+- **THEN** el sistema rechaza la operación
 
 #### Scenario: Pago dividido con montos inválidos
 
@@ -146,3 +176,30 @@ El sistema SHALL mostrar el QR de pago configurado en la pantalla de confirmaci�
 
 - **WHEN** el cliente confirma un pedido y no hay un QR de pago activo
 - **THEN** la pantalla de confirmación se muestra sin QR de pago
+
+### Requirement: Atribución del pedido al personal
+
+El sistema SHALL registrar el usuario del personal que procesa cada pedido para permitir reportes de rendimiento por usuario.
+
+#### Scenario: Pedido atribuido automáticamente
+
+- **WHEN** un miembro del personal autenticado crea o procesa un pedido
+- **THEN** el pedido queda asociado a ese usuario sin acción manual adicional
+
+### Requirement: Registro del método de pago
+
+El sistema SHALL permitir registrar en el pedido el método de pago con el que se cobró entre los métodos habilitados por el negocio.
+
+#### Scenario: Cobro con método registrado
+
+- **WHEN** el personal marca el cobro de un pedido indicando el método utilizado
+- **THEN** el pedido queda asociado a ese método de pago para el cierre de caja
+
+### Requirement: Descuentos con trazabilidad
+
+El sistema SHALL permitir aplicar un descuento a un pedido registrando su monto y motivo, y SHALL reflejarlo en el total del pedido.
+
+#### Scenario: Descuento aplicado con motivo
+
+- **WHEN** el personal aplica un descuento indicando monto y motivo
+- **THEN** el total del pedido se ajusta y quedan registrados el descuento, su motivo y el usuario responsable

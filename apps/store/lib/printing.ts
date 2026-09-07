@@ -132,6 +132,7 @@ interface ComandaItem {
   flavorName: string | null;
   bobaTypeName: string | null;
   menuItemName: string | null;
+  menuItemOptionName: string | null;
   unitPrice: number;
   quantity: number;
   toppings: { toppingName: string; unitPrice: number }[];
@@ -245,7 +246,9 @@ export function formatComanda(order: ComandaOrder): string {
   for (const item of order.items) {
     const quantityLabel = item.quantity > 1 ? `${item.quantity}x ` : "";
     const baseLabel = item.menuItemName
-      ? `${quantityLabel}${item.menuItemName}`
+      ? `${quantityLabel}${item.menuItemName}${
+          item.menuItemOptionName ? ` (${item.menuItemOptionName})` : ""
+        }`
       : `${quantityLabel}${itemLabel(
           item.flavorName ?? "",
           item.sizeName ?? "",

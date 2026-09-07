@@ -14,6 +14,19 @@ export async function todayMenuItems() {
   });
 }
 
+/** Carta fija: todos los platillos disponibles de categorías distintas de
+ *  ALMUERZO (Sandwiches, Milanesas, etc.) con sus variantes de precio. */
+export async function cartaMenuItems() {
+  return prisma.menuItem.findMany({
+    where: {
+      available: true,
+      category: { not: "ALMUERZO" },
+    },
+    include: { options: { orderBy: { name: "asc" } } },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+  });
+}
+
 /** Activa (ON) o desactiva (OFF) el Menú del Día de un plato para hoy. */
 export async function setMenuDelDiaForToday(id: string, on: boolean) {
   return prisma.menuItem.update({

@@ -1,6 +1,7 @@
 ﻿import { spawn } from "child_process";
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
+import { FlavorCategoryLabel, MenuCategoryLabel } from "@bbspos/types";
 
 const CONFIG_PATH = join(process.cwd(), "..", "store", "printing.json");
 
@@ -187,6 +188,7 @@ interface ComandaItem {
   flavorName: string | null;
   bobaTypeName: string | null;
   menuItemName: string | null;
+  menuItemOptionName: string | null;
   unitPrice: number;
   quantity: number;
   toppings: { toppingName: string; unitPrice: number }[];
@@ -300,7 +302,9 @@ export function formatComanda(order: ComandaOrder): string {
   for (const item of order.items) {
     const quantityLabel = item.quantity > 1 ? `${item.quantity}x ` : "";
     const baseLabel = item.menuItemName
-      ? `${quantityLabel}${item.menuItemName}`
+      ? `${quantityLabel}${item.menuItemName}${
+          item.menuItemOptionName ? ` (${item.menuItemOptionName})` : ""
+        }`
       : `${quantityLabel}${itemLabel(
           item.flavorName ?? "",
           item.sizeName ?? "",
@@ -392,10 +396,8 @@ export function formatSummaryReport(data: {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  MILK: "Con leche",
-  WATER: "Con agua",
-  SPECIAL: "Especiales",
-  ALMUERZO: "Almuerzos",
+  ...FlavorCategoryLabel,
+  ...MenuCategoryLabel,
 };
 
 const PAYMENT_LABELS: Record<string, string> = {

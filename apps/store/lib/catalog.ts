@@ -1,8 +1,8 @@
-import { prisma, todayMenuItems } from "@bbspos/db";
+import { prisma, todayMenuItems, cartaMenuItems } from "@bbspos/db";
 import type { Catalog } from "@bbspos/types";
 
 export async function getCatalog(): Promise<Catalog> {
-  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems] =
+  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems] =
     await Promise.all([
       prisma.size.findMany({
         where: { available: true },
@@ -23,7 +23,26 @@ export async function getCatalog(): Promise<Catalog> {
         orderBy: { name: "asc" },
       }),
       todayMenuItems(),
+      cartaMenuItems(),
     ]);
+
+  const toMenuItemView = (
+    mi: {
+      id: string;
+      name: string;
+      category: string;
+      price: number;
+      description: string | null;
+      options?: { id: string; name: string; price: number }[];
+    },
+  ) => ({
+    id: mi.id,
+    name: mi.name,
+    category: mi.category as Catalog["menuItems"][number]["category"],
+    price: mi.price,
+    description: mi.description,
+    options: mi.options ?? [],
+  });
 
   return {
     sizes,
@@ -36,14 +55,8 @@ export async function getCatalog(): Promise<Catalog> {
     bobaTypes,
     drinkPrices,
     toppings,
-    // Payload aditivo: se entregan los platos del Menú del Día vigente.
-    // La tienda pública aún no tiene UI para venderlos.
-    menuItems: menuItems.map((mi) => ({
-      id: mi.id,
-      name: mi.name,
-      category: mi.category,
-      price: mi.price,
-    })),
+    menuItems: menuItems.map(toMenuItemView),
+    cartaItems: cartaItems.map(toMenuItemView),
   };
 }
 

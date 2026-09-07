@@ -45,6 +45,7 @@ export default async function OrdersPage({
       bobaTypeName: i.bobaTypeName,
       menuItemName: i.menuItemName,
       menuItemCategory: i.menuItemCategory,
+      menuItemOptionName: i.menuItemOptionName,
       unitPrice: i.unitPrice,
       quantity: i.quantity,
       toppings: i.toppings.map((t) => ({

@@ -5,11 +5,15 @@ import {
   FlavorCategory,
   FlavorCategoryList,
   FlavorCategoryLabel,
+  MenuCategoryLabel,
+  MenuCategoryList,
   cartItemUnitTotal,
   formatPrice,
   type Catalog,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
+  type MenuCategory as MenuCategoryType,
+  type MenuItemView,
   type Size,
   type Topping,
 } from "@bbspos/types";
@@ -23,6 +27,14 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
     CATEGORIES.find((c) =>
       catalog.flavors.some((f) => f.categories.includes(c) && f.available),
     ) ?? FlavorCategory.MILK
+  );
+}
+
+function firstCartaCategory(catalog: Catalog): MenuCategoryType | null {
+  return (
+    MenuCategoryList.find((c) =>
+      catalog.cartaItems.some((i) => i.category === c),
+    ) ?? null
   );
 }
 
@@ -40,6 +52,10 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastLeaving, setToastLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cartaCategory, setCartaCategory] = useState<MenuCategoryType | null>(
+    null,
+  );
+  const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
 
   // Al entrar (montar) se dejan los selectores en blanco para arrancar
   // un pedido nuevo sin arrastrar selecciones.
@@ -48,6 +64,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setVariantItem(null);
+    setCartaCategory(firstCartaCategory(catalog));
     setActiveCategory(firstActiveCategory(catalog));
   }, [catalog]);
 
@@ -224,6 +242,38 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
+    setVariantItem(null);
+  }
+
+  const cartaItems =
+    cartaCategory === null
+      ? []
+      : catalog.cartaItems.filter((i) => i.category === cartaCategory);
+
+  function tapCartaItem(item: MenuItemView) {
+    if (item.options.length > 0) {
+      setVariantItem(item);
+      return;
+    }
+    cart.addMenuItem({
+      menuItemId: item.id,
+      name: item.name,
+      category: item.category,
+      unitPrice: item.price,
+      optionName: null,
+    });
+  }
+
+  function confirmVariant(option: MenuItemView["options"][number]) {
+    if (!variantItem) return;
+    cart.addMenuItem({
+      menuItemId: variantItem.id,
+      name: variantItem.name,
+      category: variantItem.category,
+      unitPrice: option.price,
+      optionName: option.name,
+    });
+    setVariantItem(null);
   }
 
   const selectedSize: Size | undefined = size;
@@ -317,6 +367,11 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                       {item.kind === "DRINK" && item.toppings.length > 0 && (
                         <span className="ml-1 font-normal text-slate-500 text-[10px]">
                           +{item.toppings.map((t) => t.name).join(",")}
+                        </span>
+                      )}
+                      {item.kind === "MENU_ITEM" && item.optionName && (
+                        <span className="ml-1 font-normal text-slate-400">
+                          ·{item.optionName}
                         </span>
                       )}
                     </p>
@@ -427,6 +482,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                         name: menuItem.name,
                         category: menuItem.category,
                         unitPrice: menuItem.price,
+                        optionName: null,
                       })
                     }
                     className="h-16 w-full rounded-xl border-2 border-amber-500/50 bg-amber-500/10 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
@@ -441,7 +497,92 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
             </section>
           )}
 
-          {/* Pestañas de categorías */}
+          {/* Sección Carta (a la carta: categorías fijas fuera del Menú del Día) */}
+          {catalog.cartaItems.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 text-base font-bold uppercase tracking-wide text-white">
+                Carta
+                <span className="text-slate-400 text-xs font-semibold">
+                  A LA CARTA
+                </span>
+              </h3>
+
+              {/* Pestañas de categorías de la carta */}
+              <div className="flex flex-wrap gap-2">
+                {MenuCategoryList.map((category) => {
+                  const enabled = catalog.cartaItems.some(
+                    (i) => i.category === category,
+                  );
+                  const selected = category === cartaCategory;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      disabled={!enabled}
+                      onClick={() => setCartaCategory(category)}
+                      className={`h-12 px-4 rounded-xl border text-base font-bold transition-colors disabled:opacity-30 ${
+                        selected
+                          ? "border-primary bg-primary text-white"
+                          : "border-border bg-slate-600 text-white hover:border-primary/60"
+                      }`}
+                    >
+                      {MenuCategoryLabel[category]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Grilla de platos de la categoría seleccionada */}
+              {cartaCategory !== null && (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {cartaItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.description ?? `Agregar ${item.name}`}
+                      onClick={() => tapCartaItem(item)}
+                      className="h-16 w-full rounded-xl border-2 border-slate-600 bg-slate-700 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-transform active:scale-95 hover:border-primary hover:bg-slate-600"
+                    >
+                      {item.name}
+                      <span className="mt-0.5 block text-xs font-semibold text-slate-300">
+                        {item.options.length > 0
+                          ? "Elegir variante"
+                          : formatPrice(item.price)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
+              {variantItem && (
+                <div className="rounded-xl border border-primary/40 bg-slate-700 p-4 space-y-3">
+                  <p className="text-base font-bold text-white">
+                    {variantItem.name} — elige variante
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {variantItem.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => confirmVariant(option)}
+                        className="h-14 rounded-xl border-2 border-slate-600 bg-slate-600 text-base font-bold text-white transition-transform active:scale-95 hover:border-primary hover:bg-slate-500"
+                      >
+                        {option.name} · {formatPrice(option.price)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setVariantItem(null)}
+                    className="w-full text-center text-sm font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((category) => {
               const enabled = catalog.flavors.some(

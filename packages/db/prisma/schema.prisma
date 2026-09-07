@@ -79,17 +79,32 @@ model Topping {
 }
 
 model MenuItem {
-  id             String       @id @default(cuid())
+  id             String            @id @default(cuid())
   name           String
-  category       MenuCategory @default(ALMUERZO)
+  category       MenuCategory      @default(ALMUERZO)
   price          Int
-  available      Boolean      @default(true)
-  enMenuDelDia   Boolean      @default(false)
+  description    String?
+  available      Boolean           @default(true)
+  enMenuDelDia   Boolean           @default(false)
   menuDelDiaDate String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  options        MenuItemOption[]
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@index([category, available])
+}
+
+// Opciones de un platillo con variantes de precio obligatorias, p. ej. las
+// milanesas "a la carta" que se cobra distinto Pollo vs Res.
+model MenuItemOption {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name       String
+  price      Int
+  createdAt  DateTime @default(now())
+
+  @@unique([menuItemId, name])
 }
 
 model Order {
@@ -137,6 +152,7 @@ model OrderItem {
   bobaTypeName     String?
   menuItemName     String?
   menuItemCategory MenuCategory?
+  menuItemOptionName String?
   unitPrice        Int
   quantity         Int
   toppings         OrderItemTopping[]
@@ -173,6 +189,22 @@ enum FlavorCategory {
 
 enum MenuCategory {
   ALMUERZO
+  SANDWICH
+  PANINI
+  ENSALADA
+  PIQUEO
+  COMPARTIR
+  ALITA
+  HAMBURGUESA
+  MILANESA
+  LOMO
+  POLLO
+  KIDS
+  POSTRE
+  WAFFLE
+  PANCAKE
+  EXTRAS
+  BEBIDA
 }
 
 enum BobaKind {

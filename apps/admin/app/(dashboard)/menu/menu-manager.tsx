@@ -63,6 +63,8 @@ export interface MenuItemAdminView {
   name: string;
   category: MenuCategoryType;
   price: number;
+  description: string | null;
+  options: { id: string; name: string; price: number }[];
   available: boolean;
   enMenuDelDiaHoy: boolean;
 }
@@ -251,6 +253,63 @@ function PriceMatrixEditor({
   );
 }
 
+function MenuItemOptionsEditor({
+  options,
+  onChange,
+}: {
+  options: { name: string; price: string }[];
+  onChange: (next: { name: string; price: string }[]) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        Variantes (Pollo / Res, etc.) — precio propio por variante
+      </p>
+      {options.map((opt, i) => (
+        <div key={i} className="flex gap-2 items-center">
+          <Input
+            className="max-w-40"
+            placeholder="Nombre variante"
+            value={opt.name}
+            onChange={(e) => {
+              const next = [...options];
+              next[i] = { ...next[i], name: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Input
+            className="max-w-24"
+            type="number"
+            min="1"
+            placeholder="Bs"
+            value={opt.price}
+            onChange={(e) => {
+              const next = [...options];
+              next[i] = { ...next[i], price: e.target.value };
+              onChange(next);
+            }}
+          />
+          <Button
+            variant="destructive"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => onChange(options.filter((_, j) => j !== i))}
+          >
+            ✕
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...options, { name: "", price: "" }])}
+      >
+        + Agregar variante
+      </Button>
+    </div>
+  );
+}
+
 export function MenuManager({
   sizes,
   flavors,
@@ -280,7 +339,15 @@ export function MenuManager({
     name: string;
     category: MenuCategoryType;
     price: string;
-  }>({ name: "", category: MenuCategory.ALMUERZO, price: "" });
+    description: string;
+    options: { name: string; price: string }[];
+  }>({
+    name: "",
+    category: MenuCategory.ALMUERZO,
+    price: "",
+    description: "",
+    options: [],
+  });
   const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
@@ -300,7 +367,15 @@ export function MenuManager({
     name: string;
     category: MenuCategoryType;
     price: string;
-  }>({ name: "", category: MenuCategory.ALMUERZO, price: "" });
+    description: string;
+    options: { name: string; price: string }[];
+  }>({
+    name: "",
+    category: MenuCategory.ALMUERZO,
+    price: "",
+    description: "",
+    options: [],
+  });
 
   function run(action: () => Promise<void>) {
     action().catch((e) => {
@@ -349,6 +424,11 @@ export function MenuManager({
       name: item.name,
       category: item.category,
       price: String(item.price),
+      description: item.description ?? "",
+      options: item.options.map((o) => ({
+        name: o.name,
+        price: String(o.price),
+      })),
     });
   }
 
@@ -362,59 +442,82 @@ export function MenuManager({
       </div>
 
       <CollapsibleCard
-        title="Almuerzos · Menú del Día"
+        title="Menú · Platos (Almuerzos y Carta)"
         defaultOpen={menuItems.length > 0}
       >
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2 items-end">
+              <Input
+                className="max-w-52"
+                placeholder="Nombre del plato"
+                value={menuItemForm.name}
+                onChange={(e) =>
+                  setMenuItemForm({ ...menuItemForm, name: e.target.value })
+                }
+              />
+              <Select
+                value={menuItemForm.category}
+                onValueChange={(v) =>
+                  setMenuItemForm({ ...menuItemForm, category: v as MenuCategoryType })
+                }
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MenuCategoryList.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {MenuCategoryLabel[c]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                className="max-w-28"
+                type="number"
+                min="1"
+                placeholder="Precio (Bs)"
+                value={menuItemForm.price}
+                onChange={(e) =>
+                  setMenuItemForm({ ...menuItemForm, price: e.target.value })
+                }
+              />
+              <Button
+                onClick={() =>
+                  run(() =>
+                    createMenuItem({
+                      name: menuItemForm.name,
+                      category: menuItemForm.category,
+                      price: Number(menuItemForm.price),
+                      description: menuItemForm.description,
+                      options: menuItemForm.options.map((o) => ({
+                        name: o.name,
+                        price: Number(o.price),
+                      })),
+                    }),
+                  )
+                }
+              >
+                <Plus className="h-4 w-4" /> Agregar plato
+              </Button>
+            </div>
             <Input
-              className="max-w-52"
-              placeholder="Nombre del plato"
-              value={menuItemForm.name}
+              placeholder="Descripción (opcional)"
+              value={menuItemForm.description}
               onChange={(e) =>
-                setMenuItemForm({ ...menuItemForm, name: e.target.value })
+                setMenuItemForm({
+                  ...menuItemForm,
+                  description: e.target.value,
+                })
               }
             />
-            <Select
-              value={menuItemForm.category}
-              onValueChange={(v) =>
-                setMenuItemForm({ ...menuItemForm, category: v as MenuCategoryType })
-              }
-            >
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MenuCategoryList.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {MenuCategoryLabel[c]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              className="max-w-28"
-              type="number"
-              min="1"
-              placeholder="Precio (Bs)"
-              value={menuItemForm.price}
-              onChange={(e) =>
-                setMenuItemForm({ ...menuItemForm, price: e.target.value })
+            <MenuItemOptionsEditor
+              options={menuItemForm.options}
+              onChange={(options) =>
+                setMenuItemForm({ ...menuItemForm, options })
               }
             />
-            <Button
-              onClick={() =>
-                run(() =>
-                  createMenuItem({
-                    name: menuItemForm.name,
-                    category: menuItemForm.category,
-                    price: Number(menuItemForm.price),
-                  }),
-                )
-              }
-            >
-              <Plus className="h-4 w-4" /> Agregar plato
-            </Button>
           </div>
 
           <div className="space-y-2">
@@ -428,22 +531,41 @@ export function MenuManager({
                   <Badge variant={item.available ? "success" : "secondary"}>
                     {item.available ? "Disponible" : "No disponible"}
                   </Badge>
-                  {item.enMenuDelDiaHoy && (
-                    <Badge variant="warning">DEL DÍA</Badge>
+                  {item.category === MenuCategory.ALMUERZO &&
+                    item.enMenuDelDiaHoy && (
+                      <Badge variant="warning">DEL DÍA</Badge>
+                    )}
+                  <span className="text-sm text-muted-foreground">
+                    {MenuCategoryLabel[item.category]}
+                  </span>
+                  {item.options.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Variante:{" "}
+                      {item.options
+                        .map((o) => `${o.name} ${formatPrice(o.price)}`)
+                        .join(" · ")}
+                    </span>
                   )}
                   <span className="text-sm text-muted-foreground">
                     {formatPrice(item.price)}
                   </span>
+                  {item.description && (
+                    <p className="w-full text-xs text-muted-foreground">
+                      {item.description}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={!item.available}
+                    disabled={!item.available || item.category !== MenuCategory.ALMUERZO}
                     title={
-                      item.available
-                        ? "Agregar o quitar del Menú del Día de hoy"
-                        : "El plato debe estar disponible"
+                      item.category !== MenuCategory.ALMUERZO
+                        ? "Solo los almuerzos se agregan al Menú del Día"
+                        : item.available
+                          ? "Agregar o quitar del Menú del Día de hoy"
+                          : "El plato debe estar disponible"
                     }
                     onClick={() =>
                       run(() =>
@@ -468,6 +590,11 @@ export function MenuManager({
                           category: item.category,
                           price: item.price,
                           available: !item.available,
+                          description: item.description,
+                          options: item.options.map((o) => ({
+                            name: o.name,
+                            price: o.price,
+                          })),
                         }),
                       )
                     }
@@ -1122,7 +1249,7 @@ export function MenuManager({
           <DialogHeader>
             <DialogTitle>Editar plato</DialogTitle>
             <DialogDescription>
-              Actualiza el nombre, la sección y el precio fijo del plato.
+              Actualiza la información del plato: nombre, sección, precio fijo, descripción y variantes de precio.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1162,6 +1289,19 @@ export function MenuManager({
                 setMenuItemEdit({ ...menuItemEdit, price: e.target.value })
               }
             />
+            <Input
+              placeholder="Descripción (opcional)"
+              value={menuItemEdit.description}
+              onChange={(e) =>
+                setMenuItemEdit({ ...menuItemEdit, description: e.target.value })
+              }
+            />
+            <MenuItemOptionsEditor
+              options={menuItemEdit.options}
+              onChange={(options) =>
+                setMenuItemEdit({ ...menuItemEdit, options })
+              }
+            />
           </div>
           <DialogFooter>
             <Button
@@ -1179,6 +1319,11 @@ export function MenuManager({
                     category: menuItemEdit.category,
                     price: Number(menuItemEdit.price),
                     available: editingMenuItem.available,
+                    description: menuItemEdit.description,
+                    options: menuItemEdit.options.map((o) => ({
+                      name: o.name,
+                      price: Number(o.price),
+                    })),
                   }).then(() => setEditingMenuItem(null)),
                 )
               }

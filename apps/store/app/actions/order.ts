@@ -87,6 +87,7 @@ export async function createOrder(
             flavorName: item.flavorName,
             bobaTypeName: item.bobaTypeName,
             menuItemName: item.menuItemName,
+            menuItemOptionName: item.menuItemOptionName,
             unitPrice: item.unitPrice,
             quantity: item.quantity,
             toppings: item.toppings.map((t) => ({

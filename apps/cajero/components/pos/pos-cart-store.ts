@@ -27,6 +27,7 @@ export interface AddPosMenuItemInput {
   name: string;
   category: MenuCategory;
   unitPrice: number;
+  optionName: string | null;
 }
 
 export interface PosCartSnapshot {
@@ -46,7 +47,10 @@ function normalizeStoredItem(item: unknown): CartItem | null {
   if (!item || typeof item !== "object") return null;
   const raw = item as Record<string, unknown>;
   if (raw.kind === "MENU_ITEM") {
-    return raw as unknown as CartItem;
+    return {
+      ...(raw as object),
+      optionName: "optionName" in raw ? raw.optionName : null,
+    } as CartItem;
   }
   return { kind: "DRINK", ...(raw as object) } as CartItem;
 }
@@ -126,7 +130,7 @@ export function addPosItem(input: AddPosItemInput) {
 }
 
 export function addPosMenuItem(input: AddPosMenuItemInput) {
-  const id = `menu-item-${input.menuItemId}`;
+  const id = `menu-item-${input.menuItemId}-${input.optionName ?? ""}`;
   const existing = items.find((i) => i.id === id);
   if (existing) {
     items = items.map((i) =>
@@ -140,6 +144,7 @@ export function addPosMenuItem(input: AddPosMenuItemInput) {
       name: input.name,
       category: input.category,
       unitPrice: input.unitPrice,
+      optionName: input.optionName,
       quantity: 1,
     };
     items = [...items, item];

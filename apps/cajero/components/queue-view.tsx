@@ -213,6 +213,11 @@ function ItemsList({ order }: { order: Order }) {
             <span className="font-bold text-white">
 {item.quantity}× {item.flavorName ? `${item.flavorName} (${item.sizeName})` : item.menuItemName}
                         </span>{" "}
+                        {item.menuItemOptionName && (
+                          <span className="text-white font-normal">
+                            · {item.menuItemOptionName}
+                          </span>
+                        )}
                         {item.flavorName && (
                           <span className="text-white font-normal">
                             · {item.bobaTypeName}

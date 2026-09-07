@@ -7,12 +7,15 @@ import {
   FlavorCategoryList,
   FlavorCategoryLabel,
   MenuCategoryLabel,
+  MenuCategoryList,
   cartItemUnitTotal,
   formatPrice,
   Role,
   type Catalog,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
+  type MenuCategory as MenuCategoryType,
+  type MenuItemView,
   type Role as RoleType,
   type Size,
   type Topping,
@@ -27,6 +30,14 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
     CATEGORIES.find((c) =>
       catalog.flavors.some((f) => f.categories.includes(c) && f.available),
     ) ?? FlavorCategory.MILK
+  );
+}
+
+function firstCartaCategory(catalog: Catalog): MenuCategoryType | null {
+  return (
+    MenuCategoryList.find((c) =>
+      catalog.cartaItems.some((i) => i.category === c),
+    ) ?? null
   );
 }
 
@@ -54,6 +65,10 @@ export function PosTerminal({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cartaCategory, setCartaCategory] = useState<MenuCategoryType | null>(
+    null,
+  );
+  const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
   // arranque un pedido nuevo sin arrastrar selecciones.
@@ -62,6 +77,8 @@ export function PosTerminal({
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setVariantItem(null);
+    setCartaCategory(firstCartaCategory(catalog));
     setActiveCategory(firstActiveCategory(catalog));
   }, [catalog]);
 
@@ -224,6 +241,40 @@ export function PosTerminal({
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
+    setVariantItem(null);
+  }
+
+  const cartaItems =
+    cartaCategory === null
+      ? []
+      : catalog.cartaItems.filter((i) => i.category === cartaCategory);
+
+  // Tocar un plato de la carta: si tiene variantes (Pollo/Res) se abre el
+  // selector con sus precios; si no, se agrega directo con su precio fijo.
+  function tapCartaItem(item: MenuItemView) {
+    if (item.options.length > 0) {
+      setVariantItem(item);
+      return;
+    }
+    cart.addMenuItem({
+      menuItemId: item.id,
+      name: item.name,
+      category: item.category,
+      unitPrice: item.price,
+      optionName: null,
+    });
+  }
+
+  function confirmVariant(option: MenuItemView["options"][number]) {
+    if (!variantItem) return;
+    cart.addMenuItem({
+      menuItemId: variantItem.id,
+      name: variantItem.name,
+      category: variantItem.category,
+      unitPrice: option.price,
+      optionName: option.name,
+    });
+    setVariantItem(null);
   }
 
   const selectedSize: Size | undefined = size;
@@ -297,9 +348,18 @@ export function PosTerminal({
                     {item.kind === "DRINK" ? item.flavor.name : item.name}
                   </p>
                   <p className="text-slate-400">
-                    {item.kind === "DRINK"
-                      ? `${item.size.name} · ${item.bobaType.name}`
-                      : MenuCategoryLabel[item.category]}
+                    {item.kind === "DRINK" ? (
+                      `${item.size.name} · ${item.bobaType.name}`
+                    ) : (
+                      <>
+                        {MenuCategoryLabel[item.category]}
+                        {item.optionName && (
+                          <span className="ml-1 font-semibold text-white">
+                            · {item.optionName}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </p>
                   {item.kind === "DRINK" && item.toppings.length > 0 && (
                     <p className="text-slate-400">
@@ -433,6 +493,7 @@ export function PosTerminal({
                         name: menuItem.name,
                         category: menuItem.category,
                         unitPrice: menuItem.price,
+                        optionName: null,
                       })
                     }
                     className="relative h-14 w-full rounded-lg border border-amber-500/50 bg-amber-500/10 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
@@ -444,6 +505,93 @@ export function PosTerminal({
                   </button>
                 ))}
               </div>
+            </section>
+          )}
+
+          {/* Sección Carta (a la carta: categorías fijas fuera del Menú del Día) */}
+          {catalog.cartaItems.length > 0 && (
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
+                Carta
+                <span className="text-slate-400 text-[10px] font-semibold">
+                  A LA CARTA
+                </span>
+              </h3>
+
+              {/* Pestañas de categorías de la carta */}
+              <div className="flex flex-wrap gap-2">
+                {MenuCategoryList.map((category) => {
+                  const enabled = catalog.cartaItems.some(
+                    (i) => i.category === category,
+                  );
+                  const selected = category === cartaCategory;
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      disabled={!enabled}
+                      onClick={() => setCartaCategory(category)}
+                      className={`h-8 px-3 rounded-lg border text-xs font-bold transition-colors disabled:opacity-30 ${
+                        selected
+                          ? "border-primary bg-primary text-white"
+                          : "border-slate-700 bg-slate-800 text-white hover:border-primary/60"
+                      }`}
+                    >
+                      {MenuCategoryLabel[category]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Grilla de platos de la categoría seleccionada */}
+              {cartaCategory !== null && (
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                  {cartaItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={item.description ?? `Agregar ${item.name}`}
+                      onClick={() => tapCartaItem(item)}
+                      className="relative h-14 w-full rounded-lg border border-slate-700 bg-slate-800 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-primary hover:bg-slate-700"
+                    >
+                      {item.name}
+                      <span className="mt-0.5 block text-xs font-semibold text-slate-300">
+                        {item.options.length > 0
+                          ? "Elegir variante"
+                          : formatPrice(item.price)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
+              {variantItem && (
+                <div className="rounded-lg border border-primary/40 bg-slate-800 p-3 space-y-2">
+                  <p className="text-sm font-bold text-white">
+                    {variantItem.name} — elige variante
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {variantItem.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => confirmVariant(option)}
+                        className="h-12 rounded-lg border border-slate-600 bg-slate-700 text-sm font-bold text-white transition-colors active:scale-95 hover:border-primary hover:bg-slate-600"
+                      >
+                        {option.name} · {formatPrice(option.price)}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setVariantItem(null)}
+                    className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
             </section>
           )}
 

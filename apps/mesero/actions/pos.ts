@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma, todayMenuItems } from "@bbspos/db";
+import { prisma, todayMenuItems, cartaMenuItems } from "@bbspos/db";
 import {
   OrderStatus,
   cartItemUnitTotal,
@@ -12,7 +12,7 @@ import { getRequiredSession } from "@/lib/session";
 import { printText, formatComanda, getPrinterName } from "@/lib/printing";
 
 export async function getPosCatalog(): Promise<Catalog> {
-  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems] =
+  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems] =
     await Promise.all([
       prisma.size.findMany({
         where: { available: true },
@@ -33,7 +33,26 @@ export async function getPosCatalog(): Promise<Catalog> {
         orderBy: { name: "asc" },
       }),
       todayMenuItems(),
+      cartaMenuItems(),
     ]);
+
+  const toMenuItemView = (
+    mi: {
+      id: string;
+      name: string;
+      category: string;
+      price: number;
+      description: string | null;
+      options?: { id: string; name: string; price: number }[];
+    },
+  ) => ({
+    id: mi.id,
+    name: mi.name,
+    category: mi.category as Catalog["menuItems"][number]["category"],
+    price: mi.price,
+    description: mi.description,
+    options: mi.options ?? [],
+  });
 
   return {
     sizes,
@@ -46,12 +65,8 @@ export async function getPosCatalog(): Promise<Catalog> {
     bobaTypes,
     drinkPrices,
     toppings,
-    menuItems: menuItems.map((mi) => ({
-      id: mi.id,
-      name: mi.name,
-      category: mi.category,
-      price: mi.price,
-    })),
+    menuItems: menuItems.map(toMenuItemView),
+    cartaItems: cartaItems.map(toMenuItemView),
   };
 }
 
@@ -90,6 +105,7 @@ export async function createPosOrder(
       : {
           menuItemName: item.name,
           menuItemCategory: item.category,
+          menuItemOptionName: item.optionName,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
         },
@@ -151,6 +167,7 @@ export async function createPosOrder(
               flavorName: item.flavorName,
               bobaTypeName: item.bobaTypeName,
               menuItemName: item.menuItemName,
+              menuItemOptionName: item.menuItemOptionName,
               unitPrice: item.unitPrice,
               quantity: item.quantity,
               toppings: item.toppings.map((t) => ({

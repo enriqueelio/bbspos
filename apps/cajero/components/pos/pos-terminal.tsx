@@ -6,6 +6,7 @@ import {
   FlavorCategory,
   FlavorCategoryList,
   FlavorCategoryLabel,
+  MenuCategory,
   MenuCategoryLabel,
   MenuCategoryList,
   cartItemUnitTotal,
@@ -25,6 +26,10 @@ import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 
 const CATEGORIES = FlavorCategoryList;
 
+/** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
+const BUBAS_PANE = "BUBAS";
+type CatalogPane = MenuCategoryType | typeof BUBAS_PANE;
+
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
     CATEGORIES.find((c) =>
@@ -33,12 +38,21 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   );
 }
 
-function firstCartaCategory(catalog: Catalog): MenuCategoryType | null {
-  return (
-    MenuCategoryList.find((c) =>
-      catalog.cartaItems.some((i) => i.category === c),
-    ) ?? null
+/** Categoría que debe quedar seleccionada al abrir el POS o iniciar una nueva
+ *  venta: Milanesas por defecto; si no hay, la primera categoría de la carta que
+ *  tenga productos; si tampoco hay carta, el Menú del Día y por último Bubas. */
+function defaultPane(catalog: Catalog): CatalogPane {
+  if (
+    catalog.cartaItems.some((i) => i.category === MenuCategory.MILANESA)
+  ) {
+    return MenuCategory.MILANESA;
+  }
+  const first = MenuCategoryList.find((c) =>
+    catalog.cartaItems.some((i) => i.category === c),
   );
+  if (first) return first;
+  if (catalog.menuItems.length > 0) return MenuCategory.ALMUERZO;
+  return BUBAS_PANE;
 }
 
 function deliveryLabel(type: PosDeliveryType) {
@@ -56,7 +70,10 @@ export function PosTerminal({
   const cart = usePosCart();
   const isBilling =
     role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
-  const [activeCategory, setActiveCategory] = useState<FlavorCategoryType>(
+  const [activePane, setActivePane] = useState<CatalogPane>(() =>
+    defaultPane(catalog),
+  );
+  const [bubaCategory, setBubaCategory] = useState<FlavorCategoryType>(
     firstActiveCategory(catalog),
   );
   const [sizeId, setSizeId] = useState<string>("");
@@ -66,10 +83,8 @@ export function PosTerminal({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cartaCategory, setCartaCategory] = useState<MenuCategoryType | null>(
-    null,
-  );
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
+  const [isAfter16, setIsAfter16] = useState(false);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
   // arranque un pedido nuevo sin arrastrar selecciones.
@@ -79,8 +94,26 @@ export function PosTerminal({
     setSelectedFlavorId(null);
     setToppingIds([]);
     setVariantItem(null);
-    setCartaCategory(firstCartaCategory(catalog));
-    setActiveCategory(firstActiveCategory(catalog));
+    setBubaCategory(firstActiveCategory(catalog));
+    setActivePane(defaultPane(catalog));
+  }, [catalog]);
+
+  // Regla horaria del Menú del Día: desde las 16:00 la disponibilidad de los
+  // almuerzos del día termina y la sección se oculta del catálogo visible.
+  useEffect(() => {
+    const checkTime = () => {
+      const now = new Date();
+      const past16 = now.getHours() >= 16;
+      setIsAfter16(past16);
+      if (past16) {
+        setActivePane((pane) =>
+          pane === MenuCategory.ALMUERZO ? defaultPane(catalog) : pane,
+        );
+      }
+    };
+    checkTime();
+    const id = setInterval(checkTime, 30_000);
+    return () => clearInterval(id);
   }, [catalog]);
 
   // Al entrar se limpia el carrito persistido de una sesión anterior para que
@@ -100,9 +133,9 @@ export function PosTerminal({
   const flavors = useMemo(
     () =>
       catalog.flavors.filter(
-        (f) => f.categories.includes(activeCategory) && f.available,
+        (f) => f.categories.includes(bubaCategory) && f.available,
       ),
-    [catalog.flavors, activeCategory],
+    [catalog.flavors, bubaCategory],
   );
 
   // Autoselección por defecto: Tamaño Grande y Tipo de boba Tapioca.
@@ -122,7 +155,7 @@ export function PosTerminal({
     return (
       catalog.drinkPrices.find(
         (p) =>
-          p.category === activeCategory &&
+          p.category === bubaCategory &&
           p.sizeId === size.id &&
           p.bobaTypeId === bobaType.id,
       )?.price ?? 0
@@ -143,12 +176,17 @@ export function PosTerminal({
   const selectedFlavor =
     flavors.find((f) => f.id === selectedFlavorId) ?? null;
 
-  function switchCategory(category: FlavorCategoryType) {
-    setActiveCategory(category);
+  function switchBubaCategory(category: FlavorCategoryType) {
+    setBubaCategory(category);
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+  }
+
+  function switchPane(pane: CatalogPane) {
+    setActivePane(pane);
+    setVariantItem(null);
   }
 
   function toggleTopping(id: string) {
@@ -178,7 +216,7 @@ export function PosTerminal({
     cart.addItem({
       size: selectedSize,
       flavor: selectedFlavor,
-      category: activeCategory,
+      category: bubaCategory,
       bobaType,
       unitPrice: priceOf(),
       toppings: selectedToppings.map((t) => ({
@@ -218,7 +256,8 @@ export function PosTerminal({
       setSizeId("");
       setBobaTypeId("");
       setSelectedFlavorId(null);
-      setActiveCategory(firstActiveCategory(catalog));
+      setBubaCategory(firstActiveCategory(catalog));
+      setActivePane(defaultPane(catalog));
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
@@ -245,10 +284,27 @@ export function PosTerminal({
     setVariantItem(null);
   }
 
-  const cartaItems =
-    cartaCategory === null
-      ? []
-      : catalog.cartaItems.filter((i) => i.category === cartaCategory);
+  const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
+  const isBubas = activePane === BUBAS_PANE;
+  const isCartaPane = !isMenuDelDia && !isBubas;
+  const cartaItems = isCartaPane
+    ? catalog.cartaItems.filter((i) => i.category === activePane)
+    : [];
+
+  // Botones del bloque superior: las categorías de la carta con productos y
+  // Bubble Drinks como categoría fija. El Menú del Día queda fijo en la parte
+  // superior del catálogo (fuera de esta barra) para acceso rápido; se oculta
+  // tras las 16:00.
+  const catalogPanes = useMemo(() => {
+    const panes: { key: CatalogPane; label: string }[] = [];
+    for (const c of MenuCategoryList) {
+      if (catalog.cartaItems.some((i) => i.category === c)) {
+        panes.push({ key: c, label: MenuCategoryLabel[c] });
+      }
+    }
+    panes.push({ key: BUBAS_PANE, label: "Bubble Drinks" });
+    return panes;
+  }, [catalog]);
 
   // Tocar un plato de la carta: si tiene variantes (Pollo/Res) se abre el
   // selector con sus precios; si no, se agrega directo con su precio fijo.
@@ -257,6 +313,7 @@ export function PosTerminal({
       setVariantItem(item);
       return;
     }
+    setVariantItem(null);
     cart.addMenuItem({
       menuItemId: item.id,
       name: item.name,
@@ -470,19 +527,13 @@ export function PosTerminal({
         </div>
       </div>
 
-      {/* ===== Derecha (~66%): Catálogo de menú ===== */}
-      <div className="flex-1 overflow-y-auto p-4 bg-slate-950">
-        <div className="max-w-4xl mx-auto flex flex-col gap-4">
-          {/* Sección destacada del Menú del Día (platos) */}
-          {catalog.menuItems.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
-                Almuerzos
-                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-black text-amber-500">
-                  DEL DÍA
-                </span>
-              </h3>
-              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+      {/* ===== Derecha (~66%): Catálogo ===== */}
+      <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+        {/* Bloque superior: almuerzos del día (acceso rápido) + categorías */}
+        <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex flex-col gap-2">
+          {!isAfter16 && catalog.menuItems.length > 0 && (
+            <>
+              <div className="flex flex-wrap gap-2">
                 {catalog.menuItems.map((menuItem) => (
                   <button
                     key={menuItem.id}
@@ -497,55 +548,216 @@ export function PosTerminal({
                         optionName: null,
                       })
                     }
-                    className="relative h-14 w-full rounded-lg border border-amber-500/50 bg-amber-500/10 p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
+                    className="h-9 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 hover:border-amber-400 hover:bg-amber-500/20"
                   >
                     {menuItem.name}
-                    <span className="mt-0.5 block text-xs font-semibold text-amber-400">
+                    <span className="ml-1 text-xs font-semibold text-amber-400">
                       {formatPrice(menuItem.price)}
                     </span>
                   </button>
                 ))}
               </div>
-            </section>
+              {/* Línea separadora entre almuerzos y categorías */}
+              <div className="h-px bg-slate-800" />
+            </>
           )}
 
-          {/* Sección Carta (a la carta: categorías fijas fuera del Menú del Día) */}
-          {catalog.cartaItems.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
-                Carta
-                <span className="text-slate-400 text-[10px] font-semibold">
-                  A LA CARTA
-                </span>
-              </h3>
+          <div className="flex flex-wrap gap-2">
+            {catalogPanes.map((pane) => {
+              const selected = pane.key === activePane;
+              return (
+                <button
+                  key={pane.key}
+                  type="button"
+                  onClick={() => switchPane(pane.key)}
+                  className={`h-9 px-3 rounded-lg border text-sm font-bold transition-colors ${
+                    selected
+                      ? "border-primary bg-primary text-white"
+                      : "border-border bg-slate-800 text-white hover:border-primary/60"
+                  }`}
+                >
+                  {pane.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-              {/* Pestañas de categorías de la carta */}
-              <div className="flex flex-wrap gap-2">
-                {MenuCategoryList.map((category) => {
-                  const enabled = catalog.cartaItems.some(
-                    (i) => i.category === category,
-                  );
-                  const selected = category === cartaCategory;
-                  return (
+        {/* Bloque inferior: productos de la categoría seleccionada */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="max-w-4xl mx-auto flex flex-col gap-4">
+            {isBubas && (
+              <>
+                {/* Subcategorías de Bubble Drinks (Especiales / Con agua / Con leche) */}
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.map((category) => {
+                    const enabled = catalog.flavors.some(
+                      (f) => f.categories.includes(category) && f.available,
+                    );
+                    const selected = category === bubaCategory;
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        disabled={!enabled}
+                        onClick={() => switchBubaCategory(category)}
+                        className={`h-9 px-3 rounded-lg border text-sm font-bold transition-colors disabled:opacity-30 ${
+                          selected
+                            ? "border-primary bg-primary text-white"
+                            : "border-border bg-slate-800 text-white hover:border-primary/60"
+                        }`}
+                      >
+                        {FlavorCategoryLabel[category]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Grilla de sabores */}
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                  {flavors.map((flavor) => {
+                    const selected = selectedFlavorId === flavor.id;
+                    return (
+                      <button
+                        key={flavor.id}
+                        type="button"
+                        onClick={() => selectFlavor(flavor)}
+                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
+                          selected
+                            ? "border-primary bg-primary/15 text-white"
+                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        }`}
+                      >
+                        {flavor.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Tamaño */}
+                <section className="space-y-2">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
+                    Tamaño
+                  </h3>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                    {sizes.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSizeId(s.id)}
+                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
+                          s.id === sizeId
+                            ? "border-primary bg-primary text-white"
+                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        }`}
+                      >
+                        {s.name} · {s.oz} oz
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Tipo de boba (debajo de tamaño) */}
+                <section className="space-y-2">
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
+                    Tipo de boba
+                  </h3>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                    {sortedBobaTypes.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBobaTypeId(b.id)}
+                        className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
+                          b.id === bobaTypeId
+                            ? "border-primary bg-primary text-white"
+                            : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                        }`}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {toppings.length > 0 && (
+                  <section className="space-y-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
+                      Extras
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {toppings.map((t) => {
+                        const selected = toppingIds.includes(t.id);
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => toggleTopping(t.id)}
+                            className={`h-9 rounded-lg border px-3 text-sm font-bold transition-colors ${
+                              selected
+                                ? "border-primary bg-primary text-white"
+                                : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
+                            }`}
+                          >
+                            + {t.name} · {formatPrice(t.price)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Preticket: producto en construcción */}
+                {selectedFlavor ? (
+                  <section className="rounded-lg border border-slate-700 bg-slate-800 p-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-white">
+                      Producto en curso
+                    </h3>
+                    <div className="mt-2 space-y-1 text-sm text-white">
+                      <p className="font-bold">{selectedFlavor.name}</p>
+                      <p className="text-slate-400">
+                        {size?.name
+                          ? `${size.name} · ${bobaType?.name ?? ""}`
+                          : "Elige un tamaño"}
+                      </p>
+                      {selectedToppings.length > 0 && (
+                        <p className="text-slate-400">
+                          + {selectedToppings.map((t) => t.name).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                        Subtotal
+                      </span>
+                      <span className="font-mono text-xl font-black text-white">
+                        {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
+                      </span>
+                    </div>
                     <button
-                      key={category}
                       type="button"
-                      disabled={!enabled}
-                      onClick={() => setCartaCategory(category)}
-                      className={`h-8 px-3 rounded-lg border text-xs font-bold transition-colors disabled:opacity-30 ${
-                        selected
-                          ? "border-primary bg-primary text-white"
-                          : "border-slate-700 bg-slate-800 text-white hover:border-primary/60"
-                      }`}
+                      disabled={!selectedSize || !selectedFlavor || !bobaType}
+                      onClick={confirmProduct}
+                      className="mt-3 h-11 w-full rounded-lg bg-emerald-600 text-base font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {MenuCategoryLabel[category]}
+                      Confirmar producto
                     </button>
-                  );
-                })}
-              </div>
+                  </section>
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    Toca un sabor para empezar tu pedido.
+                  </p>
+                )}
+              </>
+            )}
 
-              {/* Grilla de platos de la categoría seleccionada */}
-              {cartaCategory !== null && (
+            {isCartaPane && (
+              <section className="space-y-2">
+                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
+                  {MenuCategoryLabel[activePane as MenuCategoryType]}
+                </h3>
+
+                {/* Grilla de platos de la categoría seleccionada */}
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                   {cartaItems.map((item) => (
                     <button
@@ -564,198 +776,37 @@ export function PosTerminal({
                     </button>
                   ))}
                 </div>
-              )}
 
-              {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
-              {variantItem && (
-                <div className="rounded-lg border border-primary/40 bg-slate-800 p-3 space-y-2">
-                  <p className="text-sm font-bold text-white">
-                    {variantItem.name} — elige variante
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {variantItem.options.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => confirmVariant(option)}
-                        className="h-12 rounded-lg border border-slate-600 bg-slate-700 text-sm font-bold text-white transition-colors active:scale-95 hover:border-primary hover:bg-slate-600"
-                      >
-                        {option.name} · {formatPrice(option.price)}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setVariantItem(null)}
-                    className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* Pestañas de categorías */}
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((category) => {
-              const enabled = catalog.flavors.some(
-                (f) => f.categories.includes(category) && f.available,
-              );
-              const selected = category === activeCategory;
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  disabled={!enabled}
-                  onClick={() => switchCategory(category)}
-                  className={`h-9 px-3 rounded-lg border text-sm font-bold transition-colors disabled:opacity-30 ${
-                    selected
-                      ? "border-primary bg-primary text-white"
-                      : "border-border bg-slate-800 text-white hover:border-primary/60"
-                  }`}
-                >
-                  {FlavorCategoryLabel[category]}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Grilla de sabores */}
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-            {flavors.map((flavor) => {
-              const selected = selectedFlavorId === flavor.id;
-              return (
-                <button
-                  key={flavor.id}
-                  type="button"
-                  onClick={() => selectFlavor(flavor)}
-                  className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                    selected
-                      ? "border-primary bg-primary/15 text-white"
-                      : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
-                  }`}
-                >
-                  {flavor.name}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tamaño */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-              Tamaño
-            </h3>
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-              {sizes.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSizeId(s.id)}
-                  className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                    s.id === sizeId
-                      ? "border-primary bg-primary text-white"
-                      : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
-                  }`}
-                >
-                  {s.name} · {s.oz} oz
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {/* Tipo de boba (debajo de tamaño) */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-              Tipo de boba
-            </h3>
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-              {sortedBobaTypes.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => setBobaTypeId(b.id)}
-                  className={`h-14 w-full rounded-lg border p-2 text-sm font-bold leading-tight whitespace-normal break-words transition-colors active:scale-95 ${
-                    b.id === bobaTypeId
-                      ? "border-primary bg-primary text-white"
-                      : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
-                  }`}
-                >
-                  {b.name}
-                </button>
-              ))}
-            </div>
-          </section>
-
-          {toppings.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">
-                Extras
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {toppings.map((t) => {
-                  const selected = toppingIds.includes(t.id);
-                  return (
+                {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
+                {variantItem && (
+                  <div className="rounded-lg border border-primary/40 bg-slate-800 p-3 space-y-2">
+                    <p className="text-sm font-bold text-white">
+                      {variantItem.name} — elige variante
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {variantItem.options.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => confirmVariant(option)}
+                          className="h-12 rounded-lg border border-slate-600 bg-slate-700 text-sm font-bold text-white transition-colors active:scale-95 hover:border-primary hover:bg-slate-600"
+                        >
+                          {option.name} · {formatPrice(option.price)}
+                        </button>
+                      ))}
+                    </div>
                     <button
-                      key={t.id}
                       type="button"
-                      onClick={() => toggleTopping(t.id)}
-                      className={`h-9 rounded-lg border px-3 text-sm font-bold transition-colors ${
-                        selected
-                          ? "border-primary bg-primary text-white"
-                          : "border-slate-700 bg-slate-800 text-white hover:border-primary hover:bg-slate-700"
-                      }`}
+                      onClick={() => setVariantItem(null)}
+                      className="w-full text-center text-xs font-semibold text-slate-400 hover:text-white"
                     >
-                      + {t.name} · {formatPrice(t.price)}
+                      Cancelar
                     </button>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Preticket: producto en construcción */}
-          {selectedFlavor ? (
-            <section className="rounded-lg border border-slate-700 bg-slate-800 p-4">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-white">
-                Producto en curso
-              </h3>
-              <div className="mt-2 space-y-1 text-sm text-white">
-                <p className="font-bold">{selectedFlavor.name}</p>
-                <p className="text-slate-400">
-                  {size?.name
-                    ? `${size.name} · ${bobaType?.name ?? ""}`
-                    : "Elige un tamaño"}
-                </p>
-                {selectedToppings.length > 0 && (
-                  <p className="text-slate-400">
-                    + {selectedToppings.map((t) => t.name).join(", ")}
-                  </p>
+                  </div>
                 )}
-              </div>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-                  Subtotal
-                </span>
-                <span className="font-mono text-xl font-black text-white">
-                  {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
-                </span>
-              </div>
-              <button
-                type="button"
-                disabled={!selectedSize || !selectedFlavor || !bobaType}
-                onClick={confirmProduct}
-                className="mt-3 h-11 w-full rounded-lg bg-emerald-600 text-base font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Confirmar producto
-              </button>
-            </section>
-          ) : (
-            <p className="text-sm text-slate-500">
-              Toca un sabor para empezar tu pedido.
-            </p>
-          )}
+              </section>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -98,6 +98,7 @@ export interface MenuItemView {
   category: MenuCategory;
   price: number;
   description: string | null;
+  imageUrl: string | null;
   options: MenuItemOptionView[];
 }
 
@@ -106,6 +107,7 @@ export interface Size {
   name: string;
   oz: number;
   available: boolean;
+  imageUrl: string | null;
 }
 
 export interface Flavor {
@@ -113,6 +115,7 @@ export interface Flavor {
   name: string;
   categories: FlavorCategory[];
   available: boolean;
+  imageUrl: string | null;
 }
 
 export const BobaKind = {
@@ -132,6 +135,7 @@ export interface BobaType {
   name: string;
   kind: BobaKind;
   available: boolean;
+  imageUrl: string | null;
 }
 
 export interface Topping {
@@ -139,6 +143,7 @@ export interface Topping {
   name: string;
   price: number;
   available: boolean;
+  imageUrl: string | null;
 }
 
 export interface DrinkPrice {

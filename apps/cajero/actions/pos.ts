@@ -46,6 +46,7 @@ export async function getPosCatalog(): Promise<Catalog> {
       category: string;
       price: number;
       description: string | null;
+      imageUrl?: string | null;
       options?: { id: string; name: string; price: number }[];
     },
   ) => ({
@@ -54,6 +55,7 @@ export async function getPosCatalog(): Promise<Catalog> {
     category: mi.category as Catalog["menuItems"][number]["category"],
     price: mi.price,
     description: mi.description,
+    imageUrl: mi.imageUrl ?? null,
     options: mi.options ?? [],
   });
 
@@ -64,6 +66,7 @@ export async function getPosCatalog(): Promise<Catalog> {
       name: f.name,
       categories: f.categories.map((c) => c.category),
       available: f.available,
+      imageUrl: f.imageUrl ?? null,
     })),
     bobaTypes,
     drinkPrices,

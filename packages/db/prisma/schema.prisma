@@ -22,11 +22,12 @@ model User {
 }
 
 model Size {
-  id         String   @id @default(cuid())
-  name       String   @unique
+  id         String       @id @default(cuid())
+  name       String       @unique
   oz         Int
-  available  Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  available  Boolean      @default(true)
+  imageUrl   String?
+  createdAt  DateTime     @default(now())
   drinkPrices DrinkPrice[]
 }
 
@@ -35,6 +36,7 @@ model Flavor {
   name       String               @unique
   categories FlavorCategoryLink[]
   available  Boolean              @default(true)
+  imageUrl   String?
   createdAt  DateTime             @default(now())
 }
 
@@ -53,6 +55,7 @@ model BobaType {
   name      String   @unique
   kind      BobaKind
   available Boolean  @default(true)
+  imageUrl  String?
   createdAt DateTime @default(now())
   drinkPrices DrinkPrice[]
 }
@@ -75,6 +78,7 @@ model Topping {
   name      String   @unique
   price     Int
   available Boolean  @default(true)
+  imageUrl  String?
   createdAt DateTime @default(now())
 }
 
@@ -87,6 +91,7 @@ model MenuItem {
   available      Boolean           @default(true)
   enMenuDelDia   Boolean           @default(false)
   menuDelDiaDate String?
+  imageUrl       String?
   options        MenuItemOption[]
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt

@@ -1,7 +1,8 @@
 ﻿"use client";
 
-import { useState } from "react";
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown, ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -58,6 +59,129 @@ import {
   updateSize,
   updateTopping,
 } from "@/app/actions/catalog";
+import { removeProductImage, saveProductImage } from "@/app/actions/product-image";
+
+export type ProductImageEntity =
+  | "menuItem"
+  | "size"
+  | "flavor"
+  | "bobaType"
+  | "topping";
+
+export function ProductImageField({
+  entity,
+  id,
+  imageUrl,
+  onSaved,
+}: {
+  entity: ProductImageEntity;
+  id: string;
+  imageUrl: string | null;
+  onSaved?: (imageUrl: string | null) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  const previewSrc = imageUrl
+    ? imageUrl.replace(/^\/images\/menu\//, "/api/menu-image/")
+    : null;
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const { imageUrl: url } = await saveProductImage({ entity, id, file });
+      onSaved?.(url);
+      toast({
+        title: "Foto actualizada",
+        description: "La imagen se optimizó y guardó.",
+      });
+      router.refresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo guardar la foto",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    setBusy(true);
+    try {
+      await removeProductImage({ entity, id });
+      onSaved?.(null);
+      toast({ title: "Foto eliminada" });
+      router.refresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo quitar la foto",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-muted-foreground">
+        Foto del producto
+      </span>
+      <div className="flex items-center gap-3">
+        {previewSrc ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewSrc}
+            alt="Foto del producto"
+            className="h-16 w-16 rounded-lg border border-slate-800 object-cover"
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-700 text-muted-foreground">
+            <ImageIcon className="h-5 w-5" />
+          </div>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            handleFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {busy ? "Procesando..." : "Subir foto"}
+          </Button>
+          {previewSrc && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={handleRemove}
+            >
+              Quitar
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export interface MenuItemAdminView {
   id: string;
@@ -65,6 +189,7 @@ export interface MenuItemAdminView {
   category: MenuCategoryType;
   price: number;
   description: string | null;
+  imageUrl: string | null;
   options: { id: string; name: string; price: number }[];
   available: boolean;
   enMenuDelDiaHoy: boolean;
@@ -222,8 +347,8 @@ function PriceMatrixEditor({
     } catch (e) {
       toast({
         variant: "destructive",
-        title: "AcciÃ³n Denegada",
-        description: e instanceof Error ? e.message : "OcurriÃ³ un error.",
+        title: "Acción Denegada",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
         duration: 100000,
       });
     }
@@ -233,7 +358,7 @@ function PriceMatrixEditor({
     <div className="space-y-4">
       {sizes.length === 0 || bobaTypes.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Registra al menos un tamaÃ±o y un tipo de boba para cargar la matriz.
+          Registra al menos un tamaño y un tipo de boba para cargar la matriz.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -257,7 +382,7 @@ function PriceMatrixEditor({
               {sizes.map((s) => (
                 <tr key={s.id}>
                   <td className="px-2 py-1 font-medium">
-                    {s.name} Â· {s.oz} oz
+                    {s.name} · {s.oz} oz
                   </td>
                   {bobaTypes.map((b) => (
                     <td key={b.id} className="px-2 py-1">
@@ -304,7 +429,7 @@ function MenuItemOptionsEditor({
   return (
     <div className="space-y-1.5">
       <p className="text-xs font-medium text-muted-foreground">
-        Variantes (Pollo / Res, etc.) â€” precio propio por variante
+        Variantes (Pollo / Res, etc.) — precio propio por variante
       </p>
       {options.map((opt, i) => (
         <div key={i} className="flex gap-2 items-center">
@@ -336,7 +461,7 @@ function MenuItemOptionsEditor({
             className="h-8 w-8"
             onClick={() => onChange(options.filter((_, j) => j !== i))}
           >
-            âœ•
+            ✔
           </Button>
         </div>
       ))}
@@ -356,6 +481,25 @@ function normalize(text: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function previewImageUrl(imageUrl: string | null): string | undefined {
+  return imageUrl
+    ? imageUrl.replace(/^\/images\/menu\//, "/api/menu-image/")
+    : undefined;
+}
+
+function ProductThumb({ imageUrl }: { imageUrl: string | null }) {
+  const src = previewImageUrl(imageUrl);
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      className="h-8 w-8 shrink-0 rounded-md border border-slate-800 object-cover"
+    />
+  );
 }
 
 function MenuSection({
@@ -446,7 +590,10 @@ function MenuSection({
                     className={cn("border-b border-slate-800/60", zebra)}
                   >
                     <td className="px-4 py-2.5 font-medium">
-                      {item.name}
+                      <span className="flex items-center gap-2">
+                        <ProductThumb imageUrl={item.imageUrl} />
+                        {item.name}
+                      </span>
                     </td>
                     {showCategory && (
                       <td className="px-4 py-2.5 text-muted-foreground">
@@ -649,8 +796,8 @@ export function MenuManager({
     action().catch((e) => {
       toast({
         variant: "destructive",
-        title: "AcciÃ³n Denegada",
-        description: e instanceof Error ? e.message : "OcurriÃ³ un error.",
+        title: "Acción Denegada",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
         duration: 100000,
       });
     });
@@ -659,7 +806,7 @@ export function MenuManager({
   function confirmDelete(action: () => Promise<void>) {
     if (
       window.confirm(
-        "Â¿EstÃ¡s seguro de eliminar este elemento? Esta acciÃ³n no se puede deshacer.",
+        "¿Estás seguro de eliminar este elemento? Esta acción no se puede deshacer.",
       )
     ) {
       run(action);
@@ -817,7 +964,7 @@ export function MenuManager({
   return (
     <div className="space-y-6">
       <div className="mb-6 border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold text-white">GestiÃ³n del menÃº</h1>
+        <h1 className="text-xl font-bold text-white">Gestión del menú</h1>
 <p className="text-muted-foreground">
           El menú se organiza en cinco secciones: Almuerzos, Platos a la carta,
           Bebidas, Cafetería y Bubas.
@@ -882,7 +1029,10 @@ export function MenuManager({
                       className={cn("border-b border-slate-800/60", zebra)}
                     >
                       <td className="px-4 py-2.5 font-medium">
-                        {item.name}
+                        <span className="flex items-center gap-2">
+                          <ProductThumb imageUrl={item.imageUrl} />
+                          {item.name}
+                        </span>
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">
                         {formatPrice(item.price)}
@@ -1001,7 +1151,7 @@ export function MenuManager({
 
       <CollapsibleCard title="Bubas" defaultOpen={false}>
         <div className="space-y-4">
-          <SubSection title="TamaÃ±os de vaso">
+          <SubSection title="Tamaños de vaso">
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Input
@@ -1042,10 +1192,13 @@ export function MenuManager({
                     key={size.id}
                     className="flex items-center justify-between gap-3 rounded-lg border p-3"
                   >
-                    <div>
-                      <div className="font-medium">{size.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {size.oz} oz
+                    <div className="flex items-center gap-2">
+                      <ProductThumb imageUrl={size.imageUrl} />
+                      <div>
+                        <div className="font-medium">{size.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {size.oz} oz
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1088,7 +1241,7 @@ export function MenuManager({
                 ))}
                 {sizes.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    No hay tamaÃ±os registrados.
+                    No hay tamaños registrados.
                   </p>
                 )}
               </div>
@@ -1135,6 +1288,7 @@ export function MenuManager({
                     className="flex items-center justify-between gap-3 rounded-lg border p-3"
                   >
                     <div className="flex flex-wrap items-center gap-2">
+                      <ProductThumb imageUrl={flavor.imageUrl} />
                       <span className="font-medium">{flavor.name}</span>
                       <CategoryToggles
                         selected={flavor.categories}
@@ -1245,10 +1399,13 @@ export function MenuManager({
                     key={boba.id}
                     className="flex items-center justify-between gap-3 rounded-lg border p-3"
                   >
-                    <div>
-                      <div className="font-medium">{boba.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {BobaKindLabel[boba.kind]}
+                    <div className="flex items-center gap-2">
+                      <ProductThumb imageUrl={boba.imageUrl} />
+                      <div>
+                        <div className="font-medium">{boba.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {BobaKindLabel[boba.kind]}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1339,10 +1496,13 @@ export function MenuManager({
                     key={topping.id}
                     className="flex items-center justify-between gap-3 rounded-lg border p-3"
                   >
-                    <div>
-                      <div className="font-medium">{topping.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {formatPrice(topping.price)}
+                    <div className="flex items-center gap-2">
+                      <ProductThumb imageUrl={topping.imageUrl} />
+                      <div>
+                        <div className="font-medium">{topping.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatPrice(topping.price)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1399,7 +1559,7 @@ export function MenuManager({
           {FlavorCategoryList.map((category) => (
             <SubSection
               key={category}
-              title={`Matriz de precios Â· ${FlavorCategoryLabel[category]}`}
+              title={`Matriz de precios · ${FlavorCategoryLabel[category]}`}
             >
               <PriceMatrixEditor
                 category={category}
@@ -1420,12 +1580,22 @@ export function MenuManager({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editar tamaÃ±o</DialogTitle>
+            <DialogTitle>Editar tamaño</DialogTitle>
             <DialogDescription>
               Actualiza el nombre y la medida del vaso.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {editingSize && (
+              <ProductImageField
+                entity="size"
+                id={editingSize.id}
+                imageUrl={editingSize.imageUrl}
+                onSaved={(imageUrl) =>
+                  setEditingSize((s) => (s ? { ...s, imageUrl } : s))
+                }
+              />
+            )}
             <Input
               placeholder="Nombre"
               value={sizeEdit.name}
@@ -1474,11 +1644,23 @@ export function MenuManager({
               Actualiza el nombre del sabor.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            placeholder="Nombre"
-            value={flavorEdit}
-            onChange={(e) => setFlavorEdit(e.target.value)}
-          />
+          <div className="space-y-4">
+            {editingFlavor && (
+              <ProductImageField
+                entity="flavor"
+                id={editingFlavor.id}
+                imageUrl={editingFlavor.imageUrl}
+                onSaved={(imageUrl) =>
+                  setEditingFlavor((f) => (f ? { ...f, imageUrl } : f))
+                }
+              />
+            )}
+            <Input
+              placeholder="Nombre"
+              value={flavorEdit}
+              onChange={(e) => setFlavorEdit(e.target.value)}
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingFlavor(null)}>
               Cancelar
@@ -1515,6 +1697,16 @@ export function MenuManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {editingBoba && (
+              <ProductImageField
+                entity="bobaType"
+                id={editingBoba.id}
+                imageUrl={editingBoba.imageUrl}
+                onSaved={(imageUrl) =>
+                  setEditingBoba((b) => (b ? { ...b, imageUrl } : b))
+                }
+              />
+            )}
             <Input
               placeholder="Nombre"
               value={bobaEdit.name}
@@ -1574,6 +1766,16 @@ export function MenuManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {editingTopping && (
+              <ProductImageField
+                entity="topping"
+                id={editingTopping.id}
+                imageUrl={editingTopping.imageUrl}
+                onSaved={(imageUrl) =>
+                  setEditingTopping((t) => (t ? { ...t, imageUrl } : t))
+                }
+              />
+            )}
             <Input
               placeholder="Nombre"
               value={toppingEdit.name}
@@ -1626,11 +1828,25 @@ export function MenuManager({
             </DialogTitle>
             <DialogDescription>
               {almuerzoModal.editing
-                ? "Actualiza la informaciÃ³n del plato."
-                : "Registra un nuevo plato del MenÃº del DÃ­a."}
+                ? "Actualiza la información del plato."
+                : "Registra un nuevo plato del Menú del Día."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {almuerzoModal.editing && (
+              <ProductImageField
+                entity="menuItem"
+                id={almuerzoModal.editing.id}
+                imageUrl={almuerzoModal.editing.imageUrl}
+                onSaved={(imageUrl) =>
+                  setAlmuerzoModal((m) =>
+                    m.editing
+                      ? { ...m, editing: { ...m.editing, imageUrl } }
+                      : m,
+                  )
+                }
+              />
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 Nombre
@@ -1659,10 +1875,10 @@ export function MenuManager({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                DescripciÃ³n (opcional)
+                Descripción (opcional)
               </label>
               <Input
-                placeholder="DescripciÃ³n"
+                placeholder="Descripción"
                 value={almuerzoDraft.description}
                 onChange={(e) =>
                   setAlmuerzoDraft({
@@ -1705,6 +1921,18 @@ export function MenuManager({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {cartaModal.editing && (
+              <ProductImageField
+                entity="menuItem"
+                id={cartaModal.editing.id}
+                imageUrl={cartaModal.editing.imageUrl}
+                onSaved={(imageUrl) =>
+                  setCartaModal((m) =>
+                    m.editing ? { ...m, editing: { ...m.editing, imageUrl } } : m,
+                  )
+                }
+              />
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 Nombre
@@ -1719,7 +1947,7 @@ export function MenuManager({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                CategorÃ­a
+                Categoría
               </label>
               <Select
                 value={cartaDraft.category}
@@ -1758,10 +1986,10 @@ export function MenuManager({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                DescripciÃ³n (opcional)
+                Descripción (opcional)
               </label>
               <Input
-                placeholder="DescripciÃ³n"
+                placeholder="Descripción"
                 value={cartaDraft.description}
                 onChange={(e) =>
                   setCartaDraft({

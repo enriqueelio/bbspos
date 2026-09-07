@@ -18,7 +18,9 @@ services:
       TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID}"
     volumes:
       - bubba-data:/app/packages/db/prisma
+      - bubba-menu-images:/app/apps/store/public/images/menu
     restart: unless-stopped
 
 volumes:
   bubba-data:
+  bubba-menu-images:

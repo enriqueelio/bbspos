@@ -42,6 +42,7 @@ export default async function MenuPage() {
         name: f.name,
         categories: f.categories.map((c) => c.category),
         available: f.available,
+        imageUrl: f.imageUrl ?? null,
       }))}
       bobaTypes={bobaTypes}
       toppings={toppings}
@@ -52,6 +53,7 @@ export default async function MenuPage() {
         category: mi.category,
         price: mi.price,
         description: mi.description,
+        imageUrl: mi.imageUrl ?? null,
         options: mi.options.map((o) => ({
           id: o.id,
           name: o.name,

@@ -99,3 +99,17 @@ El reporte de la app del cajero SHALL limitar las métricas de rendimiento (pedi
 
 - **WHEN** el cajero consulta su pestaña de reporte
 - **THEN** las métricas de rendimiento corresponden únicamente a los pedidos que él mismo entregó
+
+### Requirement: Pantalla objetivo del módulo de cajero
+
+El módulo de cajero SHALL estar optimizado para el monitor de escritorio del local: panel de **19"**, relación de aspecto **16:10**, resolución **1440×900 px** (densidad ≈ 89 PPI), área útil de aproximadamente **409 × 256 mm**. El layout SHALL ser fluido (sin anchos fijos al límite), con el ticket de cobro en la columna izquierda (~30–35 % ≈ 430–505 px) y la cola de pedidos/gestión en la derecha (~65–70 % ≈ 935–1005 px); la interfaz SHALL conservar compatibilidad con resoluciones menores, como mínimo 1280×1024 (5:4).
+
+#### Scenario: Sala del cajero a 1440×900
+
+- **WHEN** el cajero usa la terminal en el monitor 16:10 de 1440×900
+- **THEN** la interfaz aprovecha todo el ancho sin scroll horizontal, con el ticket fijo a la izquierda y la cola a la derecha
+
+#### Scenario: Reducción a 1280×1024
+
+- **WHEN** la terminal se usa en un monitor 5:4 de 1280×1024
+- **THEN** la interfaz se redimensiona fluidamente conservando la misma estructura de dos columnas sin desbordes

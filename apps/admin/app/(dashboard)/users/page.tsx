@@ -22,5 +22,11 @@ export default async function UsersPage() {
     }),
   ]);
 
-  return <UsersClient users={users} currentUserId={session.user.id} />;
+  return (
+    <UsersClient
+      users={users}
+      currentUserId={session.user.id}
+      currentUserRole={session.user.role}
+    />
+  );
 }

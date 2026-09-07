@@ -54,7 +54,8 @@ export function PosTerminal({
 }) {
   const router = useRouter();
   const cart = usePosCart();
-  const isBilling = role === Role.CAJERO || role === Role.ADMIN;
+  const isBilling =
+    role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
   const [activeCategory, setActiveCategory] = useState<FlavorCategoryType>(
     firstActiveCategory(catalog),
   );

@@ -567,7 +567,8 @@ export function QueueView({
   role: RoleType;
 }) {
   const clock = useQueueClock(orders);
-  const billing = role === Role.CAJERO || role === Role.ADMIN;
+  const billing =
+    role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
 
   if (orders.length === 0) {
     return (

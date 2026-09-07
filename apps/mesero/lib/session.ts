@@ -10,9 +10,12 @@ export async function getRequiredSession() {
   return session;
 }
 
-/** Acceso al terminal de toma de pedidos: mesero, cajero y admin. */
+/** Acceso al terminal de toma de pedidos: mesero, cajero, admin y super admin. */
 export function hasOrderAccess(role: RoleType): boolean {
   return (
-    role === Role.MESERO || role === Role.CAJERO || role === Role.ADMIN
+    role === Role.MESERO ||
+    role === Role.CAJERO ||
+    role === Role.ADMIN ||
+    role === Role.SUPER_ADMIN
   );
 }

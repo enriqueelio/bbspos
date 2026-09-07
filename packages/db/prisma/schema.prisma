@@ -220,6 +220,7 @@ enum OrderStatus {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   CAJERO
   MESERO

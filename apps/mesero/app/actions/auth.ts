@@ -7,7 +7,7 @@ import { prisma } from "@bbspos/db";
 import { compare } from "bcryptjs";
 
 /** Roles que pueden operar el terminal de toma de pedidos del mesero. */
-const ALLOWED_ROLES = [Role.MESERO, Role.CAJERO, Role.ADMIN];
+const ALLOWED_ROLES = [Role.MESERO, Role.CAJERO, Role.ADMIN, Role.SUPER_ADMIN];
 
 /** Valida que la sesión tenga un rol con acceso a la app del mesero. */
 export async function ensureOrderAccess(): Promise<boolean> {

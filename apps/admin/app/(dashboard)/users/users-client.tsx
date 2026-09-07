@@ -12,9 +12,10 @@ import {
 } from "@bbspos/ui";
 import {
   RoleLabel,
-  RoleList,
+  RoleListAll,
   ShiftLabel,
   ShiftList,
+  Role as RoleValue,
   type Role,
   type Shift,
   type StaffUser,
@@ -34,21 +35,59 @@ type DialogState =
   | { kind: "create" }
   | { kind: "edit"; user: StaffUser };
 
+/** Roles que el actor puede otorgar. El ADMIN no asigna ADMIN ni SUPER_ADMIN. */
+function roleOptionsForActor(actorRole: Role): Role[] {
+  return actorRole === "SUPER_ADMIN"
+    ? RoleListAll
+    : [RoleValue.CAJERO, RoleValue.MESERO];
+}
+
 export function UsersClient({
   users,
   currentUserId,
+  currentUserRole,
 }: {
   users: StaffUser[];
   currentUserId: string;
+  currentUserRole: Role;
 }) {
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const isSuper = currentUserRole === "SUPER_ADMIN";
+
+  /** El actor puede gestionar a este usuario (editar o dar de baja). */
+  function canManage(user: StaffUser): boolean {
+    if (user.role === "SUPER_ADMIN") return false;
+    if (user.id === currentUserId) return true;
+    if (user.role === "ADMIN" && !isSuper) return false;
+    return true;
+  }
+
+  /** El actor puede cambiar el rol de este usuario. */
+  function canEditRole(user: StaffUser): boolean {
+    if (user.id === currentUserId) return false;
+    if (user.role === "SUPER_ADMIN") return false;
+    return canManage(user);
+  }
+
+  /** El turno del Super Admin está congelado para todo el mundo. */
+  function shiftIsLocked(user: StaffUser): boolean {
+    return user.role === "SUPER_ADMIN";
+  }
+
   function closeDialog() {
     setDialog({ kind: "none" });
     setError(null);
   }
+
+  const baseRoleOptions = roleOptionsForActor(currentUserRole);
+  const targetRole = dialog.kind === "edit" ? dialog.user.role : null;
+  const roleOptions =
+    targetRole && !baseRoleOptions.includes(targetRole)
+      ? [...baseRoleOptions, targetRole]
+      : baseRoleOptions;
 
   return (
     <div className="space-y-6">
@@ -106,7 +145,15 @@ export function UsersClient({
                   </td>
                   <td className="px-4 py-2">{user.username}</td>
                   <td className="px-4 py-2">
-                    <Badge variant={user.role === "ADMIN" ? "default" : "secondary"}>
+                    <Badge
+                      variant={
+                        user.role === "SUPER_ADMIN"
+                          ? "warning"
+                          : user.role === "ADMIN"
+                            ? "default"
+                            : "secondary"
+                      }
+                    >
                       {RoleLabel[user.role]}
                     </Badge>
                   </td>
@@ -121,58 +168,64 @@ export function UsersClient({
                     </Badge>
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setNotice(null);
-                          setDialog({ kind: "edit", user });
-                        }}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" /> Editar
-                      </Button>
-                      {user.active ? (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={user.id === currentUserId}
-                          title={
-                            user.id === currentUserId
-                              ? "No puedes desactivar tu propia cuenta"
-                              : undefined
-                          }
-                          onClick={() => {
-                            if (
-                              !confirm(
-                                `¿Dar de baja a ${user.name}? No podrá iniciar sesión y podrás reactivarlo después.`,
-                              )
-                            ) {
-                              return;
-                            }
-                            runAction(async () => {
-                              await setUserActive(user.id, false);
-                              setNotice(`${user.name} fue dado de baja.`);
-                            }, setError);
-                          }}
-                        >
-                          Dar de baja
-                        </Button>
-                      ) : (
+                    {canManage(user) ? (
+                      <div className="flex flex-wrap justify-end gap-2">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            runAction(async () => {
-                              await setUserActive(user.id, true);
-                              setNotice(`${user.name} fue reactivado.`);
-                            }, setError);
+                            setNotice(null);
+                            setDialog({ kind: "edit", user });
                           }}
                         >
-                          Reactivar
+                          <Pencil className="mr-1 h-4 w-4" /> Editar
                         </Button>
-                      )}
-                    </div>
+                        {user.active ? (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={user.id === currentUserId}
+                            title={
+                              user.id === currentUserId
+                                ? "No puedes desactivar tu propia cuenta"
+                                : undefined
+                            }
+                            onClick={() => {
+                              if (
+                                !confirm(
+                                  `¿Dar de baja a ${user.name}? No podrá iniciar sesión y podrás reactivarlo después.`,
+                                )
+                              ) {
+                                return;
+                              }
+                              runAction(async () => {
+                                await setUserActive(user.id, false);
+                                setNotice(`${user.name} fue dado de baja.`);
+                              }, setError);
+                            }}
+                          >
+                            Dar de baja
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              runAction(async () => {
+                                await setUserActive(user.id, true);
+                                setNotice(`${user.name} fue reactivado.`);
+                              }, setError);
+                            }}
+                          >
+                            Reactivar
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="block text-right text-xs text-muted-foreground">
+                        Cuenta protegida
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -184,6 +237,13 @@ export function UsersClient({
       {dialog.kind !== "none" && (
         <UserDialog
           dialog={dialog}
+          roleOptions={roleOptions}
+          roleLocked={
+            dialog.kind === "edit" ? !canEditRole(dialog.user) : false
+          }
+          shiftLocked={
+            dialog.kind === "edit" ? shiftIsLocked(dialog.user) : false
+          }
           onClose={closeDialog}
         />
       )}
@@ -193,9 +253,15 @@ export function UsersClient({
 
 function UserDialog({
   dialog,
+  roleOptions,
+  roleLocked,
+  shiftLocked,
   onClose,
 }: {
   dialog: Exclude<DialogState, { kind: "none" }>;
+  roleOptions: Role[];
+  roleLocked: boolean;
+  shiftLocked: boolean;
   onClose: () => void;
 }) {
   const isEdit = dialog.kind === "edit";
@@ -275,34 +341,46 @@ function UserDialog({
 
             <div className="space-y-1">
               <Label htmlFor="u-role">Rol</Label>
-              <select
-                id="u-role"
-                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-              >
-                {RoleList.map((r) => (
-                  <option key={r} value={r}>
-                    {RoleLabel[r]}
-                  </option>
-                ))}
-              </select>
+              {roleLocked && target ? (
+                <div className="flex h-9 items-center rounded-md border border-input bg-card px-3 text-sm text-muted-foreground">
+                  {RoleLabel[target.role]}
+                </div>
+              ) : (
+                <select
+                  id="u-role"
+                  className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as Role)}
+                >
+                  {roleOptions.map((r) => (
+                    <option key={r} value={r}>
+                      {RoleLabel[r]}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="u-shift">Turno</Label>
-              <select
-                id="u-shift"
-                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
-                value={shift}
-                onChange={(e) => setShift(e.target.value as Shift)}
-              >
-                {ShiftList.map((s) => (
-                  <option key={s} value={s}>
-                    {ShiftLabel[s]}
-                  </option>
-                ))}
-              </select>
+              {shiftLocked ? (
+                <div className="flex h-9 items-center rounded-md border border-input bg-card px-3 text-sm text-muted-foreground">
+                  {ShiftLabel[target!.shift]}
+                </div>
+              ) : (
+                <select
+                  id="u-shift"
+                  className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+                  value={shift}
+                  onChange={(e) => setShift(e.target.value as Shift)}
+                >
+                  {ShiftList.map((s) => (
+                    <option key={s} value={s}>
+                      {ShiftLabel[s]}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {isEdit ? (

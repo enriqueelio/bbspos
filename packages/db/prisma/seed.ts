@@ -150,6 +150,17 @@ async function main() {
   const adminPassword = await hash("admin123", 10);
 
   await prisma.user.upsert({
+    where: { username: "superadmin" },
+    update: { role: "SUPER_ADMIN" },
+    create: {
+      username: "superadmin",
+      name: "Super Admin",
+      password: adminPassword,
+      role: "SUPER_ADMIN",
+    },
+  });
+
+  await prisma.user.upsert({
     where: { username: "admin" },
     update: { role: "ADMIN" },
     create: {
@@ -187,7 +198,7 @@ async function main() {
   });
 
   console.log(
-    "Catálogo, matriz de precios, admin, cajero y mesero sembrados correctamente.",
+    "Catálogo, matriz de precios, super admin, admin, cajero y mesero sembrados correctamente.",
   );
 }
 

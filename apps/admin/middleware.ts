@@ -5,7 +5,8 @@ export default withAuth({
   callbacks: {
     authorized({ token }) {
       if (!token) return false;
-      return (token.role ?? Role.CAJERO) === Role.ADMIN;
+      const role = token.role ?? Role.CAJERO;
+      return role === Role.ADMIN || role === Role.SUPER_ADMIN;
     },
   },
   pages: {

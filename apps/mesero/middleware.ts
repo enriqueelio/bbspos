@@ -25,7 +25,8 @@ export default withAuth({
       return (
         role === Role.MESERO ||
         role === Role.CAJERO ||
-        role === Role.ADMIN
+        role === Role.ADMIN ||
+        role === Role.SUPER_ADMIN
       );
     },
   },

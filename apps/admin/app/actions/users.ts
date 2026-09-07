@@ -24,10 +24,64 @@ function parseShift(value: string): ShiftType {
 
 async function requireAdminSession() {
   const session = await getRequiredSession();
-  if (session.user.role !== Role.ADMIN) {
+  if (
+    session.user.role !== Role.ADMIN &&
+    session.user.role !== Role.SUPER_ADMIN
+  ) {
     throw new Error("Solo los administradores pueden gestionar usuarios.");
   }
   return session;
+}
+
+/** Roles que el actor puede otorgar al crear/editar usuarios. */
+function rolesAssignableBy(actorRole: RoleType): RoleType[] {
+  if (actorRole === Role.SUPER_ADMIN) {
+    return [Role.SUPER_ADMIN, Role.ADMIN, Role.CAJERO, Role.MESERO];
+  }
+  return [Role.CAJERO, Role.MESERO];
+}
+
+/**
+ * Reglas de gestión de usuarios:
+ * - El Super Admin es una cuenta protegida: nadie puede cambiarle el rol ni el turno.
+ * - Solo el Super Admin gestiona a usuarios con rol ADMIN (excepto él mismo).
+ * - Nadie puede desactivar su propia cuenta ni quitarse su propio rol.
+ */
+async function assertUserEditAllowed(options: {
+  actor: { id: string; role: RoleType };
+  target: { id: string; role: RoleType; shift: ShiftType; active: boolean };
+  nextRole: RoleType;
+  nextShift: ShiftType;
+  nextActive: boolean;
+}) {
+  const { actor, target, nextRole, nextShift, nextActive } = options;
+  const isSelf = target.id === actor.id;
+
+  if (target.role === Role.SUPER_ADMIN) {
+    if (actor.role === Role.ADMIN) {
+      throw new Error("Solo el Super Admin puede gestionar al Super Admin.");
+    }
+    if (nextRole !== target.role) {
+      throw new Error("El rol de un Super Admin no puede cambiarse.");
+    }
+    if (nextShift !== target.shift) {
+      throw new Error("El turno de un Super Admin no puede cambiarse.");
+    }
+    return;
+  }
+
+  if (isSelf) {
+    if (!nextActive) {
+      throw new Error("No puedes desactivar tu propia cuenta.");
+    }
+    if (nextRole !== target.role) {
+      throw new Error("No puedes quitarte tu propio rol.");
+    }
+  }
+
+  if (target.role === Role.ADMIN && actor.role === Role.ADMIN && !isSelf) {
+    throw new Error("Solo el Super Admin puede gestionar administradores.");
+  }
 }
 
 function validateName(name: string) {
@@ -47,56 +101,6 @@ function validatePassword(password: string) {
   return password;
 }
 
-/**
- * Garantiza que la operación no deje el sistema sin administradores activos
- * y que nadie modifique su propia cuenta para quitarse el acceso.
- */
-async function assertLastAdminProtection(options: {
-  currentUserId: string;
-  targetUserId: string;
-  nextRole: RoleType;
-  nextActive: boolean;
-}) {
-  const { currentUserId, targetUserId, nextRole, nextActive } = options;
-
-  if (targetUserId === currentUserId && (!nextActive || nextRole !== Role.ADMIN)) {
-    throw new Error(
-      "No puedes desactivar tu propia cuenta ni quitarte el rol de administrador.",
-    );
-  }
-
-  const target = await prisma.user.findUnique({
-    where: { id: targetUserId },
-    select: { role: true, active: true },
-  });
-
-  if (!target) {
-    throw new Error("Usuario no encontrado.");
-  }
-
-  // ¿El cambio quita un administrador activo?
-  const removesActiveAdmin =
-    target.active &&
-    target.role === Role.ADMIN &&
-    (!nextActive || nextRole !== Role.ADMIN);
-
-  if (!removesActiveAdmin) return;
-
-  const otherActiveAdmins = await prisma.user.count({
-    where: {
-      role: Role.ADMIN,
-      active: true,
-      id: { not: targetUserId },
-    },
-  });
-
-  if (otherActiveAdmins === 0) {
-    throw new Error(
-      "Debe existir al menos un administrador activo en el sistema.",
-    );
-  }
-}
-
 export async function createUser(input: {
   name: string;
   username: string;
@@ -104,13 +108,17 @@ export async function createUser(input: {
   role: string;
   shift: string;
 }) {
-  await requireAdminSession();
+  const session = await requireAdminSession();
 
   const name = validateName(input.name);
   const username = input.username.trim().toLowerCase();
   const password = validatePassword(input.password);
   const role = parseRole(input.role);
   const shift = parseShift(input.shift);
+
+  if (!rolesAssignableBy(session.user.role).includes(role)) {
+    throw new Error("No tienes permisos para asignar ese rol.");
+  }
 
   if (!/^[a-z0-9_]+$/.test(username)) {
     throw new Error(
@@ -158,10 +166,23 @@ export async function updateUser(input: {
     throw new Error("Usuario no encontrado.");
   }
 
-  await assertLastAdminProtection({
-    currentUserId: session.user.id,
-    targetUserId: user.id,
+  if (
+    user.id !== session.user.id &&
+    !rolesAssignableBy(session.user.role).includes(role)
+  ) {
+    throw new Error("No tienes permisos para asignar ese rol.");
+  }
+
+  await assertUserEditAllowed({
+    actor: { id: session.user.id, role: session.user.role },
+    target: {
+      id: user.id,
+      role: user.role,
+      shift: user.shift,
+      active: user.active,
+    },
     nextRole: role,
+    nextShift: shift,
     nextActive: user.active,
   });
 
@@ -191,12 +212,19 @@ export async function setUserActive(userId: string, active: boolean) {
     throw new Error("Usuario no encontrado.");
   }
 
-  await assertLastAdminProtection({
-    currentUserId: session.user.id,
-    targetUserId: user.id,
-    nextRole: user.role,
-    nextActive: active,
-  });
+  if (user.role === Role.SUPER_ADMIN) {
+    throw new Error(
+      "El Super Admin es una cuenta protegida y no puede darse de baja.",
+    );
+  }
+
+  if (user.id === session.user.id) {
+    throw new Error("No puedes desactivar tu propia cuenta.");
+  }
+
+  if (user.role === Role.ADMIN && session.user.role === Role.ADMIN) {
+    throw new Error("Solo el Super Admin puede dar de baja a administradores.");
+  }
 
   await prisma.user.update({
     where: { id: user.id },

@@ -7,7 +7,10 @@ import { getRequiredSession } from "@/lib/session";
 
 async function requireAdminSession() {
   const session = await getRequiredSession();
-  if (session.user.role !== Role.ADMIN) {
+  if (
+    session.user.role !== Role.ADMIN &&
+    session.user.role !== Role.SUPER_ADMIN
+  ) {
     throw new Error("Solo los administradores pueden modificar el menú.");
   }
   return session;

@@ -10,14 +10,21 @@ export async function getRequiredSession() {
   return session;
 }
 
-/** Acceso a la app del cajero para tomar/ver pedidos: cajero, admin y mesero. */
+/** Acceso a la app del cajero para tomar/ver pedidos: cajero, admin, super admin y mesero. */
 export function hasCashierAccess(role: RoleType): boolean {
   return (
-    role === Role.CAJERO || role === Role.ADMIN || role === Role.MESERO
+    role === Role.CAJERO ||
+    role === Role.ADMIN ||
+    role === Role.SUPER_ADMIN ||
+    role === Role.MESERO
   );
 }
 
-/** Acceso a funciones de cobro (registrar pagos): solo cajero y admin. */
+/** Acceso a funciones de cobro (registrar pagos): cajero, admin y super admin. */
 export function hasBillingAccess(role: RoleType): boolean {
-  return role === Role.CAJERO || role === Role.ADMIN;
+  return (
+    role === Role.CAJERO ||
+    role === Role.ADMIN ||
+    role === Role.SUPER_ADMIN
+  );
 }

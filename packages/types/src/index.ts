@@ -232,6 +232,7 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
 };
 
 export const Role = {
+  SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
   CAJERO: "CAJERO",
   MESERO: "MESERO",
@@ -240,12 +241,22 @@ export const Role = {
 export type Role = (typeof Role)[keyof typeof Role];
 
 export const RoleLabel: Record<Role, string> = {
+  SUPER_ADMIN: "Super Admin",
   ADMIN: "Administrador",
   CAJERO: "Cajero",
   MESERO: "Mesero",
 };
 
+/** Roles asignables por un ADMIN o SUPER_ADMIN en el selector general. */
 export const RoleList: Role[] = [Role.ADMIN, Role.CAJERO, Role.MESERO];
+
+/** Todos los roles del sistema, incluido el protegido SUPER_ADMIN. */
+export const RoleListAll: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN,
+  Role.CAJERO,
+  Role.MESERO,
+];
 
 export const Shift = {
   MANANA: "MANANA",

@@ -21,9 +21,13 @@ import {
   type Order,
   type Role as RoleType,
 } from "@bbspos/types";
-import { acceptOrder, deliverOrder } from "@/app/actions/orders";
+import { acceptOrder, acceptPensionOrder, deliverOrder } from "@/app/actions/orders";
 import { reprintOrder } from "@/app/actions/printing";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
+import {
+  PensionPaymentDialog,
+  type PensionCustomerOption,
+} from "@/components/pension-payment-dialog";
 
 function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
@@ -259,16 +263,18 @@ function ChargeGrid({
   order,
   clock,
   onSplit,
+  onPension,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   onSplit: () => void;
+  onPension: () => void;
 }) {
   return (
-    <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-5">
       <Button
         variant="default"
-        className="h-14 text-lg font-bold w-full"
+        className="h-14 w-full text-lg font-bold text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-950/40"
         disabled={clock.busyId === order.id}
         onClick={() =>
           clock.run(order.id, async () => {
@@ -279,8 +285,8 @@ function ChargeGrid({
         EFECTIVO
       </Button>
       <Button
-        variant="default"
-        className="h-14 text-lg font-bold w-full"
+        variant="outline"
+        className="h-14 w-full text-lg font-bold text-white border border-primary/60 bg-primary/10 hover:bg-primary/20"
         disabled={clock.busyId === order.id}
         onClick={() =>
           clock.run(order.id, async () => {
@@ -291,12 +297,20 @@ function ChargeGrid({
         QR
       </Button>
       <Button
-        variant="secondary"
-        className="h-10 w-full"
+        variant="default"
+        className="h-14 w-full border-violet-500/50 bg-violet-500/15 text-base font-bold text-violet-100 transition-colors hover:bg-violet-500/25 hover:text-white"
+        disabled={clock.busyId === order.id}
+        onClick={onPension}
+      >
+        Cuenta Pensionado
+      </Button>
+      <Button
+        variant="outline"
+        className="h-14 w-full border-slate-600 bg-slate-900/60 text-sm font-bold text-slate-200 hover:border-slate-400 hover:text-white"
         disabled={clock.busyId === order.id}
         onClick={onSplit}
       >
-        Cobro dividido
+        ÷ Dividir
       </Button>
       <ReprintButton order={order} clock={clock} />
     </div>
@@ -307,12 +321,15 @@ function OrderCard({
   order,
   clock,
   billing,
+  customers,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   billing: boolean;
+  customers: PensionCustomerOption[];
 }) {
   const [showSplit, setShowSplit] = useState(false);
+  const [showPension, setShowPension] = useState(false);
   const isFresh =
     order.status === OrderStatus.RECIBIDO ||
     (order.status === OrderStatus.ACEPTADO && !order.paidAt);
@@ -387,7 +404,8 @@ function OrderCard({
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
-                />
+                onPension={() => setShowPension(true)}
+/>
               ) : (
                 <div className="flex w-full justify-center py-1">
                   <Badge
@@ -407,7 +425,8 @@ function OrderCard({
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
-                />
+                onPension={() => setShowPension(true)}
+/>
               ) : (
                 <div className="flex w-full justify-center py-1">
                   <Badge
@@ -428,7 +447,8 @@ function OrderCard({
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
-                />
+                onPension={() => setShowPension(true)}
+/>
               )}
 
             {/* Pedido ACEPTADO: siempre se puede marcar como entregado,
@@ -466,6 +486,21 @@ function OrderCard({
             setShowSplit(false);
           }}
           onCancel={() => setShowSplit(false)}
+        />
+      )}
+
+      {showPension && (
+        <PensionPaymentDialog
+          total={order.total}
+          customers={customers}
+          busy={clock.busyId === order.id}
+          onConfirm={async (customerId) => {
+            await clock.run(order.id, async () => {
+              await acceptPensionOrder(order.id, customerId);
+            });
+            setShowPension(false);
+          }}
+          onCancel={() => setShowPension(false)}
         />
       )}
       </Card>
@@ -562,9 +597,11 @@ function ConfirmDialog({
 export function QueueView({
   orders,
   role,
+  customers,
 }: {
   orders: Order[];
   role: RoleType;
+  customers: PensionCustomerOption[];
 }) {
   const clock = useQueueClock(orders);
   const billing =
@@ -627,7 +664,13 @@ export function QueueView({
           {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
         </h2>
         {ordered.map((order) => (
-          <OrderCard key={order.id} order={order} clock={clock} billing={billing} />
+          <OrderCard
+            key={order.id}
+            order={order}
+            clock={clock}
+            billing={billing}
+            customers={customers}
+          />
         ))}
       </section>
 
@@ -642,3 +685,4 @@ export function QueueView({
     </div>
   );
 }
+

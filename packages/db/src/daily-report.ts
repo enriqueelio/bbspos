@@ -19,6 +19,13 @@ export interface DailyReportStats {
   discountsTotal: number;
   toppingsRevenue: number;
   peakHour: { hour: number; orders: number } | null;
+  /** Ingresos reales del día por recargas/pagos de deuda de pensionados (Bs).
+   *  Es efectivo/QR que entró a la caja ese día, aunque no sea una venta. */
+  pensionRecharges: number;
+  /** Desglose de pensionRecharges por método de pago (Efectivo/QR). */
+  pensionRechargeByMethod: { method: string; revenue: number }[];
+  /** Consumos del día cobrados por Cuenta Pensionado (no entran a la caja). */
+  pensionConsumption: number;
 }
 
 function pad(n: number): string {
@@ -121,57 +128,65 @@ export function durationLabel(minutes: number): string {
 export async function collectReportStats(key: string): Promise<DailyReportStats> {
   const bounds = dayBounds(key);
 
-  const [delivered, peakCreated, adjustments, toppingItems] = await Promise.all([
-    // FINANZAS: pedidos entregados del día (tienen método de pago y entrega).
-    prisma.order.findMany({
-      where: {
-        status: "ENTREGADO",
-        deliveredAt: { gte: bounds.gte, lt: bounds.lt },
-      },
-      select: {
-        total: true,
-        paymentMethod: true,
-        paymentMethod2: true,
-        paymentAmount2: true,
-        createdAt: true,
-        deliveredAt: true,
-      },
-    }),
-    // Hora pico: pedidos creados en el día (sin anulados), como peak-hours.ts.
-    prisma.order.findMany({
-      where: {
-        createdAt: { gte: bounds.gte, lt: bounds.lt },
-        status: { not: "ANULADO" },
-      },
-      select: { createdAt: true },
-    }),
-    // Fugas: anulaciones (cancelledAt) y descuentos (discountedAt), como adjustments.ts.
-    prisma.order.findMany({
-      where: {
-        OR: [
-          { status: "ANULADO", cancelledAt: { gte: bounds.gte, lt: bounds.lt } },
-          { discountedAt: { gte: bounds.gte, lt: bounds.lt } },
-        ],
-      },
-      select: {
-        status: true,
-        total: true,
-        discountAmount: true,
-        discountedAt: true,
-        cancelledAt: true,
-      },
-    }),
-    // Ingreso por extras: toppings de los pedidos entregados del día.
-    prisma.orderItem.findMany({
-      where: {
-        order: {
+  const [delivered, peakCreated, adjustments, toppingItems, ledger] =
+    await Promise.all([
+      // FINANZAS: pedidos entregados del día (tienen método de pago y entrega).
+      prisma.order.findMany({
+        where: {
           status: "ENTREGADO",
           deliveredAt: { gte: bounds.gte, lt: bounds.lt },
         },
-      },
-      select: { quantity: true, toppings: { select: { unitPrice: true } } },
-    }),
-  ]);
+        select: {
+          total: true,
+          paymentMethod: true,
+          paymentMethod2: true,
+          paymentAmount2: true,
+          createdAt: true,
+          deliveredAt: true,
+        },
+      }),
+      // Hora pico: pedidos creados en el día (sin anulados), como peak-hours.ts.
+      prisma.order.findMany({
+        where: {
+          createdAt: { gte: bounds.gte, lt: bounds.lt },
+          status: { not: "ANULADO" },
+        },
+        select: { createdAt: true },
+      }),
+      // Fugas: anulaciones (cancelledAt) y descuentos (discountedAt), como adjustments.ts.
+      prisma.order.findMany({
+        where: {
+          OR: [
+            { status: "ANULADO", cancelledAt: { gte: bounds.gte, lt: bounds.lt } },
+            { discountedAt: { gte: bounds.gte, lt: bounds.lt } },
+          ],
+        },
+        select: {
+          status: true,
+          total: true,
+          discountAmount: true,
+          discountedAt: true,
+          cancelledAt: true,
+        },
+      }),
+      // Ingreso por extras: toppings de los pedidos entregados del día.
+      prisma.orderItem.findMany({
+        where: {
+          order: {
+            status: "ENTREGADO",
+            deliveredAt: { gte: bounds.gte, lt: bounds.lt },
+          },
+        },
+        select: { quantity: true, toppings: { select: { unitPrice: true } } },
+      }),
+      // Cuentas corrientes de pensionados: la recarga/pago de deuda es ingreso
+      // real de caja del día; el consumo NO entra a la caja (ya se cobró o se
+      // cobrará a fin de mes contra la cuenta del pensionado).
+      prisma.customerLedger.findMany({
+        where: { createdAt: { gte: bounds.gte, lt: bounds.lt } },
+        select: { type: true, amount: true, paymentMethod: true },
+      }),
+    ]);
 
   const revenueTotal = delivered.reduce((acc, o) => acc + o.total, 0);
 
@@ -230,6 +245,21 @@ export async function collectReportStats(key: string): Promise<DailyReportStats>
     0,
   );
 
+  // Cuentas corrientes: recargas/pagos de deuda entran a la caja como ingresos
+  // reales del día; los consumos se cobran contra la cuenta y NO entran a la caja.
+  const pensionRecharges = ledger
+    .filter((l) => l.type === "RECARGA" || l.type === "PAGO_DEUDA")
+    .reduce((acc, l) => acc + l.amount, 0);
+  const pensionRechargeByMethod = new Map<string, number>();
+  for (const l of ledger) {
+    if (l.type !== "RECARGA" && l.type !== "PAGO_DEUDA") continue;
+    const method = l.paymentMethod ?? "EFECTIVO";
+    pensionRechargeByMethod.set(method, (pensionRechargeByMethod.get(method) ?? 0) + l.amount);
+  }
+  const pensionConsumption = ledger
+    .filter((l) => l.type === "CONSUMO")
+    .reduce((acc, l) => acc + l.amount, 0);
+
   return {
     revenueTotal,
     deliveredOrders: delivered.length,
@@ -242,6 +272,11 @@ export async function collectReportStats(key: string): Promise<DailyReportStats>
     discountsTotal,
     toppingsRevenue,
     peakHour,
+    pensionRecharges,
+    pensionRechargeByMethod: [...pensionRechargeByMethod.entries()].map(
+      ([method, revenue]) => ({ method, revenue }),
+    ),
+    pensionConsumption,
   };
 }
 
@@ -261,6 +296,13 @@ export function buildReportMessage(key: string, stats: DailyReportStats): string
     `• Efectivo: ${efectivo} Bs | QR: ${qr} Bs` +
     (tarjeta > 0 ? ` | Tarjeta: ${tarjeta} Bs` : "");
 
+  const pensionRecharges =
+    stats.pensionRechargeByMethod.length > 0
+      ? stats.pensionRechargeByMethod
+          .map((p) => `${p.method}: ${p.revenue} Bs`)
+          .join(" | ")
+      : "0 Bs";
+
   return [
     "📊 *CIERRE DIARIO BIBOSI* 📊",
     `📅 ${key}`,
@@ -269,6 +311,10 @@ export function buildReportMessage(key: string, stats: DailyReportStats): string
     `• Total: *${stats.revenueTotal} Bs*`,
     `• Ticket Promedio: ${stats.avgTicket} Bs`,
     pagos,
+    "",
+    "👵 *PENSIONADOS*",
+    `• Recargas / Pagos de deuda (ingreso real de caja): ${pensionRecharges}`,
+    `• Consumos por Cuenta (no entran a caja): ${stats.pensionConsumption} Bs`,
     "",
     "⏱ *OPERACIÓN*",
     `• Pedidos Entregados: ${stats.deliveredOrders}`,

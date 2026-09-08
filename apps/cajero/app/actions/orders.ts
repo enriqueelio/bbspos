@@ -5,8 +5,12 @@ import { prisma } from "@bbspos/db";
 import {
   AcceptablePayment,
   OrderStatus,
+  PensionType,
+  PaymentMethod,
   Role,
+  formatPrice,
   type PaymentMethod as PaymentMethodType,
+  type PensionType as PensionTypeType,
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
@@ -102,6 +106,111 @@ export async function acceptOrder(
       userId,
     },
   });
+
+  revalidatePath("/");
+}
+
+/** Cobra un pedido contra la cuenta corriente de un cliente/pensionado
+ *  (método "Cuenta Pensionado"). El dinero NO entra a la caja de ese turno.
+ *  - Prepago: exige saldo >= total y lo descuenta.
+ *  - Postpago: descuenta el total (puede quedar en deuda) siempre que la nueva
+ *    deuda no supere su creditLimit (si tiene uno configurado).
+ *  El consumo se registra en CustomerLedger para el cierre diario. */
+export async function acceptPensionOrder(orderId: string, customerId: string) {
+  const session = await getRequiredSession();
+
+  if (session.user.role === Role.MESERO) {
+    throw new Error("No autorizado. Los meseros no pueden registrar pagos.");
+  }
+
+  const [order, customer] = await Promise.all([
+    prisma.order.findUnique({ where: { id: orderId } }),
+    prisma.customer.findUnique({ where: { id: customerId } }),
+  ]);
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+  if (!customer) {
+    throw new Error("Cliente no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("El pedido está anulado.");
+  }
+
+  if (
+    order.status !== OrderStatus.RECIBIDO &&
+    order.status !== OrderStatus.ACEPTADO &&
+    order.status !== OrderStatus.ENTREGADO
+  ) {
+    throw new Error("No se puede registrar el pago de este pedido.");
+  }
+
+  if (order.paidAt) {
+    throw new Error("Este pedido ya fue cobrado.");
+  }
+
+  const total = order.total;
+  const pensionType: PensionTypeType = customer.pensionType;
+  let nextBalance: number;
+
+  if (pensionType === PensionType.PREPAGO) {
+    if (customer.balance < total) {
+      throw new Error(
+        `Saldo insuficiente: ${customer.name} tiene ${formatPrice(customer.balance)} y el pedido cuesta ${formatPrice(total)}. Pide una recarga de ${formatPrice(total - customer.balance)} en Administración.`,
+      );
+    }
+    nextBalance = customer.balance - total;
+  } else {
+    nextBalance = customer.balance - total;
+    if (customer.creditLimit > 0 && nextBalance < -customer.creditLimit) {
+      throw new Error(
+        `La deuda de ${customer.name} superaría el límite de ${formatPrice(customer.creditLimit)} (quedaría en ${formatPrice(Math.abs(nextBalance))}).`,
+      );
+    }
+  }
+
+  // El pedido ya cobrado o el usuario de la sesión pueden no existir en la DB;
+  // verificamos antes de asignar la llave foránea para no violar P2003.
+  let userId = order.userId;
+  if (!userId) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true },
+    });
+    userId = dbUser ? dbUser.id : null;
+  }
+
+  // Transacción: descuenta el saldo, registra el consumo y cobra la orden.
+  await prisma.$transaction([
+    prisma.customer.update({
+      where: { id: customerId },
+      data: { balance: nextBalance },
+    }),
+    prisma.customerLedger.create({
+      data: {
+        customerId,
+        type: "CONSUMO",
+        amount: total,
+        orderId: order.id,
+      },
+    }),
+    prisma.order.update({
+      where: { id: orderId },
+      data: {
+        // Un pedido en RECIBIDO (web/store) se acepta al cobrarlo; los que ya
+        // están ACEPTADO o ENTREGADO conservan su estado (el cobro es aparte).
+        ...(order.status === OrderStatus.RECIBIDO
+          ? { status: OrderStatus.ACEPTADO }
+          : {}),
+        paymentMethod: PaymentMethod.PENSION,
+        paidAt: new Date(),
+        userId,
+        customerId,
+      },
+    }),
+  ]);
 
   revalidatePath("/");
 }

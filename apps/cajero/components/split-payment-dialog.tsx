@@ -113,13 +113,13 @@ export function SplitPaymentDialog({
             <div className="w-full text-4xl font-mono text-emerald-400 p-4 bg-slate-900 rounded-lg text-right">
               {amount1 || "0"}
             </div>
-            <div className="grid grid-cols-3 gap-2 mt-4">
+            <div className="grid grid-cols-3 gap-1.5 mt-3">
               {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((d) => (
                 <Button
                   key={d}
                   type="button"
                   variant="secondary"
-                  className="h-16 text-2xl font-bold"
+                  className="h-14 text-2xl font-bold"
                   onClick={() => handleNumpad(d)}
                 >
                   {d}
@@ -128,7 +128,7 @@ export function SplitPaymentDialog({
               <Button
                 type="button"
                 variant="secondary"
-                className="h-16 text-2xl font-bold"
+                className="h-14 text-2xl font-bold"
                 onClick={() => handleNumpad("0")}
               >
                 0
@@ -136,7 +136,7 @@ export function SplitPaymentDialog({
               <Button
                 type="button"
                 variant="secondary"
-                className="h-16 text-2xl font-bold"
+                className="h-14 text-2xl font-bold"
                 onClick={backspace}
               >
                 Borrar
@@ -144,9 +144,11 @@ export function SplitPaymentDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-base text-white">
+          <div className="flex items-center gap-2 text-sm text-slate-300">
             <div className="h-px flex-1 bg-border" />
-            <span>queda {formatPrice(Math.max(0, remaining))}</span>
+            <span className="font-bold text-amber-300">
+              queda {formatPrice(Math.max(0, remaining))}
+            </span>
             <div className="h-px flex-1 bg-border" />
           </div>
 
@@ -156,7 +158,7 @@ export function SplitPaymentDialog({
             </label>
             <div className="rounded-lg border border-border bg-muted/50 px-4 py-3">
               <span className="font-semibold">{PaymentMethodLabel[method2]}</span>
-              <span className="ml-2 text-lg font-bold text-primary">
+              <span className="ml-2 font-mono text-xl font-black text-white">
                 {parsedAmount1 > 0 && remaining > 0
                   ? formatPrice(amount2)
                   : "—"}
@@ -183,3 +185,4 @@ export function SplitPaymentDialog({
     </Dialog>
   );
 }
+

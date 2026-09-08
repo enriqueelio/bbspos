@@ -10,6 +10,7 @@ import { ReportActions } from "@/components/report-actions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
 import { SignOutButton } from "@/components/sign-out-button";
 import { getPosCatalog } from "@/actions/pos";
+import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 
 type Tab = "preparar" | "venta" | "reporte";
 
@@ -18,6 +19,7 @@ function toPlainOrder(order: {
   seq: number | null;
   status: string;
   customerName: string | null;
+  customerId: string | null;
   total: number;
   createdAt: Date;
   deliveredAt: Date | null;
@@ -45,6 +47,7 @@ function toPlainOrder(order: {
     seq: order.seq,
     status: order.status as Order["status"],
     customerName: order.customerName,
+    customerId: order.customerId,
     total: order.total,
     createdAt: order.createdAt.toISOString(),
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
@@ -111,19 +114,41 @@ export default async function CashierPage({
 
   if (tab === "preparar") {
     const bounds = dayBounds(todayKey());
-    const rows = await prisma.order.findMany({
-      where: {
-        status: {
-          in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
+    const [rows, dbCustomers] = await Promise.all([
+      prisma.order.findMany({
+        where: {
+          status: {
+            in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
+          },
+          createdAt: { gte: bounds.gte, lt: bounds.lt },
         },
-        createdAt: { gte: bounds.gte, lt: bounds.lt },
-      },
-      include: {
-        items: { include: { toppings: true } },
-      },
-      // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
-      orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
-    });
+        include: {
+          items: { include: { toppings: true } },
+        },
+        // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
+        orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
+      }),
+      prisma.customer.findMany({
+        orderBy: [{ name: "asc" }],
+        select: {
+          id: true,
+          name: true,
+          ci: true,
+          pensionType: true,
+          balance: true,
+          creditLimit: true,
+        },
+      }),
+    ]);
+
+    const pensionCustomers: PensionCustomerOption[] = dbCustomers.map((c) => ({
+      id: c.id,
+      name: c.name,
+      ci: c.ci,
+      pensionType: c.pensionType as PensionCustomerOption["pensionType"],
+      balance: c.balance,
+      creditLimit: c.creditLimit,
+    }));
 
     return (
       <main className="flex h-full flex-col">
@@ -132,7 +157,7 @@ export default async function CashierPage({
         </div>
         <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[70vw] px-4 pb-6">
-            <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} />
+            <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} customers={pensionCustomers} />
           </div>
         </div>
       </main>

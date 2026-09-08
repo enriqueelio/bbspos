@@ -1,0 +1,19 @@
+Por favor, actualiza y rediseña la interfaz de la **App de Cajero** en el proyecto bbspos siguiendo estos requerimientos estrictos de layout y comportamiento:
+
+1. **Diseño en 3 Secciones Principales:**
+   - Divide la pantalla principal del cajero en 3 columnas/secciones diferenciadas:
+     * **Izquierda:** Panel de "Ticket en Curso" y controles de pago (tal como está funcionando actualmente).
+     * **Centro:** (O área central/intermedia si aplica en tu flujo actual de cobro, manteniendo la armonía de la pantalla).
+     * **Derecha:** Dividida a su vez en **dos bloques verticales**:
+       - **Bloque Superior (Categorías):** Contendrá la barra o cuadrícula de todas las categorías de productos disponibles.
+       - **Bloque Inferior (Productos):** Mostrará dinámicamente los productos correspondientes a la categoría que se encuentre seleccionada arriba.
+
+2. **Integración de las Bubble Drinks como Categoría:**
+   - Trata y muestra las Bubble Drinks (Special, Water, Milk / Sabores) exactamente igual que al resto de las categorías de la carta general, integrándolas en el bloque superior de categorías para que sigan el mismo flujo de selección.
+
+3. **Selección por Defecto ("Milanesas"):**
+   - Configura el estado inicial de la interfaz para que, al cargar la pantalla del cajero (o al iniciar una nueva venta), aparezca **por defecto seleccionada la categoría "Milanesas"**, mostrando inmediatamente sus productos correspondientes en el bloque inferior sin necesidad de clics adicionales.
+
+4. **Regla Horaria para el Menú del Día (A las 16:00 hrs):**
+   - Implementa una validación basada en la hora local del sistema (o un control automático al superar las 16:00 / 4:00 PM):
+   - A partir de las **16:00**, los productos pertenecientes a la categoría o sección de **"Menú del Día"** deben **desactivarse y ocultarse automáticamente** del catálogo visible para evitar que ocupen espacio físico en el menú de la interfaz.

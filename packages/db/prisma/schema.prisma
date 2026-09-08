@@ -112,6 +112,44 @@ model MenuItemOption {
   @@unique([menuItemId, name])
 }
 
+// Cuenta corriente de un cliente/pensionado. El saldo es Int (Bs, igual que el
+// resto del sistema): positivo = saldo a favor (Prepago), negativo = deuda
+// (Postpago). creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
+model Customer {
+  id          String           @id @default(cuid())
+  name        String
+  ci          String?
+  phone       String
+  pensionType PensionType      @default(PREPAGO)
+  balance     Int              @default(0)
+  creditLimit Int              @default(0)
+  createdAt   DateTime         @default(now())
+  orders      Order[]
+  ledger      CustomerLedger[]
+
+  @@index([name])
+}
+
+// Historial de movimientos de la cuenta. type es un String con los valores
+// "RECARGA" (saldo a favor de un Prepago), "PAGO_DEUDA" (abono de un Postpago)
+// o "CONSUMO" (compra descontada de la cuenta). amount es siempre positivo;
+// el significado lo da el type. paymentMethod solo se registra en abonos
+// (RECARGA/PAGO_DEUDA) porque ahí entra efectivo/QR real a la caja.
+model CustomerLedger {
+  id            String        @id @default(cuid())
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type          String
+  amount        Int
+  paymentMethod PaymentMethod?
+  orderId       String?
+  order         Order?        @relation(fields: [orderId], references: [id])
+  createdAt     DateTime      @default(now())
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
 model Order {
   id             String         @id @default(cuid())
   seq            Int?           @unique
@@ -138,6 +176,9 @@ model Order {
   canceledById   String?
   canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
   delayNotified  Boolean        @default(false)
+  customerId     String?
+  customer       Customer?      @relation(fields: [customerId], references: [id])
+  ledgerEntries  CustomerLedger[]
 
   @@index([createdAt])
   @@index([createdAt, status])
@@ -145,6 +186,7 @@ model Order {
   @@index([deliveredAt])
   @@index([userId])
   @@index([userId, status])
+  @@index([customerId])
 }
 
 model OrderItem {
@@ -241,6 +283,12 @@ enum PaymentMethod {
   EFECTIVO
   QR
   TARJETA
+  PENSION
+}
+
+enum PensionType {
+  PREPAGO
+  POSTPAGO
 }
 
 enum DeliveryType {

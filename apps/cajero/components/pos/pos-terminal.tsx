@@ -63,7 +63,7 @@ function deliveryLabel(type: PosDeliveryType) {
 const TOP_LABEL =
   "text-sm font-bold uppercase tracking-widest text-slate-400";
 const CHIP_BASE =
-  "inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-semibold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30";
+  "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-bold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30";
 const CHIP = {
   selected:
     "border border-primary bg-primary text-primary-foreground shadow-md shadow-primary/30",
@@ -384,7 +384,7 @@ export function PosTerminal({
                 selectedFlavorId === null)
             }
             title="Vaciar el pedido si el cliente se arrepiente"
-            className="h-8 shrink-0 rounded-full border border-slate-700 bg-slate-800/80 px-3 text-xs font-semibold uppercase tracking-wide text-slate-300 transition-all hover:border-red-500/60 hover:bg-red-500/15 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-8 shrink-0 rounded-full border border-red-500/50 bg-red-500/10 px-3 text-xs font-semibold uppercase tracking-wide text-red-300 transition-all hover:border-red-500 hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Limpiar
           </button>
@@ -652,7 +652,7 @@ export function PosTerminal({
                 </div>
 
                 {/* Tamaño */}
-                <section className="space-y-2">
+                <section className="mt-2 space-y-3">
                   <h3 className={TOP_LABEL}>Tamaño</h3>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                     {sizes.map((s) => (
@@ -671,7 +671,7 @@ export function PosTerminal({
                 </section>
 
                 {/* Tipo de boba (debajo de tamaño) */}
-                <section className="space-y-2">
+                <section className="mt-2 space-y-3">
                   <h3 className={TOP_LABEL}>Tipo de boba</h3>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                     {sortedBobaTypes.map((b) => (
@@ -690,7 +690,7 @@ export function PosTerminal({
                 </section>
 
                 {toppings.length > 0 && (
-                  <section className="space-y-2">
+                  <section className="mt-2 space-y-3">
                     <h3 className={TOP_LABEL}>Extras</h3>
                     <div className="flex flex-wrap gap-2">
                       {toppings.map((t) => {
@@ -764,22 +764,29 @@ export function PosTerminal({
                   {MenuCategoryLabel[activePane as MenuCategoryType]}
                 </h3>
 
-                {/* Grilla de platos de la categoría seleccionada */}
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                {/* Grilla de platos de la categoría seleccionada (CSS Grid táctil:
+                    tarjetas ~140px, altura fija 70px, precio en la esquina inferior) */}
+                <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
                   {cartaItems.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       title={item.description ?? `Agregar ${item.name}`}
                       onClick={() => tapCartaItem(item)}
-                      className={`${PRODUCT_BASE} h-16 flex-col ${PRODUCT.idle} hover:shadow-md hover:shadow-black/30`}
+                      className="flex h-[70px] flex-col justify-between rounded-xl border border-slate-700/60 bg-slate-800 p-2.5 text-left transition-transform hover:bg-slate-700 active:scale-95"
                     >
-                      <span className="line-clamp-2 text-center">{item.name}</span>
-                      <span className="mt-1 text-center text-xs font-semibold text-slate-300">
-                        {item.options.length > 0
-                          ? "Elegir variante"
-                          : formatPrice(item.price)}
+                      <span className="line-clamp-2 text-xs font-semibold leading-tight text-white">
+                        {item.name}
                       </span>
+                      {item.options.length > 0 ? (
+                        <span className="self-end text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                          Elegir variante
+                        </span>
+                      ) : (
+                        <span className="self-end font-mono text-sm font-bold text-emerald-400">
+                          {formatPrice(item.price)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

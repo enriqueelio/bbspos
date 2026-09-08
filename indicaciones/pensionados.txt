@@ -1,0 +1,31 @@
+Por favor, actualiza el módulo de "Pensionados" en el sistema bbspos para soportar modalidades PREPAGO y POSTPAGO mediante un sistema de Cuenta Corriente (Saldo monetario). Sigue estos pasos:
+
+1. **Actualización del Esquema Prisma (`schema.prisma`):**
+   - Añade `PENSION` al enum `PaymentMethod`.
+   - Crea el enum `PensionType` con los valores `PREPAGO` y `POSTPAGO`.
+   - Crea el modelo `Customer` con los campos: 
+     `id`, `name`, `ci` (opcional), `phone`, 
+     `pensionType` (PensionType, por defecto PREPAGO), 
+     `balance` (Decimal o Float, default 0: positivo es saldo a favor, negativo es deuda),
+     `creditLimit` (Decimal o Float, default 0: límite de deuda permitido para los Postpago).
+   - Crea el modelo `CustomerLedger` (Historial de movimientos): 
+     `id`, `customerId`, `type` (String: "RECARGA", "PAGO_DEUDA", "CONSUMO"), `amount` (monto del movimiento), `orderId` (opcional, si fue un consumo), `createdAt`.
+   - Relaciona el modelo `Order` con `Customer` (`customerId` opcional).
+
+2. **Módulo Admin (Gestión de Cuentas Corrientes):**
+   - Crea una pestaña "Clientes / Pensionados" donde se pueda registrar un cliente definiendo si es Prepago o Postpago.
+   - La tabla debe mostrar el `balance` actual. Si es negativo (Postpago), resaltarlo en rojo como deuda.
+   - Añade un botón de "Abonar / Recargar": 
+     * Si el cliente es Prepago, se llama "Recargar Saldo" y suma a su favor.
+     * Si es Postpago, se llama "Pagar Deuda" y lleva el saldo negativo de vuelta hacia 0.
+   - Todo abono debe registrarse en `CustomerLedger` y cuadrar en el "Reporte de Cierre Diario" como un ingreso real de efectivo/QR ese día.
+
+3. **Módulo de Cajero (Lógica de Cobro Inteligente):**
+   - Al cerrar una venta, añade el botón de pago "Cuenta Pensionado".
+   - Al seleccionar un cliente, el sistema evalúa:
+     * **Si es PREPAGO:** Valida que el `balance` sea mayor o igual al total del pedido. Si no le alcanza, bloquea el cobro o pide recarga. Si alcanza, resta el balance y cierra la orden.
+     * **Si es POSTPAGO:** Permite cerrar la orden restando el monto al `balance` (volviéndolo negativo o acumulando más deuda), siempre y cuando la nueva deuda no supere su `creditLimit` (si tiene uno configurado).
+   - El cobro por Pensión NO suma al efectivo de la caja de ese turno (porque el dinero real entró el día de la recarga o entrará a fin de mes).
+
+4. **Validación:**
+   - Prepara y ejecuta la migración (`npx prisma migrate dev`) para aplicar este esquema a SQLite sin afectar el catálogo actual.

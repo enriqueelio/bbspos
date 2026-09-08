@@ -299,6 +299,7 @@ export const PaymentMethod = {
   EFECTIVO: "EFECTIVO",
   QR: "QR",
   TARJETA: "TARJETA",
+  PENSION: "PENSION",
 } as const;
 
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
@@ -307,19 +308,81 @@ export const PaymentMethodLabel: Record<PaymentMethod, string> = {
   EFECTIVO: "Efectivo",
   QR: "QR",
   TARJETA: "Tarjeta",
+  PENSION: "Pensionado",
 };
 
 export const PaymentMethodList: PaymentMethod[] = [
   PaymentMethod.EFECTIVO,
   PaymentMethod.QR,
   PaymentMethod.TARJETA,
+  PaymentMethod.PENSION,
 ];
 
-/** Métodos de pago que el cajero puede registrar al aceptar un pedido. */
+/** Métodos de pago que el cajero puede registrar al aceptar un pedido.
+ *  PENSION se maneja aparte (Cuenta Pensionado) por su lógica de saldo. */
 export const AcceptablePayment: PaymentMethod[] = [
   PaymentMethod.EFECTIVO,
   PaymentMethod.QR,
 ];
+
+/** Modalidad de cuenta corriente de un cliente/pensionado. */
+export const PensionType = {
+  PREPAGO: "PREPAGO",
+  POSTPAGO: "POSTPAGO",
+} as const;
+
+export type PensionType = (typeof PensionType)[keyof typeof PensionType];
+
+export const PensionTypeLabel: Record<PensionType, string> = {
+  PREPAGO: "Prepago",
+  POSTPAGO: "Postpago",
+};
+
+export const PensionTypeList: PensionType[] = [
+  PensionType.PREPAGO,
+  PensionType.POSTPAGO,
+];
+
+/** Tipos de movimiento de la cuenta corriente (CustomerLedger). */
+export const CustomerLedgerType = {
+  RECARGA: "RECARGA",
+  PAGO_DEUDA: "PAGO_DEUDA",
+  CONSUMO: "CONSUMO",
+} as const;
+
+export type CustomerLedgerType =
+  (typeof CustomerLedgerType)[keyof typeof CustomerLedgerType];
+
+export const CustomerLedgerTypeLabel: Record<CustomerLedgerType, string> = {
+  RECARGA: "Recarga de saldo",
+  PAGO_DEUDA: "Pago de deuda",
+  CONSUMO: "Consumo",
+};
+
+/** Vista de un cliente/pensionado para el módulo de cuentas corrientes. */
+export interface CustomerView {
+  id: string;
+  name: string;
+  ci: string | null;
+  phone: string;
+  pensionType: PensionType;
+  /** Positivo = saldo a favor (Prepago); negativo = deuda (Postpago). */
+  balance: number;
+  /** Límite de deuda permitido para Postpago (0 = sin límite). */
+  creditLimit: number;
+  createdAt: string;
+}
+
+/** Movimiento de la cuenta corriente listado en la UI admin. */
+export interface CustomerLedgerView {
+  id: string;
+  customerId: string;
+  type: CustomerLedgerType;
+  amount: number;
+  paymentMethod: PaymentMethod | null;
+  orderId: string | null;
+  createdAt: string;
+}
 
 export interface OrderItemTopping {
   toppingName: string;
@@ -345,6 +408,7 @@ export interface Order {
   seq: number | null;
   status: OrderStatus;
   customerName: string | null;
+  customerId?: string | null;
   total: number;
   createdAt: string;
   paidAt?: string | null;

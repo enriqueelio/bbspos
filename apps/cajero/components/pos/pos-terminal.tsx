@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   FlavorCategory,
@@ -29,6 +29,38 @@ const CATEGORIES = FlavorCategoryList;
 /** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
 const BUBAS_PANE = "BUBAS";
 type CatalogPane = MenuCategoryType | typeof BUBAS_PANE;
+
+/** Orden de lectura de la carta en la barra de categorías: Milanesas primero
+ *  (categoría seleccionada por defecto), luego platos principales, entradas,
+ *  kids, postres y bebidas. Bubble Drinks siempre va al final. */
+const MENU_PANE_ORDER: MenuCategoryType[] = [
+  MenuCategory.MILANESA,
+  MenuCategory.SANDWICH,
+  MenuCategory.PANINI,
+  MenuCategory.HAMBURGUESA,
+  MenuCategory.LOMO,
+  MenuCategory.POLLO,
+  MenuCategory.ALITA,
+  MenuCategory.ENSALADA,
+  MenuCategory.PIQUEO,
+  MenuCategory.COMPARTIR,
+  MenuCategory.KIDS,
+  MenuCategory.POSTRE,
+  MenuCategory.WAFFLE,
+  MenuCategory.PANCAKE,
+  MenuCategory.EXTRAS,
+  MenuCategory.BEBIDA,
+];
+
+/** Nombres cortos de categoría en la barra (ahorran espacio; los nombres
+ *  completos se conservan en tickets, comandas y reportes vía MenuCategoryLabel). */
+const PANE_LABEL_SHORT: Partial<Record<CatalogPane, string>> = {
+  [MenuCategory.SANDWICH]: "Sandwiches",
+  [MenuCategory.HAMBURGUESA]: "Burgers",
+  [MenuCategory.WAFFLE]: "Wafles",
+  [MenuCategory.KIDS]: "Kids",
+  [MenuCategory.POSTRE]: "Heladería",
+};
 
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
@@ -70,6 +102,38 @@ const CHIP = {
   idle: "border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-primary/60 hover:bg-slate-800 hover:text-white",
   amber:
     "border border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:bg-amber-500/20 hover:shadow-md hover:shadow-amber-500/10",
+};
+
+/** Acento de color por categoría principal (identificación visual de un vistazo).
+ *  Las categorías sin acento usan el CHIP neutral (azul). */
+const PANE_ACCENT: Partial<
+  Record<CatalogPane, { idle: string; selected: string }>
+> = {
+  [MenuCategory.MILANESA]: {
+    idle: "border-amber-500/50 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:bg-amber-500/20",
+    selected:
+      "border-amber-400 bg-amber-400/20 text-white shadow-md shadow-amber-400/25",
+  },
+  [MenuCategory.ALITA]: {
+    idle: "border-red-500/50 bg-red-500/10 text-red-100 hover:border-red-400 hover:bg-red-500/20",
+    selected:
+      "border-red-400 bg-red-400/20 text-white shadow-md shadow-red-400/25",
+  },
+  [MenuCategory.BEBIDA]: {
+    idle: "border-sky-500/50 bg-sky-500/10 text-sky-100 hover:border-sky-400 hover:bg-sky-500/20",
+    selected:
+      "border-sky-400 bg-sky-400/20 text-white shadow-md shadow-sky-400/25",
+  },
+  [MenuCategory.HAMBURGUESA]: {
+    idle: "border-orange-500/50 bg-orange-500/10 text-orange-100 hover:border-orange-400 hover:bg-orange-500/20",
+    selected:
+      "border-orange-400 bg-orange-400/20 text-white shadow-md shadow-orange-400/25",
+  },
+  [MenuCategory.POSTRE]: {
+    idle: "border-pink-500/50 bg-pink-500/10 text-pink-100 hover:border-pink-400 hover:bg-pink-500/20",
+    selected:
+      "border-pink-400 bg-pink-400/20 text-white shadow-md shadow-pink-400/25",
+  },
 };
 const PRODUCT_BASE =
   "relative flex w-full items-center justify-center rounded-xl border px-2 py-2 text-sm font-semibold capitalize leading-tight tracking-wide whitespace-normal break-words transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30";
@@ -308,9 +372,16 @@ export function PosTerminal({
   const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
   const isBubas = activePane === BUBAS_PANE;
   const isCartaPane = !isMenuDelDia && !isBubas;
+  // Productos ordenados por precio de mayor a menor (en toda la carta).
   const cartaItems = isCartaPane
-    ? catalog.cartaItems.filter((i) => i.category === activePane)
+    ? catalog.cartaItems
+        .filter((i) => i.category === activePane)
+        .sort((a, b) => b.price - a.price)
     : [];
+  // Menú del Día también por precio de mayor a menor.
+  const menuDayItems = [...catalog.menuItems].sort(
+    (a, b) => b.price - a.price,
+  );
 
   // Botones del bloque superior: las categorías de la carta con productos y
   // Bubble Drinks como categoría fija. El Menú del Día queda fijo en la parte
@@ -318,12 +389,12 @@ export function PosTerminal({
   // tras las 16:00.
   const catalogPanes = useMemo(() => {
     const panes: { key: CatalogPane; label: string }[] = [];
-    for (const c of MenuCategoryList) {
+    for (const c of MENU_PANE_ORDER) {
       if (catalog.cartaItems.some((i) => i.category === c)) {
-        panes.push({ key: c, label: MenuCategoryLabel[c] });
+        panes.push({ key: c, label: PANE_LABEL_SHORT[c] ?? MenuCategoryLabel[c] });
       }
     }
-    panes.push({ key: BUBAS_PANE, label: "Bubble Drinks" });
+    panes.push({ key: BUBAS_PANE, label: "Bubbas" });
     return panes;
   }, [catalog]);
 
@@ -364,6 +435,58 @@ export function PosTerminal({
   // Brillo sutil en el cuadro de nombre cuando ya hay un ticket generado
   // pero aún no se ha ingresado el nombre o la mesa.
   const needsName = cart.items.length > 0 && cart.customerName.trim() === "";
+
+  // ===== Atajos de teclado (flujo rápido tipo Square) =====
+  // Teclas 1-9 seleccionan la categoría de la barra por índice; Enter dispara el
+  // cobro cuando el ticket tiene productos. Se ignoran si el foco está en un
+  // campo de texto (buscar producto / nombre de cliente) para no chocar con la
+  // escritura. Las refs evitan re-enganchar el listener en cada render.
+  const panesRef = useRef(catalogPanes);
+  panesRef.current = catalogPanes;
+  const switchPaneRef = useRef(switchPane);
+  switchPaneRef.current = switchPane;
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  const hasItemsRef = useRef(false);
+  hasItemsRef.current = cart.items.length > 0;
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+
+      if (e.key >= "1" && e.key <= "9") {
+        const pane = panesRef.current[Number(e.key) - 1];
+        if (pane) {
+          e.preventDefault();
+          switchPaneRef.current(pane.key);
+        }
+        return;
+      }
+
+      if (e.key === "Enter" && hasItemsRef.current && !busyRef.current) {
+        e.preventDefault();
+        void submitRef.current();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // El listener se registra una sola vez; las funciones se leen de refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex w-full h-[calc(100vh-8rem)] bg-slate-950 overflow-hidden">
@@ -552,61 +675,66 @@ export function PosTerminal({
 
       {/* ===== Derecha (~66%): Catálogo ===== */}
       <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
-        {/* Bloque superior: almuerzos del día (acceso rápido) + categorías */}
-        <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex flex-col gap-2">
+        <div className="flex-1 overflow-y-auto">
+          {/* Almuerzos del día (acceso rápido): scrollean junto al catálogo */}
           {!isAfter16 && catalog.menuItems.length > 0 && (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {catalog.menuItems.map((menuItem) => (
-                  <button
-                    key={menuItem.id}
-                    type="button"
-                    title={`Agregar ${menuItem.name}`}
-                    onClick={() =>
-                      cart.addMenuItem({
-                        menuItemId: menuItem.id,
-                        name: menuItem.name,
-                        category: menuItem.category,
-                        unitPrice: menuItem.price,
-                        optionName: null,
-                      })
-                    }
-                    className={`${CHIP_BASE} ${CHIP.amber} whitespace-normal break-words leading-tight`}
-                  >
-                    {menuItem.name}
-                    <span className="ml-1 text-xs font-semibold text-amber-300">
-                      {formatPrice(menuItem.price)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {/* Línea separadora entre almuerzos y categorías */}
-              <div className="h-px bg-slate-800" />
-            </>
+            <div className="flex flex-wrap gap-2 px-4 pt-3">
+              {menuDayItems.map((menuItem) => (
+                <button
+                  key={menuItem.id}
+                  type="button"
+                  title={`Agregar ${menuItem.name}`}
+                  onClick={() =>
+                    cart.addMenuItem({
+                      menuItemId: menuItem.id,
+                      name: menuItem.name,
+                      category: menuItem.category,
+                      unitPrice: menuItem.price,
+                      optionName: null,
+                    })
+                  }
+                  className={`${CHIP_BASE} ${CHIP.amber} whitespace-normal break-words leading-tight`}
+                >
+                  {menuItem.name}
+                  <span className="ml-1 text-xs font-semibold text-amber-300">
+                    {formatPrice(menuItem.price)}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            {catalogPanes.map((pane) => {
-              const selected = pane.key === activePane;
-              return (
-                <button
-                  key={pane.key}
-                  type="button"
-                  onClick={() => switchPane(pane.key)}
-                  className={`${CHIP_BASE} ${
-                    selected ? CHIP.selected : CHIP.idle
-                  }`}
-                >
-                  {pane.label}
-                </button>
-              );
-            })}
+          {/* Barra de categorías fija: pega arriba al scrollear y envuelve en varias
+              filas para que todas queden visibles sin necesidad de scroll horizontal */}
+          <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
+            <div className="flex flex-wrap gap-2 px-4">
+              {catalogPanes.map((pane) => {
+                const selected = pane.key === activePane;
+                const accent = PANE_ACCENT[pane.key];
+                const cls = accent
+                  ? selected
+                    ? accent.selected
+                    : accent.idle
+                  : selected
+                    ? CHIP.selected
+                    : CHIP.idle;
+                return (
+                  <button
+                    key={pane.key}
+                    type="button"
+                    onClick={() => switchPane(pane.key)}
+                    className={`${CHIP_BASE} shrink-0 ${cls}`}
+                  >
+                    {pane.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {/* Bloque inferior: productos de la categoría seleccionada */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="max-w-4xl mx-auto flex flex-col gap-4">
+          {/* Bloque inferior: productos de la categoría seleccionada */}
+          <div className="px-4 py-4">
+            <div className="max-w-4xl mx-auto flex flex-col gap-4">
             {isBubas && (
               <>
                 {/* Subcategorías de Bubble Drinks (Especiales / Con agua / Con leche) */}
@@ -823,6 +951,7 @@ export function PosTerminal({
                 )}
               </section>
             )}
+          </div>
           </div>
         </div>
       </div>

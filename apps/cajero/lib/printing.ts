@@ -138,6 +138,7 @@ interface ComandaItem {
   bobaTypeName: string | null;
   menuItemName: string | null;
   menuItemOptionName: string | null;
+  menuItemDetail: string | null;
   unitPrice: number;
   quantity: number;
   toppings: { toppingName: string; unitPrice: number }[];
@@ -256,6 +257,10 @@ export function formatComanda(order: ComandaOrder): string {
           item.bobaTypeName ?? "",
         )}`;
     lines.push(pricedRow(baseLabel, item.unitPrice * item.quantity));
+    // Detalle elegido por el cajero: salsas de las Alitas Mixtas, etc.
+    if (item.menuItemDetail) {
+      lines.push(...wrap(`  ${item.menuItemDetail}`, WIDTH));
+    }
     const toppingGroups = new Map<string, { count: number; total: number }>();
     for (const topping of item.toppings) {
       const g = toppingGroups.get(topping.toppingName) ?? { count: 0, total: 0 };

@@ -28,7 +28,12 @@ const CATEGORIES = FlavorCategoryList;
 
 /** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
 const BUBAS_PANE = "BUBAS";
-type CatalogPane = MenuCategoryType | typeof BUBAS_PANE;
+// Sandwiches y Paninis se fusionan en un solo botón de la barra.
+const SANDWICHES_PANE = "SANDWICHES";
+type CatalogPane =
+  | MenuCategoryType
+  | typeof BUBAS_PANE
+  | typeof SANDWICHES_PANE;
 
 /** Orden de lectura de la carta en la barra de categorías: Milanesas primero
  *  (categoría seleccionada por defecto), luego platos principales, entradas,
@@ -36,7 +41,6 @@ type CatalogPane = MenuCategoryType | typeof BUBAS_PANE;
 const MENU_PANE_ORDER: MenuCategoryType[] = [
   MenuCategory.MILANESA,
   MenuCategory.SANDWICH,
-  MenuCategory.PANINI,
   MenuCategory.HAMBURGUESA,
   MenuCategory.LOMO,
   MenuCategory.POLLO,
@@ -60,7 +64,35 @@ const PANE_LABEL_SHORT: Partial<Record<CatalogPane, string>> = {
   [MenuCategory.WAFFLE]: "Wafles",
   [MenuCategory.KIDS]: "Kids",
   [MenuCategory.POSTRE]: "Heladería",
+  [MenuCategory.COMPARTIR]: "Compartir",
 };
+
+/** Títulos propios de los panes fusionados (no son categorías de la carta). */
+const PANE_TITLE: Partial<Record<CatalogPane, string>> = {
+  [SANDWICHES_PANE]: "Sandwiches",
+};
+
+// ===== Alitas: sabores simples y salsas de las alitas mixtas =====
+// Las alitas simples vienen bañadas en su salsa (Miel y Mostaza, Barbacoa, …);
+// las Alitas Mixtas obligan a elegir 2 salsas (6/8 unidades) o 3 (12 unidades).
+const ALITA_SAUCES = [
+  "Miel y Mostaza",
+  "Barbacoa",
+  "Barbacoa Picante",
+  "Buffalo",
+  "Agridulce",
+  "Crocantes",
+];
+
+function isMixtasItem(item: Pick<MenuItemView, "name">): boolean {
+  return /mixtas/i.test(item.name);
+}
+
+/** Salsas exigidas para las Alitas Mixtas según las unidades del tamaño. */
+function requiredSauces(unitsLabel: string): number {
+  const units = Number(unitsLabel.match(/^(\d+)/)?.[1]) || 0;
+  return units >= 12 ? 3 : 2;
+}
 
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
@@ -169,6 +201,10 @@ export function PosTerminal({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
+  const [variantSize, setVariantSize] = useState<
+    MenuItemView["options"][number] | null
+  >(null);
+  const [variantSauces, setVariantSauces] = useState<string[]>([]);
   const [isAfter16, setIsAfter16] = useState(false);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
@@ -179,6 +215,8 @@ export function PosTerminal({
     setSelectedFlavorId(null);
     setToppingIds([]);
     setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
     setBubaCategory(firstActiveCategory(catalog));
     setActivePane(defaultPane(catalog));
   }, [catalog]);
@@ -272,6 +310,8 @@ export function PosTerminal({
   function switchPane(pane: CatalogPane) {
     setActivePane(pane);
     setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
   }
 
   function toggleTopping(id: string) {
@@ -367,6 +407,8 @@ export function PosTerminal({
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
   }
 
   const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
@@ -375,13 +417,21 @@ export function PosTerminal({
   // Productos ordenados por precio de mayor a menor (en toda la carta).
   const cartaItems = isCartaPane
     ? catalog.cartaItems
-        .filter((i) => i.category === activePane)
+        .filter((i) =>
+          activePane === SANDWICHES_PANE
+            ? i.category === MenuCategory.SANDWICH ||
+              i.category === MenuCategory.PANINI
+            : i.category === activePane,
+        )
         .sort((a, b) => b.price - a.price)
     : [];
   // Menú del Día también por precio de mayor a menor.
   const menuDayItems = [...catalog.menuItems].sort(
     (a, b) => b.price - a.price,
   );
+  // Menú del Día con retícula fija de 5 columnas, misma que la barra de
+  // categorías, para que ambas grillas queden alineadas.
+  const menuDayGridClass = "grid grid-cols-5 gap-2";
 
   // Botones del bloque superior: las categorías de la carta con productos y
   // Bubble Drinks como categoría fija. El Menú del Día queda fijo en la parte
@@ -390,6 +440,17 @@ export function PosTerminal({
   const catalogPanes = useMemo(() => {
     const panes: { key: CatalogPane; label: string }[] = [];
     for (const c of MENU_PANE_ORDER) {
+      if (c === MenuCategory.SANDWICH) {
+        const merged = catalog.cartaItems.some(
+          (i) =>
+            i.category === MenuCategory.SANDWICH ||
+            i.category === MenuCategory.PANINI,
+        );
+        if (merged) {
+          panes.push({ key: SANDWICHES_PANE, label: PANE_TITLE[SANDWICHES_PANE]! });
+        }
+        continue;
+      }
       if (catalog.cartaItems.some((i) => i.category === c)) {
         panes.push({ key: c, label: PANE_LABEL_SHORT[c] ?? MenuCategoryLabel[c] });
       }
@@ -398,11 +459,13 @@ export function PosTerminal({
     return panes;
   }, [catalog]);
 
-  // Tocar un plato de la carta: si tiene variantes (Pollo/Res) se abre el
-  // selector con sus precios; si no, se agrega directo con su precio fijo.
+  // Tocar un plato de la carta: si tiene variantes (Pollo/Res, Unidades de
+  // alitas) se abre el selector; si no, se agrega directo con su precio fijo.
   function tapCartaItem(item: MenuItemView) {
     if (item.options.length > 0) {
       setVariantItem(item);
+      setVariantSize(null);
+      setVariantSauces([]);
       return;
     }
     setVariantItem(null);
@@ -415,8 +478,15 @@ export function PosTerminal({
     });
   }
 
-  function confirmVariant(option: MenuItemView["options"][number]) {
+  // Variantes de alitas: tocar un tamaño en las simples agrega directo; en las
+  // Mixtas deja el tamaño marcado y continúa en la pantalla para elegir salsas.
+  function tapVariantSize(option: MenuItemView["options"][number]) {
     if (!variantItem) return;
+    if (isMixtasItem(variantItem)) {
+      setVariantSize(option);
+      setVariantSauces([]);
+      return;
+    }
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
@@ -425,6 +495,32 @@ export function PosTerminal({
       optionName: option.name,
     });
     setVariantItem(null);
+  }
+
+  // Confirmar las Alitas Mixtas: exige exactamente las salsas requeridas (2 en
+  // 6/8 unidades, 3 en 12) antes de agregar la línea a la orden.
+  function confirmMixtas() {
+    if (!variantItem || !variantSize) return;
+    if (variantSauces.length !== requiredSauces(variantSize.name)) return;
+    cart.addMenuItem({
+      menuItemId: variantItem.id,
+      name: variantItem.name,
+      category: variantItem.category,
+      unitPrice: variantSize.price,
+      optionName: variantSize.name,
+      detail: `Salsas: ${variantSauces.join(", ")}`,
+    });
+    setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
+  }
+
+  function toggleVariantSauce(sauce: string) {
+    setVariantSauces((current) =>
+      current.includes(sauce)
+        ? current.filter((s) => s !== sauce)
+        : [...current, sauce],
+    );
   }
 
   const selectedSize: Size | undefined = size;
@@ -563,6 +659,11 @@ export function PosTerminal({
                       </>
                     )}
                   </p>
+                  {item.kind === "MENU_ITEM" && item.detail && (
+                    <p className="text-xs font-semibold text-emerald-300">
+                      {item.detail}
+                    </p>
+                  )}
                   {item.kind === "DRINK" && item.toppings.length > 0 && (
                     <p className="text-slate-400">
                       + {item.toppings.map((t) => t.name).join(", ")}
@@ -676,9 +777,10 @@ export function PosTerminal({
       {/* ===== Derecha (~66%): Catálogo ===== */}
       <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
-          {/* Almuerzos del día (acceso rápido): scrollean junto al catálogo */}
+          {/* Almuerzos del día (acceso rápido): tarjetas doradas con el mismo bloque
+            uniforme que la grilla de la carta para una retícula simétrica */}
           {!isAfter16 && catalog.menuItems.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 pt-3">
+            <div className={`${menuDayGridClass} px-4 pt-3`}>
               {menuDayItems.map((menuItem) => (
                 <button
                   key={menuItem.id}
@@ -693,10 +795,12 @@ export function PosTerminal({
                       optionName: null,
                     })
                   }
-                  className={`${CHIP_BASE} ${CHIP.amber} whitespace-normal break-words leading-tight`}
+                  className="flex h-[70px] flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
                 >
-                  {menuItem.name}
-                  <span className="ml-1 text-xs font-semibold text-amber-300">
+                  <span className="line-clamp-2 text-xs font-semibold leading-tight text-amber-100">
+                    {menuItem.name}
+                  </span>
+                  <span className="self-end font-mono text-sm font-bold text-amber-300">
                     {formatPrice(menuItem.price)}
                   </span>
                 </button>
@@ -704,10 +808,10 @@ export function PosTerminal({
             </div>
           )}
 
-          {/* Barra de categorías fija: pega arriba al scrollear y envuelve en varias
-              filas para que todas queden visibles sin necesidad de scroll horizontal */}
+          {/* Barra de categorías fija: pega arriba al scrollear y usa la misma
+              retícula de 5 columnas que los almuerzos para quedar alineada */}
           <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
-            <div className="flex flex-wrap gap-2 px-4">
+            <div className="grid grid-cols-5 justify-items-stretch gap-2 px-4">
               {catalogPanes.map((pane) => {
                 const selected = pane.key === activePane;
                 const accent = PANE_ACCENT[pane.key];
@@ -723,7 +827,7 @@ export function PosTerminal({
                     key={pane.key}
                     type="button"
                     onClick={() => switchPane(pane.key)}
-                    className={`${CHIP_BASE} shrink-0 ${cls}`}
+                    className={`${CHIP_BASE} ${cls}`}
                   >
                     {pane.label}
                   </button>
@@ -889,7 +993,8 @@ export function PosTerminal({
             {isCartaPane && (
               <section className="space-y-2">
                 <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white">
-                  {MenuCategoryLabel[activePane as MenuCategoryType]}
+                  {PANE_TITLE[activePane] ??
+                    MenuCategoryLabel[activePane as MenuCategoryType]}
                 </h3>
 
                 {/* Grilla de platos de la categoría seleccionada (CSS Grid táctil:
@@ -919,30 +1024,97 @@ export function PosTerminal({
                   ))}
                 </div>
 
-                {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
+                {/* Selector de variante (Pollo/Res, Unidades de alitas): se abre
+                    al tocar un plato con opciones. Las Alitas Mixtas exigen
+                    elegir el tamaño y luego marcar las salsas correspondientes. */}
                 {variantItem && (
-                  <div className="rounded-xl border border-primary/40 bg-slate-900/80 p-4 space-y-2 shadow-lg shadow-black/20">
+                  <div className="rounded-xl border border-primary/40 bg-slate-900/80 p-4 space-y-3 shadow-lg shadow-black/20">
                     <p className="text-sm font-bold text-white capitalize">
-                      {variantItem.name} — elige variante
+                      {variantItem.name} — elige tamaño
                     </p>
                     <div className="grid grid-cols-2 gap-2">
-                      {variantItem.options.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => confirmVariant(option)}
-                          className="h-12 rounded-xl border border-slate-600 bg-slate-800 text-sm font-semibold text-white transition-all active:scale-95 hover:border-primary hover:bg-slate-700"
-                        >
-                          <span className="block capitalize">{option.name}</span>
-                          <span className="block text-xs font-semibold text-slate-300">
-                            {formatPrice(option.price)}
-                          </span>
-                        </button>
-                      ))}
+                      {[...variantItem.options]
+                        .sort(
+                          (a, b) =>
+                            Number(a.name.match(/^(\d+)/)?.[1] ?? 0) -
+                            Number(b.name.match(/^(\d+)/)?.[1] ?? 0),
+                        )
+                        .map((option) => {
+                          const active = variantSize?.id === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => tapVariantSize(option)}
+                              className={`h-12 rounded-xl border text-sm font-semibold text-white transition-all active:scale-95 ${
+                                active
+                                  ? "border-primary bg-primary"
+                                  : "border-slate-600 bg-slate-800 hover:border-primary hover:bg-slate-700"
+                              }`}
+                            >
+                              <span className="block capitalize">
+                                {option.name}
+                              </span>
+                              <span className="block text-xs font-semibold text-slate-300">
+                                {formatPrice(option.price)}
+                              </span>
+                            </button>
+                          );
+                        })}
                     </div>
+
+                    {isMixtasItem(variantItem) && variantSize && (
+                      <div className="rounded-lg bg-slate-950/60 p-3 space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-widest text-white">
+                          Salsas a elección
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          Marca{" "}
+                          <span className="font-bold text-amber-300">
+                            {requiredSauces(variantSize.name)}
+                          </span>{" "}
+                          salsas ({variantSauces.length}/
+                          {requiredSauces(variantSize.name)})
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {ALITA_SAUCES.map((sauce) => {
+                            const on = variantSauces.includes(sauce);
+                            return (
+                              <button
+                                key={sauce}
+                                type="button"
+                                onClick={() => toggleVariantSauce(sauce)}
+                                className={`h-9 rounded-full border px-3 text-xs font-semibold transition-all active:scale-95 ${
+                                  on
+                                    ? "border-amber-400 bg-amber-400/20 text-amber-100"
+                                    : "border-slate-600 bg-slate-800 text-slate-300 hover:border-amber-400/60"
+                                }`}
+                              >
+                                {sauce}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {variantSauces.length ===
+                          requiredSauces(variantSize.name) && (
+                          <button
+                            type="button"
+                            onClick={confirmMixtas}
+                            className="mt-2 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600"
+                          >
+                            Confirmar · {formatPrice(variantSize.price)}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => setVariantItem(null)}
+                      onClick={() => {
+                        setVariantItem(null);
+                        setVariantSize(null);
+                        setVariantSauces([]);
+                      }}
                       className="w-full rounded-lg pt-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide transition-colors hover:text-white"
                     >
                       Cancelar

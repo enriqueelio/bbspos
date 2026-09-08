@@ -193,7 +193,9 @@ export interface DrinkCartItem {
 }
 
 /** Platillo agregado con precio fijo. Si tiene variante (Pollo/Res) se guarda
- *  el nombre de la opción elegida y su precio como unitPrice. */
+ *  el nombre de la opción elegida y su precio como unitPrice. `detail` guarda
+ *  el detalle elegido por el cajero (p.ej. las salsas de las Alitas Mixtas)
+ *  para imprimirlo con claridad en la comanda. */
 export interface MenuItemCartItem {
   kind: "MENU_ITEM";
   id: string;
@@ -202,6 +204,7 @@ export interface MenuItemCartItem {
   category: MenuCategory;
   unitPrice: number;
   optionName: string | null;
+  detail?: string | null;
   quantity: number;
 }
 

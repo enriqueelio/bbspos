@@ -109,6 +109,7 @@ export async function createPosOrder(
           menuItemName: item.name,
           menuItemCategory: item.category,
           menuItemOptionName: item.optionName,
+          menuItemDetail: item.detail,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
         },

@@ -118,6 +118,7 @@ export async function createPosOrder(
           menuItemName: item.name,
           menuItemCategory: item.category,
           menuItemOptionName: item.optionName,
+          menuItemDetail: item.detail,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
         },
@@ -182,6 +183,7 @@ export async function createPosOrder(
               bobaTypeName: item.bobaTypeName,
               menuItemName: item.menuItemName,
               menuItemOptionName: item.menuItemOptionName,
+              menuItemDetail: item.menuItemDetail,
               unitPrice: item.unitPrice,
               quantity: item.quantity,
               toppings: item.toppings.map((t) => ({

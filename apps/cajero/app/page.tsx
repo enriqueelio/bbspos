@@ -194,51 +194,50 @@ function Header({
   const isMesero = role === "MESERO";
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-        <div className="flex items-center gap-2 font-bold">
+      <div className="flex items-center gap-3 border-b pb-4">
+        <div className="flex shrink-0 items-center gap-2 font-bold">
           <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700" />
           <span>BBSPOS Cajero</span>
         </div>
-        <div className="flex items-center gap-3">
+        {!isMesero && (
+          <nav className="flex flex-1 items-center justify-center gap-2">
+            <Link
+              href="/?tab=preparar"
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                tab === "preparar"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/?tab=venta"
+              className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
+                tab === "venta"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              Nueva Venta
+            </Link>
+            <Link
+              href="/?tab=reporte"
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                tab === "reporte"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              Reporte del día
+            </Link>
+          </nav>
+        )}
+        <div className="flex shrink-0 items-center gap-3">
           <span className="text-sm text-muted-foreground">{name}</span>
           <SignOutButton />
         </div>
       </div>
-      {/* El mesero solo toma órdenes: no muestra navegación a otras vistas. */}
-      {!isMesero && (
-        <nav className="flex gap-2">
-          <Link
-            href="/?tab=preparar"
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              tab === "preparar"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent"
-            }`}
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/?tab=venta"
-            className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
-              tab === "venta"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent"
-            }`}
-          >
-            Nueva Venta
-          </Link>
-          <Link
-            href="/?tab=reporte"
-            className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              tab === "reporte"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-accent"
-            }`}
-          >
-            Reporte del día
-          </Link>
-        </nav>
-      )}
     </>
   );
 }

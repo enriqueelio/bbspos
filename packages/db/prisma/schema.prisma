@@ -200,6 +200,7 @@ model OrderItem {
   menuItemName     String?
   menuItemCategory MenuCategory?
   menuItemOptionName String?
+  menuItemDetail   String?
   unitPrice        Int
   quantity         Int
   toppings         OrderItemTopping[]

@@ -51,16 +51,54 @@ function clean(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function parseAlitas(header: string, name: string, price: number): ParsedItem {
-  const m = name.match(/(\d+)\s*Unidades?/i);
-  const n = m ? m[1] : name;
-  return {
-    name: header === "ALITAS MIXTAS" ? `Alitas Mixtas (${n} Unidades)` : `Alitas (${n} Unidades)`,
+/** Sabores (salsas) de las alitas simples. Cada uno es un plato de la carta
+ *  con sus tamaños como variantes: 6 Unidades (base) y 8 Unidades. */
+const ALITA_FLAVORS = [
+  "Miel y Mostaza",
+  "Barbacoa",
+  "Barbacoa Picante",
+  "Buffalo",
+  "Agridulce",
+  "Crocantes",
+] as const;
+
+interface AlitaSizes {
+  header: "ALITAS" | "ALITAS MIXTAS";
+  sizes: { units: string; price: number }[];
+}
+
+/** Convierte una sección de alitas del menú en platillos agrupados por sabor.
+ *  ALITAS: un plato por salsa con 6/8 Unidades como opciones de precio.
+ *  ALITAS MIXTAS: un solo plato con 6/8/12 Unidades y salsas a elección. */
+function pushAlitasGroup(items: ParsedItem[], group: AlitaSizes) {
+  if (group.sizes.length === 0) return;
+  if (group.header === "ALITAS") {
+    for (const flavor of ALITA_FLAVORS) {
+      items.push({
+        name: `Alitas ${flavor}`,
+        category: PrismaMenuCategory.ALITA,
+        price: Math.min(...group.sizes.map((s) => s.price)),
+        description:
+          "Acompañadas de papas fritas y salsa de la casa.",
+        options: group.sizes.map((s) => ({
+          name: `${s.units} Unidades`,
+          price: s.price,
+        })),
+      });
+    }
+    return;
+  }
+  items.push({
+    name: "Alitas Mixtas",
     category: PrismaMenuCategory.ALITA,
-    price,
-    description: header === "ALITAS MIXTAS" ? "2 salsas a elecci\u00f3n. Acompa\u00f1adas de papas fritas y salsa de la casa." : "",
-    options: [],
-  };
+    price: Math.min(...group.sizes.map((s) => s.price)),
+    description:
+      "2 salsas a elección (6 y 8 unidades) o 3 salsas (12 unidades). Acompañadas de papas fritas y salsa de la casa.",
+    options: group.sizes.map((s) => ({
+      name: `${s.units} Unidades`,
+      price: s.price,
+    })),
+  });
 }
 
 const EXTRAS_ITEMS: ParsedItem[] = [
@@ -101,6 +139,16 @@ function parseFile(): ParsedItem[] {
   const items: ParsedItem[] = [];
   let currentCategory: PrismaMenuCategory | null = null;
   let currentHeader: string | null = null;
+  // Las alitas se acumulan por sección: los tamaños vienen en líneas separadas
+  // y se agrupan por sabor al terminar la sección (siguiente encabezado o fin).
+  let pendingAlitas: AlitaSizes | null = null;
+
+  const flushAlitas = () => {
+    if (pendingAlitas) {
+      pushAlitasGroup(items, pendingAlitas);
+      pendingAlitas = null;
+    }
+  };
 
   for (const raw of lines) {
     const line = raw.trim();
@@ -110,7 +158,8 @@ function parseFile(): ParsedItem[] {
     if (line.startsWith("-")) {
       if (!currentCategory) continue;
       const isMilanesas = currentHeader === "MILANESAS";
-      const isAlitas = currentHeader === "ALITAS" || currentHeader === "ALITAS MIXTAS";
+      const isAlitas =
+        currentHeader === "ALITAS" || currentHeader === "ALITAS MIXTAS";
 
       if (isMilanesas) {
         const dual = line.match(MILANESA_DUAL_RE);
@@ -148,12 +197,17 @@ function parseFile(): ParsedItem[] {
       if (!m) continue;
       const name = clean(m[1]);
       const price = Number(m[2]);
-      const description = clean(m[3].replace(/^[:.\s]+/, ""));
 
       if (isAlitas) {
-        items.push(parseAlitas(currentHeader!, name, price));
+        const units = m[1].match(/(\d+)\s*Unidades?/i)?.[1] ?? m[1];
+        if (!pendingAlitas) {
+          pendingAlitas = { header: currentHeader as AlitaSizes["header"], sizes: [] };
+        }
+        pendingAlitas.sizes.push({ units, price });
         continue;
       }
+
+      const description = clean(m[3].replace(/^[:.\s]+/, ""));
 
       items.push({
         name,
@@ -167,16 +221,20 @@ function parseFile(): ParsedItem[] {
 
     const matched = HEADER_TO_CATEGORY[line];
     if (matched) {
+      flushAlitas();
       currentCategory = matched;
       currentHeader = line;
       continue;
     }
     if (line.startsWith("PANCAKES")) {
+      flushAlitas();
       currentCategory = PrismaMenuCategory.PANCAKE;
       currentHeader = "PANCAKES";
       continue;
     }
   }
+
+  flushAlitas();
 
   return items;
 }
@@ -244,6 +302,15 @@ async function main() {
   const parsed = parseFile();
   const withExtras = [...parsed, ...EXTRAS_ITEMS];
 
+  // Las alitas pasaron de "Alitas (N Unidades)" genéricas a platillos por
+  // sabor con los tamaños como variantes: se descartan los nombres antiguos.
+  const removedAlitas = await prisma.menuItem.deleteMany({
+    where: {
+      category: PrismaMenuCategory.ALITA,
+      name: { endsWith: "Unidades)" },
+    },
+  });
+
   let created = 0;
   let updated = 0;
   for (const item of withExtras) {
@@ -261,6 +328,7 @@ async function main() {
   const optionCount = await prisma.menuItemOption.count();
 
   console.log(`Items parseados del txt: ${parsed.length}`);
+  console.log(`Alitas genéricas antiguas eliminadas: ${removedAlitas.count}`);
   console.log(`Creados: ${created} | Actualizados: ${updated}`);
   console.log(`==> Carta (no ALMUERZO) en DB: ${cartaCount} (disponibles: ${availableCount})`);
 
@@ -281,6 +349,15 @@ async function main() {
   });
   for (const m of milanesas) {
     console.log(`  Milanesa ${m.name}: ${m.options.map((o) => `${o.name} ${o.price}`).join(" / ")}`);
+  }
+
+  const alitas = await prisma.menuItem.findMany({
+    where: { category: PrismaMenuCategory.ALITA },
+    include: { options: true },
+    orderBy: { name: "asc" },
+  });
+  for (const a of alitas) {
+    console.log(`  Alita ${a.name}: ${a.options.map((o) => `${o.name} ${o.price}`).join(" / ")}`);
   }
 }
 

@@ -28,6 +28,9 @@ export interface AddPosMenuItemInput {
   category: MenuCategory;
   unitPrice: number;
   optionName: string | null;
+  /** Detalle elegido por el cajero (p.ej. salsas de las Alitas Mixtas); se
+   *  imprime en la comanda y se guarda en el pedido. */
+  detail?: string | null;
 }
 
 export interface PosCartSnapshot {
@@ -50,6 +53,7 @@ function normalizeStoredItem(item: unknown): CartItem | null {
     return {
       ...(raw as object),
       optionName: "optionName" in raw ? raw.optionName : null,
+      detail: "detail" in raw ? raw.detail : null,
     } as CartItem;
   }
   return { kind: "DRINK", ...(raw as object) } as CartItem;
@@ -130,7 +134,9 @@ export function addPosItem(input: AddPosItemInput) {
 }
 
 export function addPosMenuItem(input: AddPosMenuItemInput) {
-  const id = `menu-item-${input.menuItemId}-${input.optionName ?? ""}`;
+  const id = `menu-item-${input.menuItemId}-${input.optionName ?? ""}-${
+    input.detail ?? ""
+  }`;
   const existing = items.find((i) => i.id === id);
   if (existing) {
     items = items.map((i) =>
@@ -145,6 +151,7 @@ export function addPosMenuItem(input: AddPosMenuItemInput) {
       category: input.category,
       unitPrice: input.unitPrice,
       optionName: input.optionName,
+      detail: input.detail ?? null,
       quantity: 1,
     };
     items = [...items, item];

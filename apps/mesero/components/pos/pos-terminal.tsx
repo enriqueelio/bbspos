@@ -22,6 +22,28 @@ import { usePosCart } from "./pos-cart-store";
 
 const CATEGORIES = FlavorCategoryList;
 
+// ===== Alitas: sabores simples y salsas de las alitas mixtas =====
+// Las alitas simples vienen bañadas en su salsa; las Alitas Mixtas obligan a
+// elegir 2 salsas (6/8 unidades) o 3 (12 unidades) antes de confirmar.
+const ALITA_SAUCES = [
+  "Miel y Mostaza",
+  "Barbacoa",
+  "Barbacoa Picante",
+  "Buffalo",
+  "Agridulce",
+  "Crocantes",
+];
+
+function isMixtasItem(item: Pick<MenuItemView, "name">): boolean {
+  return /mixtas/i.test(item.name);
+}
+
+/** Salsas exigidas para las Alitas Mixtas según las unidades del tamaño. */
+function requiredSauces(unitsLabel: string): number {
+  const units = Number(unitsLabel.match(/^(\d+)/)?.[1]) || 0;
+  return units >= 12 ? 3 : 2;
+}
+
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
     CATEGORIES.find((c) =>
@@ -56,6 +78,10 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     null,
   );
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
+  const [variantSize, setVariantSize] = useState<
+    MenuItemView["options"][number] | null
+  >(null);
+  const [variantSauces, setVariantSauces] = useState<string[]>([]);
 
   // Al entrar (montar) se dejan los selectores en blanco para arrancar
   // un pedido nuevo sin arrastrar selecciones.
@@ -65,6 +91,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setSelectedFlavorId(null);
     setToppingIds([]);
     setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
     setCartaCategory(firstCartaCategory(catalog));
     setActiveCategory(firstActiveCategory(catalog));
   }, [catalog]);
@@ -243,6 +271,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
   }
 
   const cartaItems =
@@ -253,6 +283,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   function tapCartaItem(item: MenuItemView) {
     if (item.options.length > 0) {
       setVariantItem(item);
+      setVariantSize(null);
+      setVariantSauces([]);
       return;
     }
     cart.addMenuItem({
@@ -264,8 +296,15 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     });
   }
 
-  function confirmVariant(option: MenuItemView["options"][number]) {
+  // Variantes de alitas: tocar un tamaño en las simples agrega directo; en las
+  // Mixtas deja el tamaño marcado y continúa para elegir las salsas.
+  function tapVariantSize(option: MenuItemView["options"][number]) {
     if (!variantItem) return;
+    if (isMixtasItem(variantItem)) {
+      setVariantSize(option);
+      setVariantSauces([]);
+      return;
+    }
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
@@ -274,6 +313,32 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       optionName: option.name,
     });
     setVariantItem(null);
+  }
+
+  // Confirmar las Alitas Mixtas: exige exactamente las salsas requeridas (2 en
+  // 6/8 unidades, 3 en 12) antes de agregar la línea a la orden.
+  function confirmMixtas() {
+    if (!variantItem || !variantSize) return;
+    if (variantSauces.length !== requiredSauces(variantSize.name)) return;
+    cart.addMenuItem({
+      menuItemId: variantItem.id,
+      name: variantItem.name,
+      category: variantItem.category,
+      unitPrice: variantSize.price,
+      optionName: variantSize.name,
+      detail: `Salsas: ${variantSauces.join(", ")}`,
+    });
+    setVariantItem(null);
+    setVariantSize(null);
+    setVariantSauces([]);
+  }
+
+  function toggleVariantSauce(sauce: string) {
+    setVariantSauces((current) =>
+      current.includes(sauce)
+        ? current.filter((s) => s !== sauce)
+        : [...current, sauce],
+    );
   }
 
   const selectedSize: Size | undefined = size;
@@ -372,6 +437,11 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                       {item.kind === "MENU_ITEM" && item.optionName && (
                         <span className="ml-1 font-normal text-slate-400">
                           ·{item.optionName}
+                        </span>
+                      )}
+                      {item.kind === "MENU_ITEM" && item.detail && (
+                        <span className="ml-1 font-normal text-emerald-300">
+                          [{item.detail}]
                         </span>
                       )}
                     </p>
@@ -554,27 +624,91 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                 </div>
               )}
 
-              {/* Selector de variante (Pollo/Res): se abre al tocar un plato con opciones */}
+              {/* Selector de variante (Pollo/Res, Unidades de alitas): las Alitas Mixtas
+                  exigen elegir tamaño y luego marcar las salsas correspondientes. */}
               {variantItem && (
                 <div className="rounded-xl border border-primary/40 bg-slate-700 p-4 space-y-3">
                   <p className="text-base font-bold text-white">
-                    {variantItem.name} — elige variante
+                    {variantItem.name} — elige tamaño
                   </p>
                   <div className="grid grid-cols-2 gap-3">
-                    {variantItem.options.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => confirmVariant(option)}
-                        className="h-14 rounded-xl border-2 border-slate-600 bg-slate-600 text-base font-bold text-white transition-transform active:scale-95 hover:border-primary hover:bg-slate-500"
-                      >
-                        {option.name} · {formatPrice(option.price)}
-                      </button>
-                    ))}
+                    {[...variantItem.options]
+                      .sort(
+                        (a, b) =>
+                          Number(a.name.match(/^(\d+)/)?.[1] ?? 0) -
+                          Number(b.name.match(/^(\d+)/)?.[1] ?? 0),
+                      )
+                      .map((option) => {
+                        const active = variantSize?.id === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => tapVariantSize(option)}
+                            className={`h-14 rounded-xl border-2 text-base font-bold text-white transition-transform active:scale-95 ${
+                              active
+                                ? "border-primary bg-primary"
+                                : "border-slate-600 bg-slate-600 hover:border-primary hover:bg-slate-500"
+                            }`}
+                          >
+                            {option.name} · {formatPrice(option.price)}
+                          </button>
+                        );
+                      })}
                   </div>
+
+                  {isMixtasItem(variantItem) && variantSize && (
+                    <div className="rounded-lg bg-slate-900/60 p-3 space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-white">
+                        Salsas a elección
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Marca{" "}
+                        <span className="font-bold text-amber-300">
+                          {requiredSauces(variantSize.name)}
+                        </span>{" "}
+                        salsas ({variantSauces.length}/
+                        {requiredSauces(variantSize.name)})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {ALITA_SAUCES.map((sauce) => {
+                          const on = variantSauces.includes(sauce);
+                          return (
+                            <button
+                              key={sauce}
+                              type="button"
+                              onClick={() => toggleVariantSauce(sauce)}
+                              className={`h-9 rounded-full border px-3 text-xs font-semibold transition-transform active:scale-95 ${
+                                on
+                                  ? "border-amber-400 bg-amber-400/20 text-amber-100"
+                                  : "border-slate-600 bg-slate-800 text-slate-300 hover:border-amber-400/60"
+                              }`}
+                            >
+                              {sauce}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {variantSauces.length ===
+                        requiredSauces(variantSize.name) && (
+                        <button
+                          type="button"
+                          onClick={confirmMixtas}
+                          className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-white transition-colors hover:bg-emerald-500"
+                        >
+                          Confirmar · {formatPrice(variantSize.price)}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <button
                     type="button"
-                    onClick={() => setVariantItem(null)}
+                    onClick={() => {
+                      setVariantItem(null);
+                      setVariantSize(null);
+                      setVariantSauces([]);
+                    }}
                     className="w-full text-center text-sm font-semibold text-slate-400 hover:text-white"
                   >
                     Cancelar

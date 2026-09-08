@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Printer } from "lucide-react";
 import {
   Badge,
   Button,
@@ -9,6 +10,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
 } from "@bbspos/ui";
 import {
   formatOrderCode,
@@ -248,18 +250,28 @@ function ReprintButton({
   clock: ReturnType<typeof useQueueClock>;
 }) {
   return (
-    <Button
-      variant="secondary"
-      className="h-10 w-full"
+    <button
+      type="button"
+      title="Reimprimir comanda"
+      aria-label="Reimprimir comanda"
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 text-slate-300 transition-colors hover:border-slate-400 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
       disabled={clock.busyId === order.id}
-      onClick={() => clock.reprint(order.id)}
+      onClick={(e) => {
+        e.stopPropagation();
+        clock.reprint(order.id);
+      }}
     >
-      {clock.busyId === order.id ? "…" : "Reimprimir"}
-    </Button>
+      {clock.busyId === order.id ? (
+        <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+      ) : (
+        <Printer className="h-4 w-4" />
+      )}
+    </button>
   );
 }
 
-function ChargeGrid({
+/** Botón único de cobro con menú emergente de métodos de pago. */
+function ChargeButton({
   order,
   clock,
   onSplit,
@@ -270,49 +282,91 @@ function ChargeGrid({
   onSplit: () => void;
   onPension: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Cierra el menú al hacer clic fuera de él.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  // Cierra el menú con Escape.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  function pay(method: string) {
+    setOpen(false);
+    clock.run(order.id, async () => {
+      await acceptOrder(order.id, method);
+    });
+  }
+
   return (
-    <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-5">
+    <div ref={ref} className="relative">
       <Button
-        variant="default"
-        className="h-14 w-full text-lg font-bold text-white bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-600 shadow-lg shadow-emerald-950/40"
+        size="lg"
+        className="h-14 animate-pulse bg-gradient-to-b from-red-500 to-red-600 text-xl font-black text-white shadow-lg shadow-red-950/50 transition-all hover:from-red-400 hover:to-red-500 hover:animate-none active:scale-[0.98]"
         disabled={clock.busyId === order.id}
-        onClick={() =>
-          clock.run(order.id, async () => {
-            await acceptOrder(order.id, "EFECTIVO");
-          })
-        }
+        onClick={() => setOpen((v) => !v)}
       >
-        EFECTIVO
+        {clock.busyId === order.id ? "Cobrando…" : "Cobrar"}
       </Button>
-      <Button
-        variant="outline"
-        className="h-14 w-full text-lg font-bold text-white border border-primary/60 bg-primary/10 hover:bg-primary/20"
-        disabled={clock.busyId === order.id}
-        onClick={() =>
-          clock.run(order.id, async () => {
-            await acceptOrder(order.id, "QR");
-          })
-        }
-      >
-        QR
-      </Button>
-      <Button
-        variant="default"
-        className="h-14 w-full border-violet-500/50 bg-violet-500/15 text-base font-bold text-violet-100 transition-colors hover:bg-violet-500/25 hover:text-white"
-        disabled={clock.busyId === order.id}
-        onClick={onPension}
-      >
-        Cuenta Pensionado
-      </Button>
-      <Button
-        variant="outline"
-        className="h-14 w-full border-slate-600 bg-slate-900/60 text-sm font-bold text-slate-200 hover:border-slate-400 hover:text-white"
-        disabled={clock.busyId === order.id}
-        onClick={onSplit}
-      >
-        ÷ Dividir
-      </Button>
-      <ReprintButton order={order} clock={clock} />
+
+      {open && (
+        <div className="absolute bottom-full left-0 right-0 z-20 mb-2 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-emerald-600"
+            onClick={() => pay("EFECTIVO")}
+          >
+            EFECTIVO
+            <span className="text-lg">💵</span>
+          </button>
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-primary/70"
+            onClick={() => pay("QR")}
+          >
+            QR
+            <span className="text-lg">📱</span>
+          </button>
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-slate-700"
+            onClick={() => {
+              setOpen(false);
+              onSplit();
+            }}
+          >
+            DIVIDIDO
+            <span className="text-lg">➗</span>
+          </button>
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-between px-4 text-base font-bold text-white transition-colors hover:bg-violet-600"
+            onClick={() => {
+              setOpen(false);
+              onPension();
+            }}
+          >
+            PENSIONADO
+            <span className="text-lg">👤</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -330,12 +384,22 @@ function OrderCard({
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
+  // Override manual: el cajero puede expandir/contraer un pedido finalizado.
+  const [expanded, setExpanded] = useState(false);
   const isFresh =
     order.status === OrderStatus.RECIBIDO ||
     (order.status === OrderStatus.ACEPTADO && !order.paidAt);
   const isDeliveredNotPaid =
     order.deliveredAt !== null && order.paidAt === null;
   const isPending = clock.busyId === order.id;
+  // Finalizado = cobrado Y entregado. Se auto-contrae (acordeón cerrado).
+  const isFinished = Boolean(order.paidAt && order.deliveredAt);
+  const collapsed = isFinished && !expanded;
+  const payLabel = order.paymentMethod
+    ? order.paymentMethod2 && order.paymentAmount2 != null
+      ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
+      : PaymentMethodLabel[order.paymentMethod]
+    : null;
 
   return (
     <div
@@ -351,11 +415,47 @@ function OrderCard({
             : ""
         }`}
       >
+      {collapsed ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full animate-in fade-in cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-900/60"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="shrink-0 text-lg font-black text-white">
+              Pedido #{formatOrderCode(order.seq)}
+            </span>
+            {order.customerName && (
+              <span className="truncate text-sm font-semibold text-primary">
+                {order.customerName}
+              </span>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="text-sm tabular-nums text-slate-400">
+              {horaCreacion(order)}
+            </span>
+            {payLabel && (
+              <Badge
+                variant="outline"
+                className="border-primary/60 bg-primary/10 text-primary"
+              >
+                {payLabel}
+              </Badge>
+            )}
+          </div>
+        </button>
+      ) : (
+        <div
+          onClick={() => isFinished && setExpanded(false)}
+          className={isFinished ? "cursor-pointer" : ""}
+        >
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-2xl font-black text-white">
+            <CardTitle className="flex items-center gap-2 text-2xl font-black text-white">
               Pedido #{formatOrderCode(order.seq)}
+              <ReprintButton order={order} clock={clock} />
             </CardTitle>
             <p className="text-base font-semibold text-primary">
               {order.customerName
@@ -378,34 +478,24 @@ function OrderCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <ItemsList order={order} />
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <div className="space-y-2">
-            <span
-              className={`block py-1 text-4xl font-mono font-black ${
-                isDeliveredNotPaid ? "text-red-500" : "text-white"
-              }`}
-            >
-              {formatPrice(order.total)}
-            </span>
-            {order.paymentMethod && (
-              <p className="text-base text-white">
-                Pago: {PaymentMethodLabel[order.paymentMethod]}
-                {order.paymentMethod2 && order.paymentAmount2 != null
-                  ? ` ${formatPrice(order.total - order.paymentAmount2)} + ${PaymentMethodLabel[order.paymentMethod2]} ${formatPrice(order.paymentAmount2)}`
-                  : " ✓"}
-              </p>
-            )}
-          </div>
-          <div className="flex w-full flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+          <span
+            className={`block py-1 text-4xl font-mono font-black ${
+              isDeliveredNotPaid ? "text-red-500" : "text-white"
+            }`}
+          >
+            {formatPrice(order.total)}
+          </span>
+          <div className="ml-auto flex items-center gap-3">
             {/* Pedido en RECIBIDO (legado de pedidos web/store): se cobra y se acepta */}
             {order.status === OrderStatus.RECIBIDO &&
               (billing ? (
-                <ChargeGrid
+                <ChargeButton
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
-/>
+  />
               ) : (
                 <div className="flex w-full justify-center py-1">
                   <Badge
@@ -421,12 +511,12 @@ function OrderCard({
             {order.status === OrderStatus.ACEPTADO &&
               !order.paidAt &&
               (billing ? (
-                <ChargeGrid
+                <ChargeButton
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
-/>
+  />
               ) : (
                 <div className="flex w-full justify-center py-1">
                   <Badge
@@ -443,21 +533,21 @@ function OrderCard({
             {order.status === OrderStatus.ENTREGADO &&
               !order.paidAt &&
               billing && (
-                <ChargeGrid
+                <ChargeButton
                   order={order}
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
-/>
+  />
               )}
 
             {/* Pedido ACEPTADO: siempre se puede marcar como entregado,
                 pague el cliente antes o después de la entrega */}
             {order.status === OrderStatus.ACEPTADO && (
-              <Button
-                size="lg"
-                className="bg-emerald-500 hover:bg-emerald-600 text-white w-full"
-                disabled={clock.busyId === order.id}
+<Button
+                  size="lg"
+                  className="h-14 bg-emerald-500 hover:bg-emerald-600 text-white"
+                  disabled={clock.busyId === order.id}
         onClick={() =>
           clock.askConfirm(
             order.id,
@@ -472,8 +562,18 @@ function OrderCard({
               </Button>
             )}
           </div>
+          {order.paymentMethod && (
+            <p className="w-full text-base text-white">
+              Pago: {PaymentMethodLabel[order.paymentMethod]}
+              {order.paymentMethod2 && order.paymentAmount2 != null
+                ? ` ${formatPrice(order.total - order.paymentAmount2)} + ${PaymentMethodLabel[order.paymentMethod2]} ${formatPrice(order.paymentAmount2)}`
+                : " ✓"}
+            </p>
+          )}
         </div>
       </CardContent>
+      </div>
+      )}
 
       {showSplit && (
         <SplitPaymentDialog
@@ -636,6 +736,18 @@ export function QueueView({
     );
   });
 
+  // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? ordered.filter((order) => {
+        const code = formatOrderCode(order.seq).toLowerCase();
+        const name = order.customerName?.toLowerCase() ?? "";
+        const hour = horaCreacion(order).toLowerCase();
+        return code.includes(q) || name.includes(q) || hour.includes(q);
+      })
+    : ordered;
+
   return (
     <div className="space-y-6">
       {clock.error && (
@@ -663,15 +775,28 @@ export function QueueView({
           PEDIDOS EN COLA
           {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
         </h2>
-        {ordered.map((order) => (
-          <OrderCard
-            key={order.id}
-            order={order}
-            clock={clock}
-            billing={billing}
-            customers={customers}
-          />
-        ))}
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por número de pedido, nombre, mesa u hora…"
+          className="w-full"
+        />
+        {filtered.length === 0 ? (
+          <p className="rounded-md border border-slate-700 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
+            Sin resultados para
+            {query.trim() ? ` "${query.trim()}"` : " el pedido buscado"}.
+          </p>
+        ) : (
+          filtered.map((order) => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              clock={clock}
+              billing={billing}
+              customers={customers}
+            />
+          ))
+        )}
       </section>
 
       {clock.pendingConfirm && (

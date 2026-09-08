@@ -12,7 +12,7 @@
 //      DELAY_ALERT_MINUTES (opcional, default 10).
 import { checkDelayedOrders } from "../src/telegram-alert";
 
-const LOOP_MS = 60_000;
+const LOOP_MS = 15_000;
 
 async function main(): Promise<void> {
   const once = process.argv.includes("--once");
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   if (once) return;
 
   setInterval(tick, LOOP_MS);
-  console.log("[telegram-alert] Activo. Intervalo de 60s.");
+  console.log(`[telegram-alert] Activo. Intervalo de ${LOOP_MS / 1000}s.`);
 }
 
 main().catch((err) => {

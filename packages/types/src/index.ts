@@ -448,7 +448,7 @@ export interface CashierDailyData {
 }
 
 export function formatOrderCode(seq: number | null | undefined): string {
-  return String(seq ?? 0).padStart(5, "0");
+  return String(seq ?? 0).padStart(3, "0").slice(-3);
 }
 
 export function findDrinkPrice(

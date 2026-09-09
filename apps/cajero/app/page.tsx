@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { prisma } from "@bbspos/db";
 import { OrderStatus, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
@@ -9,6 +8,10 @@ import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
 import { SignOutButton } from "@/components/sign-out-button";
+import {
+  SettingsMenu,
+  type ReprintOrderOption,
+} from "@/components/settings-menu";
 import { getPosCatalog } from "@/actions/pos";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 
@@ -118,6 +121,34 @@ async function getQueueData() {
   return { orders: rows.map(toPlainOrder), pensionCustomers };
 }
 
+/** Pedidos reimprimibles del día (Recibido o Aceptado), los más recientes
+ *  primero, para el submenú de Reimpresión de la rueda dentada. */
+async function getPrintableOrders(): Promise<ReprintOrderOption[]> {
+  const bounds = dayBounds(todayKey());
+  const rows = await prisma.order.findMany({
+    where: {
+      status: {
+        in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO],
+      },
+      createdAt: { gte: bounds.gte, lt: bounds.lt },
+    },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      seq: true,
+      customerName: true,
+      createdAt: true,
+    },
+    take: 30,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    seq: r.seq,
+    customerName: r.customerName,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
 export default async function CashierPage({
   searchParams,
 }: {
@@ -138,6 +169,7 @@ export default async function CashierPage({
   if (tab === "venta") {
     const catalog = await getPosCatalog();
     const { orders: queueOrders, pensionCustomers } = await getQueueData();
+    const printableOrders = await getPrintableOrders();
 
     return (
       <main className="flex h-dvh w-full flex-col overflow-hidden">
@@ -145,7 +177,7 @@ export default async function CashierPage({
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
-            tab={tab}
+            printableOrders={printableOrders}
           />
         </div>
         <div className="min-h-0 flex-1">
@@ -162,11 +194,16 @@ export default async function CashierPage({
 
   if (tab === "preparar") {
     const { orders, pensionCustomers } = await getQueueData();
+    const printableOrders = await getPrintableOrders();
 
     return (
       <main className="flex h-full flex-col">
         <div className="mx-auto w-full max-w-[70vw] px-4 py-6">
-          <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
+          <Header
+            name={session.user.name ?? ""}
+            role={session.user.role}
+            printableOrders={printableOrders}
+          />
         </div>
         <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[70vw] px-4 pb-6">
@@ -178,11 +215,16 @@ export default async function CashierPage({
   }
 
   const data = await getCashierDailyData(session.user.id);
+  const printableOrders = await getPrintableOrders();
 
   return (
     <main className="h-full overflow-y-auto overscroll-contain">
       <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-6">
-        <Header name={session.user.name ?? ""} role={session.user.role} tab={tab} />
+        <Header
+          name={session.user.name ?? ""}
+          role={session.user.role}
+          printableOrders={printableOrders}
+        />
         <div className="flex items-center justify-between gap-3 print:hidden">
           <h1 className="text-xl font-bold">Reporte del día</h1>
           <ReportActions />
@@ -198,49 +240,25 @@ export default async function CashierPage({
 function Header({
   name,
   role,
-  tab,
+  printableOrders,
 }: {
   name: string;
   role: string;
-  tab: Tab;
+  printableOrders: ReprintOrderOption[];
 }) {
-  const isMesero = role === "MESERO";
   return (
-    <>
-      <div className="flex items-center gap-3 border-b pb-4">
-        <div className="flex shrink-0 items-center gap-2 font-bold">
-          <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700" />
-          <span>BBSPOS Cajero</span>
-        </div>
-        {!isMesero && (
-          <nav className="flex flex-1 items-center justify-center gap-2">
-            <Link
-              href="/?tab=venta"
-              className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${
-                tab === "venta"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              Nueva Venta
-            </Link>
-            <Link
-              href="/?tab=reporte"
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                tab === "reporte"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              Reporte del día
-            </Link>
-          </nav>
-        )}
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-sm text-muted-foreground">{name}</span>
-          <SignOutButton />
-        </div>
+    <div className="flex items-center justify-between gap-3 border-b pb-4">
+      <div className="flex shrink-0 items-center gap-2 font-bold">
+        <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700" />
+        <span>
+          BBSPOS {role === "MESERO" ? "Mesero" : "Cajero"}
+        </span>
       </div>
-    </>
+      <div className="flex shrink-0 items-center gap-3">
+        <SettingsMenu printableOrders={printableOrders} />
+        <span className="text-sm font-bold text-foreground">{name}</span>
+        <SignOutButton />
+      </div>
+    </div>
   );
 }

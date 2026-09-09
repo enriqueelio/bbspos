@@ -117,3 +117,37 @@
   animation: name-glow 2s ease-in-out infinite;
 }
 
+/* Resplandor rojo (entregado sin cobrar) y verde (pagado sin entregar),
+   con la misma dinámica pulsante que el glow azul de los pedidos frescos. */
+@keyframes glow-red {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.18);
+  }
+}
+
+.animate-glow-red {
+  animation:
+    card-enter 200ms ease-out both,
+    glow-red 2s ease-in-out 200ms infinite;
+}
+
+@keyframes glow-green {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.18);
+  }
+}
+
+.animate-glow-green {
+  animation:
+    card-enter 200ms ease-out both,
+    glow-green 2s ease-in-out 200ms infinite;
+}
+

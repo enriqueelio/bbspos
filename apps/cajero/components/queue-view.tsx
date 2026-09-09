@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Printer } from "lucide-react";
 import {
   Badge,
   Button,
@@ -24,7 +24,6 @@ import {
   type Role as RoleType,
 } from "@bbspos/types";
 import { acceptOrder, acceptPensionOrder, deliverOrder } from "@/app/actions/orders";
-import { reprintOrder } from "@/app/actions/printing";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 import {
   PensionPaymentDialog,
@@ -35,12 +34,12 @@ function ageMinutes(createdAtIso: string, now: number): number {
   return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
 }
 
-// Hora de creación formateada en formato 12h (ej. "01:18 p.m.").
+// Hora de creación en formato 24h (ej. "11:10" / "20:45", sin a.m./p.m.).
 function horaCreacion(order: Order): string {
-  return new Date(order.createdAt).toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const d = new Date(order.createdAt);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
 }
 
 function useQueueClock(orders: Order[]) {
@@ -126,28 +125,12 @@ function useQueueClock(orders: Order[]) {
     settleConfirm();
   }
 
-  async function reprint(orderId: string) {
-    setBusyId(orderId);
-    setError(null);
-    setNotice(null);
-    try {
-      setNotice(await reprintOrder(orderId));
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "No se pudo reimprimir la comanda.",
-      );
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   return {
     now,
     busyId,
     error,
     notice,
     run,
-    reprint,
     setError,
     pendingConfirm,
     closingConfirm,
@@ -157,17 +140,17 @@ function useQueueClock(orders: Order[]) {
   };
 }
 
-function AgeBadge({ order, now }: { order: Order; now: number }) {
+function AgeBadge({
+  order,
+  now,
+}: {
+  order: Order;
+  now: number;
+}) {
   // Semáforo de demora basado en los minutos transcurridos desde createdAt:
   //  >= 10 min -> rojo pulsante (crítico)
   //  >= 7 min  -> ámbar (precaución)
   //  < 7 min   -> gris pizarra (normal)
-  const color = (minutes: number) => {
-    if (minutes >= 10) return "bg-red-600 text-white animate-pulse";
-    if (minutes >= 7) return "bg-amber-500 text-white";
-    return "bg-slate-700 text-slate-300";
-  };
-
   // Entregado: tiempo fijo desde el ingreso hasta la entrega.
   if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
     const minutes = Math.max(
@@ -179,17 +162,17 @@ function AgeBadge({ order, now }: { order: Order; now: number }) {
       ),
     );
     return (
-      <Badge className={`text-base ${color(minutes)}`}>
+      <span className="font-bold text-red-500">
         ⏱ Tardó {formatDurationMinutes(minutes)}
-      </Badge>
+      </span>
     );
   }
 
   const minutes = ageMinutes(order.createdAt, now);
   return (
-    <Badge className={`text-base ${color(minutes)}`}>
+    <span className="font-bold text-red-500">
       Ingresado hace {formatDurationMinutes(minutes)}
-    </Badge>
+    </span>
   );
 }
 
@@ -207,9 +190,15 @@ function statusVariant(status: Order["status"]) {
   }
 }
 
-function ItemsList({ order }: { order: Order }) {
+function ItemsList({
+  order,
+  compact = false,
+}: {
+  order: Order;
+  compact?: boolean;
+}) {
   return (
-    <div className="space-y-1 text-base">
+    <div className={`space-y-1 ${compact ? "text-sm" : "text-base"}`}>
       {order.items.map((item) => (
         <div
           key={item.id}
@@ -235,63 +224,51 @@ function ItemsList({ order }: { order: Order }) {
               </span>
             )}
           </span>
-          <span>{formatPrice(item.unitPrice * item.quantity)}</span>
+          <span className={compact ? "shrink-0 tabular-nums" : ""}>
+            {formatPrice(item.unitPrice * item.quantity)}
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function ReprintButton({
-  order,
-  clock,
-}: {
-  order: Order;
-  clock: ReturnType<typeof useQueueClock>;
-}) {
-  return (
-    <button
-      type="button"
-      title="Reimprimir comanda"
-      aria-label="Reimprimir comanda"
-      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-900/70 text-slate-300 transition-colors hover:border-slate-400 hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-      disabled={clock.busyId === order.id}
-      onClick={(e) => {
-        e.stopPropagation();
-        clock.reprint(order.id);
-      }}
-    >
-      {clock.busyId === order.id ? (
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
-      ) : (
-        <Printer className="h-4 w-4" />
-      )}
-    </button>
-  );
-}
-
-/** Botón único de cobro con menú emergente de métodos de pago. */
+/** Botón único de cobro con menú emergente de métodos de pago.
+ *  El menú se renderiza en un portal flotante (fixed) para que nunca quede
+ *  recortado por el overflow del scroll de la columna ni de las tarjetas. */
 function ChargeButton({
   order,
   clock,
   onSplit,
   onPension,
+  compact = false,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   onSplit: () => void;
   onPension: () => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  // Cierra el menú al hacer clic fuera de él.
+  // Cierra el menú al hacer clic fuera de él (botón o menú flotante).
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
+      if (
+        ref.current?.contains(e.target as Node) ||
+        menuRef.current?.contains(e.target as Node)
+      ) {
+        return;
       }
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
@@ -307,6 +284,19 @@ function ChargeButton({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // Recalcula la posición respecto al botón al abrir o al redimensionar.
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const rect = ref.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPos({ top: rect.top, left: rect.left, width: rect.width });
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [open]);
+
   function pay(method: string) {
     setOpen(false);
     clock.run(order.id, async () => {
@@ -314,19 +304,16 @@ function ChargeButton({
     });
   }
 
-  return (
-    <div ref={ref} className="relative">
-      <Button
-        size="lg"
-        className="h-14 animate-pulse bg-gradient-to-b from-red-500 to-red-600 text-xl font-black text-white shadow-lg shadow-red-950/50 transition-all hover:from-red-400 hover:to-red-500 hover:animate-none active:scale-[0.98]"
-        disabled={clock.busyId === order.id}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {clock.busyId === order.id ? "Cobrando…" : "Cobrar"}
-      </Button>
-
-      {open && (
-        <div className="absolute bottom-full left-0 right-0 z-20 mb-2 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+  const menu = open && pos
+    ? createPortal(
+        <div
+          ref={menuRef}
+          className="fixed z-50 w-64 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl"
+          style={{
+            left: pos.left,
+            bottom: window.innerHeight - pos.top + 8,
+          }}
+        >
           <button
             type="button"
             className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-emerald-600"
@@ -365,8 +352,31 @@ function ChargeButton({
             PENSIONADO
             <span className="text-lg">👤</span>
           </button>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        size={compact ? "default" : "lg"}
+        className={`animate-pulse bg-gradient-to-b from-red-500 to-red-600 font-black text-white shadow-lg shadow-red-950/50 transition-all hover:from-red-400 hover:to-red-500 hover:animate-none active:scale-[0.98] ${
+          compact
+            ? "h-10 px-4 text-sm"
+            : "h-14 text-xl"
+        }`}
+        disabled={clock.busyId === order.id}
+        onClick={() => {
+          const rect = ref.current?.getBoundingClientRect();
+          if (rect) setPos({ top: rect.top, left: rect.left, width: rect.width });
+          setOpen((v) => !v);
+        }}
+      >
+        {clock.busyId === order.id ? "Cobrando…" : "Cobrar"}
+      </Button>
+
+      {menu}
     </div>
   );
 }
@@ -377,26 +387,33 @@ function OrderCard({
   billing,
   customers,
   compact = false,
+  expandedId,
+  setExpandedId,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   billing: boolean;
   customers: PensionCustomerOption[];
   compact?: boolean;
+  expandedId: string | null;
+  setExpandedId: (id: string | null) => void;
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
-  // Override manual: el cajero puede expandir/contraer un pedido finalizado.
-  const [expanded, setExpanded] = useState(false);
   const isFresh =
     order.status === OrderStatus.RECIBIDO ||
     (order.status === OrderStatus.ACEPTADO && !order.paidAt);
   const isDeliveredNotPaid =
     order.deliveredAt !== null && order.paidAt === null;
+  const isPaidNotDelivered =
+    order.paidAt !== null && order.deliveredAt === null;
   const isPending = clock.busyId === order.id;
   // Finalizado = cobrado Y entregado. Se auto-contrae (acordeón cerrado).
   const isFinished = Boolean(order.paidAt && order.deliveredAt);
-  const collapsed = isFinished && !expanded;
+  // En modo compact (cola del 20%) TODOS los pedidos nacen contraídos y cada
+  // tarjeta se expande/contrae manualmente al hacer clic.
+  const isOpen = expandedId === order.id;
+  const collapsed = compact ? !isOpen : isFinished && !isOpen;
   const payLabel = order.paymentMethod
     ? order.paymentMethod2 && order.paymentAmount2 != null
       ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
@@ -412,29 +429,37 @@ function OrderCard({
     >
       <Card
         className={`animate-in fade-in slide-in-from-bottom-4 duration-200 ${
-          isFresh
-            ? "border-primary/80 animate-glow ring-1 ring-primary/60"
-            : ""
+          isDeliveredNotPaid
+            ? "border-red-500/80 animate-glow-red ring-1 ring-red-500/60"
+            : isPaidNotDelivered
+              ? "border-emerald-500/80 animate-glow-green ring-1 ring-emerald-500/60"
+              : isFresh
+                ? "border-primary/80 animate-glow ring-1 ring-primary/60"
+                : ""
         }`}
       >
       {collapsed ? (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
-          className={`grid w-full animate-in fade-in cursor-pointer items-center gap-3 text-left transition-colors hover:bg-slate-900/60 ${
+          onClick={() => setExpandedId(order.id)}
+          className={`grid w-full animate-in fade-in cursor-pointer items-center gap-2 text-left transition-colors hover:bg-slate-900/60 ${
             compact
-              ? "grid-cols-[minmax(0,1fr)_7rem] px-4 py-3"
-              : "grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] px-5 py-3.5"
+              ? "grid-cols-[auto_minmax(0,1fr)_auto_auto] px-3 py-2"
+              : "grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] gap-3 px-5 py-3.5"
           }`}
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="shrink-0 text-lg font-black text-white">
-              Pedido #{formatOrderCode(order.seq)}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={`shrink-0 font-black text-white ${
+                compact ? "text-sm" : "text-lg"
+              }`}
+            >
+              #{formatOrderCode(order.seq)}
             </span>
             {order.customerName && (
               <span
                 className={`truncate font-black text-primary ${
-                  compact ? "text-base" : "text-lg"
+                  compact ? "text-sm" : "text-lg"
                 }`}
               >
                 {order.customerName}
@@ -443,12 +468,16 @@ function OrderCard({
           </div>
           <span
             className={`text-right font-black tabular-nums text-emerald-300 ${
-              compact ? "text-lg" : "text-xl"
+              compact ? "text-sm" : "text-xl"
             }`}
           >
             {formatPrice(order.total)}
           </span>
-          {!compact && (
+          {compact ? (
+            <span className="text-right text-xs tabular-nums text-slate-400">
+              {horaCreacion(order)}
+            </span>
+          ) : (
             <>
               <span className="text-center text-sm tabular-nums text-slate-400">
                 {horaCreacion(order)}
@@ -466,49 +495,89 @@ function OrderCard({
         </button>
       ) : (
         <div
-          onClick={() => isFinished && setExpanded(false)}
-          className={isFinished ? "cursor-pointer" : ""}
+          onClick={(e) => {
+            // Si el clic fue sobre un botón (cobrar, entregar, reimprimir,
+            // cantidades…), no se contrae la tarjeta.
+            const target = e.target as HTMLElement;
+            if (target.closest("button")) return;
+            if (compact || isFinished) setExpandedId(null);
+          }}
+          className={compact || isFinished ? "cursor-pointer" : ""}
         >
-      <CardHeader className="pb-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-2xl font-black text-white">
-              Pedido #{formatOrderCode(order.seq)}
-              <ReprintButton order={order} clock={clock} />
+      <CardHeader className={compact ? "pb-1 pt-2 px-3" : "pb-3"}>
+        <div className="min-w-0">
+          <div
+            className={`flex items-baseline gap-x-2 ${compact ? "flex-wrap" : "flex-wrap"}`}
+          >
+            <CardTitle
+              className={`shrink-0 font-black text-white ${
+                compact ? "text-base" : "text-2xl"
+              }`}
+            >
+              #{formatOrderCode(order.seq)}
             </CardTitle>
             {order.customerName && (
-              <p className="text-2xl font-black text-primary">
-                Para: {order.customerName}
-              </p>
+              <span
+                className={`min-w-0 truncate font-black text-primary ${
+                  compact ? "text-sm" : "text-2xl"
+                }`}
+              >
+                {order.customerName}
+              </span>
             )}
-            <p className="text-base font-semibold text-slate-400">
-              {horaCreacion(order)}
-            </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 text-right">
-            <Badge variant={statusVariant(order.status)} className="text-base">
-              {OrderStatusLabel[order.status]}
-            </Badge>
-            {isDeliveredNotPaid && (
-              <Badge className="bg-red-600 text-white font-black animate-pulse px-3 py-1 uppercase text-sm border border-red-400 shadow-[0_0_10px_rgba(220,38,38,0.5)]">
-                ¡Falta Pagar!
-              </Badge>
-            )}
-            <AgeBadge order={order} now={clock.now} />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ItemsList order={order} />
-        <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-          <span
-            className={`block py-1 text-4xl font-mono font-black ${
-              isDeliveredNotPaid ? "text-red-500" : "text-white"
+          <p
+            className={`flex flex-wrap items-center gap-x-2 font-semibold text-slate-400 ${
+              compact ? "text-xs" : "text-base"
             }`}
           >
-            {formatPrice(order.total)}
-          </span>
-          <div className="ml-auto flex items-center gap-3">
+            {horaCreacion(order)}
+            <AgeBadge order={order} now={clock.now} />
+          </p>
+        </div>
+      </CardHeader>
+      <CardContent className={compact ? "space-y-2 px-3 pb-3" : "space-y-3"}>
+        <ItemsList order={order} compact={compact} />
+
+        {compact && (
+          <div className="flex items-center justify-between gap-2 border-t border-slate-700 pt-2">
+            <span
+              className={`block font-mono font-black ${
+                isDeliveredNotPaid ? "text-red-500" : "text-white"
+              }`}
+            >
+              {formatPrice(order.total)}
+            </span>
+            <div className="flex min-w-0 items-center gap-2">
+              {order.paymentMethod && (
+                <span className="truncate text-xs font-semibold text-white">
+                  Pago: {PaymentMethodLabel[order.paymentMethod]}
+                  {order.paymentMethod2 && order.paymentAmount2 != null
+                    ? ` ${formatPrice(order.total - order.paymentAmount2)} + ${PaymentMethodLabel[order.paymentMethod2]}`
+                    : " ✓"}
+                </span>
+              )}
+              <Badge
+                variant={statusVariant(order.status)}
+                className="shrink-0 text-xs"
+              >
+                {OrderStatusLabel[order.status]}
+              </Badge>
+            </div>
+          </div>
+        )}
+
+        <div className={`flex items-center gap-3 border-t ${compact ? "flex-col gap-2 border-slate-700 pt-2" : "flex-wrap pt-3"}`}>
+          {!compact && (
+            <span
+              className={`block py-1 text-4xl font-mono font-black ${
+                isDeliveredNotPaid ? "text-red-500" : "text-white"
+              }`}
+            >
+              {formatPrice(order.total)}
+            </span>
+          )}
+          <div className={`flex items-center gap-2 ${compact ? "w-full" : "ml-auto"}`}>
             {/* Pedido en RECIBIDO (legado de pedidos web/store): se cobra y se acepta */}
             {order.status === OrderStatus.RECIBIDO &&
               (billing ? (
@@ -517,6 +586,7 @@ function OrderCard({
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
+                compact={compact}
   />
               ) : (
                 <div className="flex w-full justify-center py-1">
@@ -538,6 +608,7 @@ function OrderCard({
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
+                compact={compact}
   />
               ) : (
                 <div className="flex w-full justify-center py-1">
@@ -560,15 +631,18 @@ function OrderCard({
                   clock={clock}
                   onSplit={() => setShowSplit(true)}
                 onPension={() => setShowPension(true)}
+                compact={compact}
   />
               )}
 
-            {/* Pedido ACEPTADO: siempre se puede marcar como entregado,
+{/* Pedido ACEPTADO: siempre se puede marcar como entregado,
                 pague el cliente antes o después de la entrega */}
             {order.status === OrderStatus.ACEPTADO && (
 <Button
-                  size="lg"
-                  className="h-14 bg-emerald-500 hover:bg-emerald-600 text-white"
+                  size={compact ? "default" : "lg"}
+                  className={`bg-emerald-500 hover:bg-emerald-600 text-white ${
+                    compact ? "h-10 w-full text-sm" : "h-14"
+                  }`}
                   disabled={clock.busyId === order.id}
         onClick={() =>
           clock.askConfirm(
@@ -584,7 +658,15 @@ function OrderCard({
               </Button>
             )}
           </div>
-          {order.paymentMethod && (
+          {!compact && (
+            <Badge
+              variant={statusVariant(order.status)}
+              className="shrink-0 text-base"
+            >
+              {OrderStatusLabel[order.status]}
+            </Badge>
+          )}
+          {!compact && order.paymentMethod && (
             <p className="w-full text-base text-white">
               Pago: {PaymentMethodLabel[order.paymentMethod]}
               {order.paymentMethod2 && order.paymentAmount2 != null
@@ -732,6 +814,8 @@ export function QueueView({
     role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
   const [query, setQuery] = useState("");
+  // Acordeón único: solo una tarjeta expandida a la vez en toda la cola.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (orders.length === 0) {
     return (
@@ -744,7 +828,9 @@ export function QueueView({
 
   const pendingCount = orders.filter(
     (o) =>
-      o.status === OrderStatus.RECIBIDO || o.status === OrderStatus.ACEPTADO,
+      o.status === OrderStatus.RECIBIDO ||
+      o.status === OrderStatus.ACEPTADO ||
+      (o.status === OrderStatus.ENTREGADO && !o.paidAt),
   ).length;
 
   const stateRank = (o: Order) =>
@@ -752,7 +838,9 @@ export function QueueView({
       ? 0
       : o.status === OrderStatus.ACEPTADO
         ? 1
-        : 2;
+        : o.status === OrderStatus.ENTREGADO && !o.paidAt
+          ? 2
+          : 3;
 
   const ordered = [...orders].sort((a, b) => {
     const diff = stateRank(a) - stateRank(b);
@@ -820,6 +908,8 @@ export function QueueView({
               billing={billing}
               customers={customers}
               compact={compact}
+              expandedId={expandedId}
+              setExpandedId={setExpandedId}
             />
           ))
         )}

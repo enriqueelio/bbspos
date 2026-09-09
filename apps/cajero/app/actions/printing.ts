@@ -65,7 +65,7 @@ export async function reprintOrder(orderId: string): Promise<string> {
     }),
   );
 
-  return `Comanda #${String(order.seq ?? 0).padStart(5, "0")} enviada a la impresora.`;
+  return `Comanda #${String(order.seq ?? 0).padStart(3, "0")} enviada a la impresora.`;
 }
 
 /** Imprime el reporte del d�a del cajero conectado en la impresora configurada. */

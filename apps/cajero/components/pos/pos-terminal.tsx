@@ -345,6 +345,7 @@ export function PosTerminal({
 
   function confirmProduct() {
     if (!selectedSize || !bobaType || !selectedFlavor) return;
+    setNotice(null);
     cart.addItem({
       size: selectedSize,
       flavor: selectedFlavor,
@@ -416,6 +417,7 @@ export function PosTerminal({
   // cliente se arrepiente.
   function handleClear() {
     cart.clear();
+    setNotice(null);
     setToppingIds([]);
     setSizeId("");
     setBobaTypeId("");
@@ -483,6 +485,7 @@ export function PosTerminal({
       return;
     }
     setVariantItem(null);
+    setNotice(null);
     cart.addMenuItem({
       menuItemId: item.id,
       name: item.name,
@@ -501,6 +504,7 @@ export function PosTerminal({
       setVariantSauces([]);
       return;
     }
+    setNotice(null);
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
@@ -516,6 +520,7 @@ export function PosTerminal({
   function confirmMixtas() {
     if (!variantItem || !variantSize) return;
     if (variantSauces.length !== requiredSauces(variantSize.name)) return;
+    setNotice(null);
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
@@ -832,15 +837,16 @@ export function PosTerminal({
                   key={menuItem.id}
                   type="button"
                   title={`Agregar ${menuItem.name}`}
-                  onClick={() =>
-                    cart.addMenuItem({
-                      menuItemId: menuItem.id,
-                      name: menuItem.name,
-                      category: menuItem.category,
-                      unitPrice: menuItem.price,
-                      optionName: null,
-                    })
-                  }
+                  onClick={() => {
+                      setNotice(null);
+                      cart.addMenuItem({
+                        menuItemId: menuItem.id,
+                        name: menuItem.name,
+                        category: menuItem.category,
+                        unitPrice: menuItem.price,
+                        optionName: null,
+                      });
+                    }}
                   className="flex h-[70px] flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
                 >
                   <span className="line-clamp-2 text-xs font-semibold leading-tight text-amber-100">

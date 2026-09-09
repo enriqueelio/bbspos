@@ -45,7 +45,11 @@ export async function createOrder(
   );
 
   const order = await prisma.$transaction(async (tx) => {
+    // El número de pedido se reinicia a 1 cada medianoche.
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
     const last = await tx.order.findFirst({
+      where: { createdAt: { gte: startOfDay } },
       orderBy: { seq: "desc" },
       select: { seq: true },
     });

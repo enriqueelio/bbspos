@@ -91,6 +91,14 @@ export async function createPosOrder(
     throw new Error("El carrito está vacío");
   }
 
+  if (!customerName?.trim()) {
+    throw new Error("El nombre o mesa del cliente es obligatorio.");
+  }
+
+  if (!deliveryType) {
+    throw new Error("Elige Para mesa o Para llevar.");
+  }
+
   // Verifica que el usuario de la sesión exista para no violar la llave
   // foránea a la hora de asociar el pedido. Si no existe, se crea sin usuario.
   const dbUser = await prisma.user.findUnique({

@@ -120,7 +120,7 @@ function defaultPane(catalog: Catalog): CatalogPane {
 }
 
 function deliveryLabel(type: PosDeliveryType) {
-  return type === "MESA" ? "Para mesa" : "Para llevar";
+  return type === "MESA" ? "PARA MESA" : "PARA LLEVAR";
 }
 
 // ===== Estilos compartidos de botones y contenedores =====
@@ -358,11 +358,19 @@ export function PosTerminal({
 
   async function submit() {
     if (cart.items.length === 0) return;
+    const trimmedName = cart.customerName.trim().toUpperCase();
+    if (trimmedName === "") {
+      setError("Falta el nombre o la mesa del cliente. Es un dato obligatorio.");
+      return;
+    }
+    if (isBilling && cart.deliveryType === "") {
+      setError("Falta elegir Para mesa o Para llevar. Es un dato obligatorio.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const trimmedName = cart.customerName.trim();
       // El mesero solo toma pedidos en mesa: se fuerza MESA.
       const deliveryType = isBilling
         ? cart.deliveryType === ""
@@ -371,7 +379,7 @@ export function PosTerminal({
         : "MESA";
       const result = await createPosOrder(
         cart.items,
-        trimmedName === "" ? undefined : trimmedName,
+        trimmedName,
         deliveryType,
       );
       cart.clear();
@@ -531,6 +539,12 @@ export function PosTerminal({
   // Brillo sutil en el cuadro de nombre cuando ya hay un ticket generado
   // pero aún no se ha ingresado el nombre o la mesa.
   const needsName = cart.items.length > 0 && cart.customerName.trim() === "";
+  // El cajero/admin también debe elegir entre mesa o para llevar.
+  const needsDelivery =
+    isBilling && cart.items.length > 0 && cart.deliveryType === "";
+  // El ticket está listo para enviarse: hay productos y ningún dato faltante.
+  const formOk =
+    cart.items.length > 0 && !needsName && !needsDelivery;
 
   // ===== Atajos de teclado (flujo rápido tipo Square) =====
   // Teclas 1-9 seleccionan la categoría de la barra por índice; Enter dispara el
@@ -713,16 +727,20 @@ export function PosTerminal({
           <input
             type="text"
             value={cart.customerName}
-            onChange={(e) => cart.setCustomerName(e.target.value)}
-            placeholder="Nombre o Mesa"
-            className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+            onChange={(e) => cart.setCustomerName(e.target.value.toUpperCase())}
+            placeholder="NOMBRE O MESA DEL CLIENTE (OBLIGATORIO)"
+            className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
               needsName
                 ? "border-amber-400/70 animate-name-glow"
                 : "border-slate-700 focus:border-primary"
             }`}
           />
 
-          <div className="grid grid-cols-2 gap-2">
+          <div
+            className={`grid grid-cols-2 gap-2 rounded-xl ${
+              needsDelivery ? "animate-name-glow" : ""
+            }`}
+          >
             {(["MESA", "LLEVAR"] as PosDeliveryType[]).map((type) => (
               <button
                 key={type}
@@ -739,6 +757,16 @@ export function PosTerminal({
             ))}
           </div>
 
+          {(needsName || needsDelivery) && (
+            <p className="text-center text-xs font-bold uppercase tracking-wide text-amber-400">
+              {needsName && needsDelivery
+                ? "⚠ Completa nombre o mesa y elige Para mesa / Para llevar"
+                : needsName
+                  ? "⚠ Escribe el nombre o mesa del cliente"
+                  : "⚠ Elige Para mesa o Para llevar"}
+            </p>
+          )}
+
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold uppercase tracking-wide text-white">
               Total
@@ -750,7 +778,7 @@ export function PosTerminal({
 
           <button
             type="button"
-            disabled={busy || cart.items.length === 0}
+            disabled={busy || !formOk}
             onClick={submit}
             className={`w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
               isBilling

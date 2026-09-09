@@ -419,31 +419,32 @@ function OrderCard({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="flex w-full animate-in fade-in cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-900/60"
+          className="grid w-full animate-in fade-in cursor-pointer grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-900/60"
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="shrink-0 text-lg font-black text-white">
               Pedido #{formatOrderCode(order.seq)}
             </span>
             {order.customerName && (
-              <span className="truncate text-sm font-semibold text-primary">
+              <span className="truncate text-lg font-black text-primary">
                 {order.customerName}
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="text-sm tabular-nums text-slate-400">
-              {horaCreacion(order)}
-            </span>
-            {payLabel && (
-              <Badge
-                variant="outline"
-                className="border-primary/60 bg-primary/10 text-primary"
-              >
-                {payLabel}
-              </Badge>
-            )}
-          </div>
+          <span className="text-right text-xl font-black tabular-nums text-emerald-300">
+            {formatPrice(order.total)}
+          </span>
+          <span className="text-center text-sm tabular-nums text-slate-400">
+            {horaCreacion(order)}
+          </span>
+          {payLabel && (
+            <Badge
+              variant="outline"
+              className="justify-self-end border-primary/60 bg-primary/10 text-primary"
+            >
+              {payLabel}
+            </Badge>
+          )}
         </button>
       ) : (
         <div
@@ -457,10 +458,13 @@ function OrderCard({
               Pedido #{formatOrderCode(order.seq)}
               <ReprintButton order={order} clock={clock} />
             </CardTitle>
-            <p className="text-base font-semibold text-primary">
-              {order.customerName
-                ? `Para: ${order.customerName} · ${horaCreacion(order)}`
-                : horaCreacion(order)}
+            {order.customerName && (
+              <p className="text-2xl font-black text-primary">
+                Para: {order.customerName}
+              </p>
+            )}
+            <p className="text-base font-semibold text-slate-400">
+              {horaCreacion(order)}
             </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 text-right">

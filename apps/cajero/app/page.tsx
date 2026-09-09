@@ -3,7 +3,6 @@ import { OrderStatus, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";
-import { QueueView } from "@/components/queue-view";
 import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
 import { PosTerminal } from "@/components/pos/pos-terminal";
@@ -15,7 +14,7 @@ import {
 import { getPosCatalog } from "@/actions/pos";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 
-type Tab = "preparar" | "venta" | "reporte";
+type Tab = "venta" | "reporte";
 
 function toPlainOrder(order: {
   id: string;
@@ -158,15 +157,9 @@ export default async function CashierPage({
 }) {
   const session = await getRequiredSession();
   const { tab: tabParam } = await searchParams;
-  const isMesero = session.user.role === "MESERO";
-  // El mesero solo toma órdenes: siempre aterriza en Nueva Venta.
-  const tab: Tab = isMesero
-    ? "venta"
-    : tabParam === "reporte"
-      ? "reporte"
-      : tabParam === "venta"
-        ? "venta"
-        : "preparar";
+  // Nueva Venta es la pantalla por defecto (mesero y cajero); el reporte solo
+  // se abre si se pide explícitamente con ?tab=reporte.
+  const tab: Tab = tabParam === "reporte" ? "reporte" : "venta";
 
   if (tab === "venta") {
     const catalog = await getPosCatalog();
@@ -194,49 +187,31 @@ export default async function CashierPage({
     );
   }
 
-  if (tab === "preparar") {
-    const { orders, pensionCustomers } = await getQueueData();
+  if (tab === "reporte") {
+    const data = await getCashierDailyData(session.user.id);
     const printableOrders = await getPrintableOrders();
 
     return (
-      <main className="flex h-full flex-col">
-        <div className="mx-auto w-full max-w-[70vw] px-4 py-5">
+      <main className="h-full overflow-y-auto overscroll-contain">
+        <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-5">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
             printableOrders={printableOrders}
           />
-        </div>
-        <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-[70vw] px-4 pb-6">
-            <QueueView orders={orders} role={session.user.role} customers={pensionCustomers} />
+          <div className="flex items-center justify-between gap-3 print:hidden">
+            <h1 className="text-xl font-bold">Reporte del día</h1>
+            <ReportActions />
+          </div>
+          <div className="print-report-area">
+            <ReportView data={data} myName={session.user.name ?? ""} />
           </div>
         </div>
       </main>
     );
   }
 
-  const data = await getCashierDailyData(session.user.id);
-  const printableOrders = await getPrintableOrders();
-
-  return (
-    <main className="h-full overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-5">
-        <Header
-          name={session.user.name ?? ""}
-          role={session.user.role}
-          printableOrders={printableOrders}
-        />
-        <div className="flex items-center justify-between gap-3 print:hidden">
-          <h1 className="text-xl font-bold">Reporte del día</h1>
-          <ReportActions />
-        </div>
-        <div className="print-report-area">
-          <ReportView data={data} myName={session.user.name ?? ""} />
-        </div>
-      </div>
-    </main>
-  );
+  return null;
 }
 
 function Header({

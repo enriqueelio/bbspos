@@ -309,31 +309,27 @@ function ChargeButton({
     ? createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 w-64 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl"
+          className="fixed z-50 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl"
           style={{
             left: pos.left,
             bottom: window.innerHeight - pos.top + 8,
+            width: Math.max(pos.width, 168),
           }}
         >
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-emerald-600"
-            onClick={() => pay("EFECTIVO")}
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-violet-600"
+            onClick={() => {
+              setOpen(false);
+              onPension();
+            }}
           >
-            EFECTIVO
-            <span className="text-lg">💵</span>
+            PENSIONADO
+            <span className="text-lg">👤</span>
           </button>
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-primary/70"
-            onClick={() => pay("QR")}
-          >
-            QR
-            <span className="text-lg">📱</span>
-          </button>
-          <button
-            type="button"
-            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-4 text-base font-bold text-white transition-colors hover:bg-slate-700"
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-slate-700"
             onClick={() => {
               setOpen(false);
               onSplit();
@@ -344,14 +340,19 @@ function ChargeButton({
           </button>
           <button
             type="button"
-            className="flex h-12 w-full items-center justify-between px-4 text-base font-bold text-white transition-colors hover:bg-violet-600"
-            onClick={() => {
-              setOpen(false);
-              onPension();
-            }}
+            className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-primary/70"
+            onClick={() => pay("QR")}
           >
-            PENSIONADO
-            <span className="text-lg">👤</span>
+            QR
+            <span className="text-lg">📱</span>
+          </button>
+          <button
+            type="button"
+            className="flex h-12 w-full items-center justify-between px-3 text-base font-bold text-white transition-colors hover:bg-emerald-600"
+            onClick={() => pay("EFECTIVO")}
+          >
+            EFECTIVO
+            <span className="text-lg">💵</span>
           </button>
         </div>,
         document.body,

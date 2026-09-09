@@ -389,6 +389,7 @@ export function PosTerminal({
         cart.items,
         trimmedName,
         deliveryType,
+        cart.notes,
       );
       cart.clear();
       // Devuelve los selectores a su estado por defecto para no arrastrar
@@ -613,7 +614,7 @@ export function PosTerminal({
     <div className="flex h-full w-full bg-slate-950 overflow-hidden">
       {/* ===== Columna 1 (20%): Pedidos en Cola con scroll propio ===== */}
       <aside className="flex w-1/5 min-w-[300px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
-        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <QueueView
             orders={queueOrders}
             role={role}
@@ -789,6 +790,15 @@ export function PosTerminal({
                   : "⚠ Elige Para mesa o Para llevar"}
             </p>
           )}
+
+          <input
+            type="text"
+            value={cart.notes}
+            onChange={(e) => cart.setNotes(e.target.value.toUpperCase())}
+            placeholder="INDICACIONES ESPECIALES (OPCIONAL)"
+            title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
+            className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
+          />
 
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold uppercase tracking-wide text-white">

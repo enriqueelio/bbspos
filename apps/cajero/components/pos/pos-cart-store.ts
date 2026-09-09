@@ -37,6 +37,7 @@ export interface PosCartSnapshot {
   items: CartItem[];
   customerName: string;
   deliveryType: PosDeliveryType | "";
+  notes: string;
 }
 
 const listeners = new Set<() => void>();
@@ -91,10 +92,11 @@ let customerName =
 // El tipo de entrega arranca sin ninguno preseleccionado; el cliente/mesero
 // elige "Para mesa" o "Para llevar" (o se toma por defecto al enviar).
 let deliveryType: PosDeliveryType | "" = "";
-let snapshot: PosCartSnapshot = { items, customerName, deliveryType };
+let notes = typeof stored.notes === "string" ? stored.notes : "";
+let snapshot: PosCartSnapshot = { items, customerName, deliveryType, notes };
 
 function emit() {
-  snapshot = { items, customerName, deliveryType };
+  snapshot = { items, customerName, deliveryType, notes };
   for (const listener of listeners) listener();
 }
 
@@ -186,10 +188,17 @@ export function setPosDeliveryType(type: PosDeliveryType) {
   persistState();
 }
 
+export function setPosNotes(text: string) {
+  notes = text;
+  emit();
+  persistState();
+}
+
 export function clearPosCart() {
   items = [];
   customerName = "";
   deliveryType = "";
+  notes = "";
   emit();
   if (typeof window !== "undefined") {
     try {
@@ -217,6 +226,7 @@ export function usePosCart() {
     removeItem: removePosItem,
     setCustomerName: setPosCustomerName,
     setDeliveryType: setPosDeliveryType,
+    setNotes: setPosNotes,
     clear: clearPosCart,
   };
 }

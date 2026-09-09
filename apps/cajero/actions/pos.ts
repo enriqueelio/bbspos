@@ -84,6 +84,7 @@ export async function createPosOrder(
   items: CartItem[],
   customerName?: string,
   deliveryType?: "MESA" | "LLEVAR" | null,
+  notes?: string | null,
 ): Promise<{ orderId: string; seq: number; total: number }> {
   const session = await getRequiredSession();
 
@@ -154,6 +155,7 @@ export async function createPosOrder(
         data: {
           customerName: customerName?.trim() || null,
           deliveryType: deliveryType ?? null,
+          notes: notes?.trim() || null,
           status: OrderStatus.ACEPTADO,
           seq,
           total,

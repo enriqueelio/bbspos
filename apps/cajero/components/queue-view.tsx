@@ -539,6 +539,17 @@ function OrderCard({
       <CardContent className={compact ? "space-y-2 px-3 pb-3" : "space-y-3"}>
         <ItemsList order={order} compact={compact} />
 
+        {order.notes && (
+          <div className="border-t border-slate-700 pt-2">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Indicaciones especiales
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-amber-300">
+              {order.notes}
+            </p>
+          </div>
+        )}
+
         {compact && (
           <div className="flex items-center justify-between gap-2 border-t border-slate-700 pt-2">
             <span

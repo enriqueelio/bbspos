@@ -411,6 +411,7 @@ export interface Order {
   seq: number | null;
   status: OrderStatus;
   customerName: string | null;
+  notes?: string | null;
   customerId?: string | null;
   total: number;
   createdAt: string;

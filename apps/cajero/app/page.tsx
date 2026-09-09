@@ -22,6 +22,7 @@ function toPlainOrder(order: {
   seq: number | null;
   status: string;
   customerName: string | null;
+  notes: string | null;
   customerId: string | null;
   total: number;
   createdAt: Date;
@@ -50,6 +51,7 @@ function toPlainOrder(order: {
     seq: order.seq,
     status: order.status as Order["status"],
     customerName: order.customerName,
+    notes: order.notes,
     customerId: order.customerId,
     total: order.total,
     createdAt: order.createdAt.toISOString(),
@@ -173,7 +175,7 @@ export default async function CashierPage({
 
     return (
       <main className="flex h-dvh w-full flex-col overflow-hidden">
-        <div className="w-full shrink-0 px-4 pt-4">
+        <div className="w-full shrink-0 px-4 pt-2">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
@@ -198,7 +200,7 @@ export default async function CashierPage({
 
     return (
       <main className="flex h-full flex-col">
-        <div className="mx-auto w-full max-w-[70vw] px-4 py-6">
+        <div className="mx-auto w-full max-w-[70vw] px-4 py-5">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
@@ -219,7 +221,7 @@ export default async function CashierPage({
 
   return (
     <main className="h-full overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-6">
+      <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-5">
         <Header
           name={session.user.name ?? ""}
           role={session.user.role}
@@ -247,7 +249,7 @@ function Header({
   printableOrders: ReprintOrderOption[];
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b pb-4">
+    <div className="flex items-center justify-between gap-3 border-b pb-3">
       <div className="flex shrink-0 items-center gap-2 font-bold">
         <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-700" />
         <span>

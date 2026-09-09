@@ -156,6 +156,7 @@ model Order {
   status         OrderStatus    @default(RECIBIDO)
   customerName   String?
   deliveryType   DeliveryType?
+  notes          String?
   total          Int
   createdAt      DateTime       @default(now())
   paidAt         DateTime?

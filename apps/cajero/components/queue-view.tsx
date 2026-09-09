@@ -376,11 +376,13 @@ function OrderCard({
   clock,
   billing,
   customers,
+  compact = false,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   billing: boolean;
   customers: PensionCustomerOption[];
+  compact?: boolean;
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
@@ -419,31 +421,47 @@ function OrderCard({
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="grid w-full animate-in fade-in cursor-pointer grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-900/60"
+          className={`grid w-full animate-in fade-in cursor-pointer items-center gap-3 text-left transition-colors hover:bg-slate-900/60 ${
+            compact
+              ? "grid-cols-[minmax(0,1fr)_7rem] px-4 py-3"
+              : "grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] px-5 py-3.5"
+          }`}
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
             <span className="shrink-0 text-lg font-black text-white">
               Pedido #{formatOrderCode(order.seq)}
             </span>
             {order.customerName && (
-              <span className="truncate text-lg font-black text-primary">
+              <span
+                className={`truncate font-black text-primary ${
+                  compact ? "text-base" : "text-lg"
+                }`}
+              >
                 {order.customerName}
               </span>
             )}
           </div>
-          <span className="text-right text-xl font-black tabular-nums text-emerald-300">
+          <span
+            className={`text-right font-black tabular-nums text-emerald-300 ${
+              compact ? "text-lg" : "text-xl"
+            }`}
+          >
             {formatPrice(order.total)}
           </span>
-          <span className="text-center text-sm tabular-nums text-slate-400">
-            {horaCreacion(order)}
-          </span>
-          {payLabel && (
-            <Badge
-              variant="outline"
-              className="justify-self-end border-primary/60 bg-primary/10 text-primary"
-            >
-              {payLabel}
-            </Badge>
+          {!compact && (
+            <>
+              <span className="text-center text-sm tabular-nums text-slate-400">
+                {horaCreacion(order)}
+              </span>
+              {payLabel && (
+                <Badge
+                  variant="outline"
+                  className="justify-self-end border-primary/60 bg-primary/10 text-primary"
+                >
+                  {payLabel}
+                </Badge>
+              )}
+            </>
           )}
         </button>
       ) : (
@@ -702,14 +720,18 @@ export function QueueView({
   orders,
   role,
   customers,
+  compact = false,
 }: {
   orders: Order[];
   role: RoleType;
   customers: PensionCustomerOption[];
+  compact?: boolean;
 }) {
   const clock = useQueueClock(orders);
   const billing =
     role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
+  // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
+  const [query, setQuery] = useState("");
 
   if (orders.length === 0) {
     return (
@@ -741,7 +763,6 @@ export function QueueView({
   });
 
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
-  const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const filtered = q
     ? ordered.filter((order) => {
@@ -798,6 +819,7 @@ export function QueueView({
               clock={clock}
               billing={billing}
               customers={customers}
+              compact={compact}
             />
           ))
         )}

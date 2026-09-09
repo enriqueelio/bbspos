@@ -76,6 +76,48 @@ function toPlainOrder(order: {
   };
 }
 
+/** Pedidos activos (cola) y clientes pensionados para todo el día de hoy. */
+async function getQueueData() {
+  const bounds = dayBounds(todayKey());
+  const [rows, dbCustomers] = await Promise.all([
+    prisma.order.findMany({
+      where: {
+        status: {
+          in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
+        },
+        createdAt: { gte: bounds.gte, lt: bounds.lt },
+      },
+      include: {
+        items: { include: { toppings: true } },
+      },
+      // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
+      orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
+    }),
+    prisma.customer.findMany({
+      orderBy: [{ name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        ci: true,
+        pensionType: true,
+        balance: true,
+        creditLimit: true,
+      },
+    }),
+  ]);
+
+  const pensionCustomers: PensionCustomerOption[] = dbCustomers.map((c) => ({
+    id: c.id,
+    name: c.name,
+    ci: c.ci,
+    pensionType: c.pensionType as PensionCustomerOption["pensionType"],
+    balance: c.balance,
+    creditLimit: c.creditLimit,
+  }));
+
+  return { orders: rows.map(toPlainOrder), pensionCustomers };
+}
+
 export default async function CashierPage({
   searchParams,
 }: {
@@ -95,60 +137,31 @@ export default async function CashierPage({
 
   if (tab === "venta") {
     const catalog = await getPosCatalog();
+    const { orders: queueOrders, pensionCustomers } = await getQueueData();
 
     return (
-      <main className="h-full overflow-y-auto overscroll-contain">
-        <div className="mx-auto w-full max-w-[70vw] px-4 pt-4">
+      <main className="flex h-dvh w-full flex-col overflow-hidden">
+        <div className="w-full shrink-0 px-4 pt-4">
           <Header
             name={session.user.name ?? ""}
             role={session.user.role}
             tab={tab}
           />
         </div>
-        <div className="mx-auto mt-2 w-full max-w-[70vw] px-4 lg:px-6">
-          <PosTerminal catalog={catalog} role={session.user.role} />
+        <div className="min-h-0 flex-1">
+          <PosTerminal
+            catalog={catalog}
+            role={session.user.role}
+            queueOrders={queueOrders}
+            customers={pensionCustomers}
+          />
         </div>
       </main>
     );
   }
 
   if (tab === "preparar") {
-    const bounds = dayBounds(todayKey());
-    const [rows, dbCustomers] = await Promise.all([
-      prisma.order.findMany({
-        where: {
-          status: {
-            in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
-          },
-          createdAt: { gte: bounds.gte, lt: bounds.lt },
-        },
-        include: {
-          items: { include: { toppings: true } },
-        },
-        // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
-        orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
-      }),
-      prisma.customer.findMany({
-        orderBy: [{ name: "asc" }],
-        select: {
-          id: true,
-          name: true,
-          ci: true,
-          pensionType: true,
-          balance: true,
-          creditLimit: true,
-        },
-      }),
-    ]);
-
-    const pensionCustomers: PensionCustomerOption[] = dbCustomers.map((c) => ({
-      id: c.id,
-      name: c.name,
-      ci: c.ci,
-      pensionType: c.pensionType as PensionCustomerOption["pensionType"],
-      balance: c.balance,
-      creditLimit: c.creditLimit,
-    }));
+    const { orders, pensionCustomers } = await getQueueData();
 
     return (
       <main className="flex h-full flex-col">
@@ -157,7 +170,7 @@ export default async function CashierPage({
         </div>
         <div className="scroll-touch min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[70vw] px-4 pb-6">
-            <QueueView orders={rows.map(toPlainOrder)} role={session.user.role} customers={pensionCustomers} />
+            <QueueView orders={orders} role={session.user.role} customers={pensionCustomers} />
           </div>
         </div>
       </main>
@@ -201,16 +214,6 @@ function Header({
         </div>
         {!isMesero && (
           <nav className="flex flex-1 items-center justify-center gap-2">
-            <Link
-              href="/?tab=preparar"
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                tab === "preparar"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent"
-              }`}
-            >
-              Dashboard
-            </Link>
             <Link
               href="/?tab=venta"
               className={`rounded-md px-4 py-2 text-sm font-bold transition-colors ${

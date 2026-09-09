@@ -23,6 +23,9 @@ import {
 } from "@bbspos/types";
 import { createPosOrder } from "@/actions/pos";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
+import { QueueView } from "@/components/queue-view";
+import type { Order } from "@bbspos/types";
+import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 
 const CATEGORIES = FlavorCategoryList;
 
@@ -179,9 +182,13 @@ const PAY_BUTTON =
 export function PosTerminal({
   catalog,
   role,
+  queueOrders,
+  customers,
 }: {
   catalog: Catalog;
   role: RoleType;
+  queueOrders: Order[];
+  customers: PensionCustomerOption[];
 }) {
   const router = useRouter();
   const cart = usePosCart();
@@ -394,9 +401,8 @@ export function PosTerminal({
       setNotice(
         `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
       );
-      // El mesero se queda en Nueva Venta para seguir tomando órdenes;
-      // el cajero/admin va a la cola para registrar pagos/entregas.
-      router.push(isBilling ? "/?tab=preparar" : "/?tab=venta");
+      // El pedido se registra y el cajero/mesero se mantiene en Nueva Venta.
+      router.push("/?tab=venta");
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "No se pudo enviar el pedido.",
@@ -599,9 +605,21 @@ export function PosTerminal({
   }, []);
 
   return (
-    <div className="flex w-full h-[calc(100vh-8rem)] bg-slate-950 overflow-hidden">
-      {/* ===== Izquierda (~35%): Ticket en curso y cobro (fijo) ===== */}
-      <div className="w-[34%] min-w-[320px] flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col overflow-hidden">
+    <div className="flex h-full w-full bg-slate-950 overflow-hidden">
+      {/* ===== Columna 1 (20%): Pedidos en Cola con scroll propio ===== */}
+      <aside className="flex w-1/5 min-w-[300px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+          <QueueView
+            orders={queueOrders}
+            role={role}
+            customers={customers}
+            compact
+          />
+        </div>
+      </aside>
+
+      {/* ===== Columna 2 (20%): Ticket en curso y cobro (fijo) ===== */}
+      <section className="flex w-1/5 min-w-[280px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
         {/* Encabezado del ticket */}
         <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
           <h2 className="text-base font-black uppercase tracking-wide text-white">
@@ -790,7 +808,7 @@ export function PosTerminal({
               "Enviando…"
             ) : isBilling ? (
               <>
-                <span className="text-base font-bold">Enviar y cobrar</span>
+                <span className="text-base font-bold">ACEPTAR</span>
                 <span className="font-mono text-lg font-bold">
                   {formatPrice(cartTotal)}
                 </span>
@@ -800,10 +818,10 @@ export function PosTerminal({
             )}
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* ===== Derecha (~66%): Catálogo ===== */}
-      <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+      {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}
+      <section className="flex w-3/5 flex-col bg-slate-950 overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           {/* Almuerzos del día (acceso rápido): tarjetas doradas con el mismo bloque
             uniforme que la grilla de la carta para una retícula simétrica */}
@@ -1154,7 +1172,7 @@ export function PosTerminal({
           </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

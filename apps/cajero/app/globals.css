@@ -151,3 +151,29 @@
     glow-green 2s ease-in-out 200ms infinite;
 }
 
+/* Parpadeo azul del botón/tarjeta de un pedido que acaba de entrar a la cola:
+   tres destellos en 2s, al igual que el card-enter inicial de las demás. */
+@keyframes flash-blue {
+  0%,
+  32%,
+  64%,
+  100% {
+    background-color: transparent;
+  }
+  16% {
+    background-color: rgba(37, 99, 235, 0.5);
+  }
+  48% {
+    background-color: rgba(37, 99, 235, 0.5);
+  }
+  80% {
+    background-color: rgba(37, 99, 235, 0.5);
+  }
+}
+
+.animate-flash-blue {
+  animation:
+    card-enter 200ms ease-out both,
+    flash-blue 2s ease-in-out 200ms both;
+}
+

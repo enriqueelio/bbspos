@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { Search, ChevronDown } from "lucide-react";
 import {
   Badge,
   Button,
@@ -389,6 +390,7 @@ function OrderCard({
   compact = false,
   expandedId,
   setExpandedId,
+  flashing = false,
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
@@ -397,6 +399,7 @@ function OrderCard({
   compact?: boolean;
   expandedId: string | null;
   setExpandedId: (id: string | null) => void;
+  flashing?: boolean;
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
@@ -443,7 +446,8 @@ function OrderCard({
           type="button"
           onClick={() => setExpandedId(order.id)}
           className={`grid w-full animate-in fade-in cursor-pointer items-center gap-2 text-left transition-colors hover:bg-slate-900/60 ${
-            compact
+            flashing ? "animate-flash-blue" : ""
+          } ${compact
               ? "grid-cols-[auto_minmax(0,1fr)_auto_auto] px-3 py-2"
               : "grid-cols-[minmax(0,1fr)_8rem_6rem_minmax(11rem,auto)] gap-3 px-5 py-3.5"
           }`}
@@ -809,6 +813,57 @@ function ConfirmDialog({
   );
 }
 
+// Acordeón de grupo: cabecera con chevrón y contenido desplegable. Si no es
+// colapsable (siempre visible) el clic no hace nada y el contenido se muestra
+// abierto en todo momento.
+function QueueGroupAccordion({
+  title,
+  count,
+  open,
+  collapsible = false,
+  onToggle,
+  children,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  collapsible?: boolean;
+  onToggle?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <button
+        type="button"
+        onClick={collapsible ? onToggle : undefined}
+        disabled={!collapsible}
+        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors ${
+          collapsible
+            ? "cursor-pointer hover:bg-slate-900/60"
+            : "cursor-default"
+        }`}
+      >
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${
+            open ? "" : "-rotate-90"
+          }`}
+        />
+        <span className="truncate text-sm font-black uppercase tracking-wide text-white">
+          {title}
+        </span>
+        {count > 0 && (
+          <Badge variant="outline" className="ml-auto shrink-0">
+            {count}
+          </Badge>
+        )}
+      </button>
+      {open && (
+        <div className="space-y-3 border-t border-slate-800 p-3">{children}</div>
+      )}
+    </Card>
+  );
+}
+
 export function QueueView({
   orders,
   role,
@@ -827,6 +882,49 @@ export function QueueView({
   const [query, setQuery] = useState("");
   // Acordeón único: solo una tarjeta expandida a la vez en toda la cola.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Grupo "Pedidos completados": contraído por defecto; el de pendientes
+  // siempre está visible (no colapsa).
+  const [completedOpen, setCompletedOpen] = useState(false);
+  // Pedidos recién llegados a la cola, en parpadeo azul durante 2 segundos.
+  const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set());
+  // Ref de las tarjetas para auto-scroll cuando entra un pedido nuevo.
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const knownIds = useRef<Set<string> | null>(null);
+
+  // Cuando aparece un pedido nuevo (pedido aceptado), desplaza la lista hasta
+  // que la tarjeta nueva quede visible. El primer render solo inicializa el
+  // set de ids conocidos para no scrollear al abrir la vista.
+  useEffect(() => {
+    if (!knownIds.current) {
+      knownIds.current = new Set(orders.map((o) => o.id));
+      return;
+    }
+    const fresh = orders.filter((o) => !knownIds.current!.has(o.id));
+    if (fresh.length === 0) return;
+    knownIds.current = new Set(orders.map((o) => o.id));
+    const newest = fresh.reduce((a, b) => (a.seq ?? 0) >= (b.seq ?? 0) ? a : b);
+    // Parpadeo azul de 2s en la tarjeta de cada pedido que acaba de entrar.
+    const ids = fresh.map((o) => o.id);
+    setFlashingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      return next;
+    });
+    const timer = setTimeout(() => {
+      setFlashingIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 2000);
+    requestAnimationFrame(() =>
+      cardRefs.current.get(newest.id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      }),
+    );
+    return () => clearTimeout(timer);
+  }, [orders]);
 
   if (orders.length === 0) {
     return (
@@ -844,21 +942,19 @@ export function QueueView({
       (o.status === OrderStatus.ENTREGADO && !o.paidAt),
   ).length;
 
-  const stateRank = (o: Order) =>
-    o.status === OrderStatus.RECIBIDO
-      ? 0
-      : o.status === OrderStatus.ACEPTADO
-        ? 1
-        : o.status === OrderStatus.ENTREGADO && !o.paidAt
-          ? 2
-          : 3;
+  // Agrupa completados (entregados Y cobrados) en el grupo superior y
+  // pendientes (no cobrados o no entregados) en el inferior; dentro de cada
+  // grupo ordena ascendente por número de ticket (seq). El array `ordered` ya
+  // lleva ambos criterios aplicados y los dos acordeones lo dividen en bloques.
+  const isComplete = (o: Order) =>
+    o.status === OrderStatus.ENTREGADO && Boolean(o.paidAt);
 
   const ordered = [...orders].sort((a, b) => {
-    const diff = stateRank(a) - stateRank(b);
+    const aDone = isComplete(a) ? 0 : 1;
+    const bDone = isComplete(b) ? 0 : 1;
+    const diff = aDone - bDone;
     if (diff !== 0) return diff;
-    return (
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+    return (a.seq ?? 0) - (b.seq ?? 0);
   });
 
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
@@ -871,6 +967,11 @@ export function QueueView({
         return code.includes(q) || name.includes(q) || hour.includes(q);
       })
     : ordered;
+
+  // Dos grupos con el sort ascendente por seq ya aplicado: los completados
+  // (entregados Y cobrados) y los pendientes (el resto de la cola).
+  const completados = filtered.filter((o) => isComplete(o));
+  const pendientes = filtered.filter((o) => !isComplete(o));
 
   return (
     <div className="space-y-6">
@@ -895,34 +996,90 @@ export function QueueView({
       )}
 
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-lg font-bold">
-          PEDIDOS EN COLA
-          {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
-        </h2>
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por número de pedido, nombre, mesa u hora…"
-          className="w-full"
-        />
+        <div
+          className={`flex items-center gap-2 ${
+            compact
+              ? "sticky top-0 z-10 -mx-3 bg-slate-900 px-3 pb-2 pt-1"
+              : ""
+          }`}
+        >
+          <h2 className="flex shrink-0 items-center gap-2 text-base font-black uppercase tracking-wide text-white">
+            PEDIDOS EN COLA
+            {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
+          </h2>
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder=""
+              title="Buscar por número de pedido, nombre, mesa u hora…"
+              className="h-9 w-full pl-8"
+            />
+          </div>
+        </div>
         {filtered.length === 0 ? (
           <p className="rounded-md border border-slate-700 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
             Sin resultados para
             {query.trim() ? ` "${query.trim()}"` : " el pedido buscado"}.
           </p>
         ) : (
-          filtered.map((order) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              clock={clock}
-              billing={billing}
-              customers={customers}
-              compact={compact}
-              expandedId={expandedId}
-              setExpandedId={setExpandedId}
-            />
-          ))
+          <>
+            <QueueGroupAccordion
+              title="Pedidos completados"
+              count={completados.length}
+              open={completedOpen}
+              collapsible
+              onToggle={() => setCompletedOpen((v) => !v)}
+            >
+              {completados.map((order) => (
+                <div
+                  key={order.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(order.id, el);
+                    else cardRefs.current.delete(order.id);
+                  }}
+                >
+                  <OrderCard
+                    order={order}
+                    clock={clock}
+                    billing={billing}
+                    customers={customers}
+                    compact={compact}
+                    expandedId={expandedId}
+                    setExpandedId={setExpandedId}
+                    flashing={flashingIds.has(order.id)}
+                  />
+                </div>
+              ))}
+            </QueueGroupAccordion>
+            <QueueGroupAccordion
+              title="Pedidos pendientes"
+              count={pendientes.length}
+              open
+            >
+              {pendientes.map((order) => (
+                <div
+                  key={order.id}
+                  ref={(el) => {
+                    if (el) cardRefs.current.set(order.id, el);
+                    else cardRefs.current.delete(order.id);
+                  }}
+                >
+                  <OrderCard
+                    order={order}
+                    clock={clock}
+                    billing={billing}
+                    customers={customers}
+                    compact={compact}
+                    expandedId={expandedId}
+                    setExpandedId={setExpandedId}
+                    flashing={flashingIds.has(order.id)}
+                  />
+                </div>
+              ))}
+            </QueueGroupAccordion>
+          </>
         )}
       </section>
 

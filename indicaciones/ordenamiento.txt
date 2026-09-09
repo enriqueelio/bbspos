@@ -1,0 +1,9 @@
+Por favor, actualiza la función de ordenamiento (`sort`) de la lista de **Pedidos en Cola** para que agrupe y ordene los pedidos aplicando estrictamente las siguientes reglas:
+
+1. **Criterio de Agrupación por Estado (Completados arriba, Pendientes abajo):**
+   - El grupo principal superior debe estar conformado exclusivamente por los pedidos que ya estén **completamente finalizados** (es decir, que cumplan con las dos condiciones: *entregados* Y *cobrados*).
+   - El grupo inferior estará conformado por todos los **pedidos activos/pendientes** (los que no han sido cobrados o no han sido entregados).
+
+2. **Criterio de Ordenamiento Ascendente (Por Número de Pedido):**
+   - Dentro de cada uno de los dos grupos, los pedidos deben ordenarse **estrictamente de forma ascendente por su número de ticket** (`orderNumber` de menor a mayor: ej. 1, 2, 3...). 
+   - Esto significa que los pedidos nuevos que vayan ingresando se irán colocando automáticamente al final de la lista de pendientes, y cuando un pedido se marque como cobrado y entregado, se desplazará ordenadamente hacia arriba a la sección de completados, manteniendo siempre el orden numérico ascendente en ambos bloques.

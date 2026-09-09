@@ -213,10 +213,15 @@ export function PosTerminal({
   >(null);
   const [variantSauces, setVariantSauces] = useState<string[]>([]);
   const [isAfter16, setIsAfter16] = useState(false);
+  const didMount = useRef(false);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
-  // arranque un pedido nuevo sin arrastrar selecciones.
+  // arranque un pedido nuevo sin arrastrar selecciones. Corre una sola vez (ref
+  // guard): el catálogo cambia de identidad en cada refresh (router.refresh de
+  // la cola) y re-ejecutarlo resetea la categoría activa a Milanesas.
   useEffect(() => {
+    if (didMount.current) return;
+    didMount.current = true;
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);

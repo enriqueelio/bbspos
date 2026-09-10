@@ -1,5 +1,5 @@
 import { cva } from "class-variance-authority";
-import { OrderStatus, type Order } from "@bbspos/types";
+import { OrderStatus, OrderType, type Order } from "@bbspos/types";
 
 /* ------------------------------------------------------------------ */
 /*  Estado visual de un pedido en la cola                              */
@@ -76,4 +76,15 @@ export const ageTextVariants = cva("font-bold", {
     },
   },
   defaultVariants: { critical: false },
+});
+
+export const orderTypeBackgroundVariants = cva("transition-all duration-300", {
+  variants: {
+    orderType: {
+      MESA: "",
+      LLEVAR: "",
+      DELIVERY: "bg-purple-500/10 shadow-inner shadow-purple-500/20",
+    },
+  },
+  defaultVariants: { orderType: OrderType.LLEVAR },
 });

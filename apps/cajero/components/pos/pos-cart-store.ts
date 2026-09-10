@@ -11,7 +11,7 @@ import type {
   Size,
 } from "@bbspos/types";
 
-export type PosDeliveryType = "MESA" | "LLEVAR";
+export type PosDeliveryType = "MESA" | "LLEVAR" | "DELIVERY";
 
 export interface AddPosItemInput {
   size: Size;

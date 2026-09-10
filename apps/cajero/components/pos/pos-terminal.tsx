@@ -124,7 +124,7 @@ function defaultPane(catalog: Catalog): CatalogPane {
 }
 
 function deliveryLabel(type: PosDeliveryType) {
-  return type === "MESA" ? "PARA MESA" : "PARA LLEVAR";
+  return type === "MESA" ? "MESA" : type === "LLEVAR" ? "LLEVAR" : "DELIVERY";
 }
 
 // ===== Estilos compartidos de botones y contenedores =====
@@ -767,33 +767,37 @@ export function PosTerminal({
           />
 
           <div
-            className={`grid grid-cols-2 gap-2 rounded-xl ${
+            className={`grid grid-cols-3 gap-2 rounded-xl ${
               needsDelivery ? "animate-name-glow" : ""
             }`}
           >
-            {(["MESA", "LLEVAR"] as PosDeliveryType[]).map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => cart.setDeliveryType(type)}
-                className={`${PAY_BUTTON} ${
-                  cart.deliveryType === type
-                    ? "border-primary bg-primary text-white shadow-md shadow-primary/25"
-                    : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
-                }`}
-              >
-                {deliveryLabel(type)}
-              </button>
-            ))}
+            {(["MESA", "LLEVAR", "DELIVERY"] as PosDeliveryType[]).map(
+              (type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => cart.setDeliveryType(type)}
+                  className={`${PAY_BUTTON} ${
+                    cart.deliveryType === type
+                      ? type === "DELIVERY"
+                        ? "border-purple-500 bg-purple-500 text-white shadow-md shadow-purple-500/25"
+                        : "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25"
+                      : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
+                  }`}
+                >
+                  {deliveryLabel(type)}
+                </button>
+              ),
+            )}
           </div>
 
           {(needsName || needsDelivery) && (
             <p className="text-center text-xs font-bold uppercase tracking-wide text-amber-400">
               {needsName && needsDelivery
-                ? "⚠ Completa nombre o mesa y elige Para mesa / Para llevar"
+                ? "⚠ Completa nombre o mesa y elige MESA / LLEVAR / DELIVERY"
                 : needsName
                   ? "⚠ Escribe el nombre o mesa del cliente"
-                  : "⚠ Elige Para mesa o Para llevar"}
+                  : "⚠ Elige MESA, LLEVAR o DELIVERY"}
             </p>
           )}
 

@@ -300,4 +300,5 @@ enum PensionType {
 enum DeliveryType {
   MESA
   LLEVAR
+  DELIVERY
 }

@@ -88,7 +88,7 @@ export async function getPosCatalog(): Promise<Catalog> {
 export async function createPosOrder(
   items: CartItem[],
   customerName?: string,
-  deliveryType?: "MESA" | "LLEVAR" | null,
+  deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
   notes?: string | null,
 ): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
@@ -102,7 +102,7 @@ export async function createPosOrder(
   }
 
   if (!deliveryType) {
-    throw new Error("Elige Para mesa o Para llevar.");
+    throw new Error("Elige MESA, LLEVAR o DELIVERY.");
   }
 
   // Verifica que el usuario de la sesión exista para no violar la llave

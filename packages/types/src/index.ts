@@ -239,6 +239,20 @@ export const OrderStatusLabel: Record<OrderStatus, string> = {
   ANULADO: "Anulado",
 };
 
+export const OrderType = {
+  MESA: "MESA",
+  LLEVAR: "LLEVAR",
+  DELIVERY: "DELIVERY",
+} as const;
+
+export type OrderType = (typeof OrderType)[keyof typeof OrderType];
+
+export const OrderTypeList: OrderType[] = [
+  OrderType.MESA,
+  OrderType.LLEVAR,
+  OrderType.DELIVERY,
+];
+
 export const Role = {
   SUPER_ADMIN: "SUPER_ADMIN",
   ADMIN: "ADMIN",
@@ -415,6 +429,7 @@ export interface Order {
   customerName: string | null;
   notes?: string | null;
   customerId?: string | null;
+  orderType?: OrderType;
   total: number;
   createdAt: string;
   acceptedAt?: string | null;

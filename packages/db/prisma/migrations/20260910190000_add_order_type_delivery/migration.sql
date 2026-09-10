@@ -1,0 +1,3 @@
+-- SQLite no impone los enums como restricción real: las columnas son TEXT.
+-- Agregar el valor DELIVERY al enum DeliveryType no requiere cambios en la
+-- estructura de la tabla, por lo que esta migración es vacía.

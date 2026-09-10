@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, ChevronDown } from "lucide-react";
+import { Search, ChevronDown, Armchair, ShoppingBag, Truck } from "lucide-react";
 import {
   Badge,
   Button,
@@ -21,6 +21,7 @@ import {
   PaymentMethodLabel,
   OrderStatus,
   OrderStatusLabel,
+  OrderType,
   Role,
   type Order,
   type Role as RoleType,
@@ -41,12 +42,29 @@ import {
   ageTextVariants,
   orderBadgeVariants,
   orderCardVariants,
+  orderTypeBackgroundVariants,
   visualStateOf,
 } from "@/components/orders/statusVariants";
 
 // El ticket que ve el cliente es el daySeq diario (#001...), no el seq global.
 function ticketOf(o: { seq: number | null; daySeq?: number | null }): number {
   return o.daySeq ?? o.seq ?? 0;
+}
+
+function DeliveryTypeIcon({
+  orderType,
+  className = "",
+}: {
+  orderType?: OrderType;
+  className?: string;
+}) {
+  const type = orderType ?? OrderType.LLEVAR;
+  const base = "shrink-0 opacity-60";
+  const size = className ? "" : "h-4 w-4";
+  const props = { className: cn(base, size, className), "aria-hidden": true };
+  if (type === OrderType.DELIVERY) return <Truck {...props} />;
+  if (type === OrderType.MESA) return <Armchair {...props} />;
+  return <ShoppingBag {...props} />;
 }
 
 // Hora de creación en formato 24h (ej. "11:10" / "20:45", sin a.m./p.m.).
@@ -450,6 +468,7 @@ function OrderCard({
         className={cn(
           "animate-in fade-in slide-in-from-bottom-4 duration-200",
           orderCardVariants({ visual }),
+          orderTypeBackgroundVariants({ orderType: order.orderType ?? OrderType.LLEVAR }),
         )}
       >
       {collapsed ? (
@@ -482,10 +501,14 @@ function OrderCard({
             )}
           </div>
           <span
-            className={`text-right font-black tabular-nums text-emerald-300 ${
+            className={`flex items-center justify-end gap-1.5 text-right font-black tabular-nums text-emerald-300 ${
               compact ? "text-sm" : "text-xl"
             }`}
           >
+            <DeliveryTypeIcon
+              orderType={order.orderType}
+              className={compact ? "h-3.5 w-3.5" : "h-5 w-5"}
+            />
             {formatPrice(order.total)}
           </span>
           {compact ? (
@@ -567,12 +590,15 @@ function OrderCard({
 
         {compact && (
           <div className="flex items-center justify-between gap-2 border-t border-slate-700 pt-2">
-            <span
-              className={`block font-mono font-black ${
-                isDeliveredNotPaid ? "text-red-500" : "text-white"
-              }`}
-            >
-              {formatPrice(order.total)}
+            <span className="flex items-center gap-1.5">
+              <DeliveryTypeIcon orderType={order.orderType} className="h-3.5 w-3.5" />
+              <span
+                className={`block font-mono font-black ${
+                  isDeliveredNotPaid ? "text-red-500" : "text-white"
+                }`}
+              >
+                {formatPrice(order.total)}
+              </span>
             </span>
             <div className="flex min-w-0 items-center gap-2">
               {order.paymentMethod && (
@@ -595,10 +621,11 @@ function OrderCard({
         <div className={`flex items-center gap-3 border-t ${compact ? "flex-col gap-2 border-slate-700 pt-2" : "flex-wrap pt-3"}`}>
           {!compact && (
             <span
-              className={`block py-1 text-4xl font-mono font-black ${
+              className={`flex items-center gap-2 py-1 text-4xl font-mono font-black ${
                 isDeliveredNotPaid ? "text-red-500" : "text-white"
               }`}
             >
+              <DeliveryTypeIcon orderType={order.orderType} className="h-6 w-6" />
               {formatPrice(order.total)}
             </span>
           )}

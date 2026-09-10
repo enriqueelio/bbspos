@@ -1,5 +1,5 @@
 import { prisma } from "@bbspos/db";
-import { OrderStatus, type Order } from "@bbspos/types";
+import { OrderStatus, OrderType, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";
@@ -23,6 +23,7 @@ function toPlainOrder(order: {
   daySeq: number | null;
   status: string;
   customerName: string | null;
+  deliveryType: string | null;
   notes: string | null;
   customerId: string | null;
   total: number;
@@ -55,6 +56,8 @@ function toPlainOrder(order: {
     daySeq: order.daySeq,
     status: order.status as Order["status"],
     customerName: order.customerName,
+    orderType:
+      (order.deliveryType as Order["orderType"]) ?? OrderType.LLEVAR,
     notes: order.notes,
     customerId: order.customerId,
     total: order.total,

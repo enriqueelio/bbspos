@@ -1371,8 +1371,8 @@ function DayTotalView({ data }: { data: DayTotalData }) {
         columns={[
           {
             header: "# Ticket",
-            cell: (r) => `#${String(r.seq ?? 0).padStart(5, "0")}`,
-            sortValue: (r) => r.seq ?? 0,
+            cell: (r) => `#${String(r.daySeq ?? r.seq ?? 0).padStart(5, "0")}`,
+            sortValue: (r) => r.daySeq ?? 0,
           },
           {
             header: "Fecha y hora",

@@ -92,7 +92,7 @@ function handleDayTotal(data: DayTotalData, from: string, to: string) {
 
   if (data.orders.length > 0) {
     const rows = data.orders.map((r) => ({
-      "Nº Ticket": r.seq ?? "—",
+      "Nº Ticket": r.daySeq ?? r.seq ?? "—",
       Fecha: new Date(r.createdAt).toLocaleDateString("es-BO"),
       Hora: new Date(r.createdAt).toLocaleTimeString("es-BO", { hour: "2-digit", minute: "2-digit" }),
       Cliente: r.customerName ?? "—",

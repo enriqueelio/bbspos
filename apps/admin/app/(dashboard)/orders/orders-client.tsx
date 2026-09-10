@@ -34,6 +34,11 @@ import {
 } from "@/app/actions/orders";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 
+// El ticket visible es el daySeq diario (#001...), no el seq global.
+function ticketOf(o: Pick<Order, "seq" | "daySeq">): number {
+  return o.daySeq ?? o.seq ?? 0;
+}
+
 const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
   { value: "ALL", label: "Todos" },
   { value: "RECIBIDO", label: "Recibidos" },
@@ -104,7 +109,7 @@ function AccordionRow({
         onClick={onToggle}
       >
         <td className="whitespace-nowrap px-4 py-3 text-sm font-mono font-bold text-white">
-          #{formatOrderCode(order.seq)}
+          #{formatOrderCode(ticketOf(order))}
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-300">
           {new Date(order.createdAt).toLocaleString("es-MX", {
@@ -342,7 +347,7 @@ function OrderDetail({
           <DialogHeader>
             <DialogTitle>¿Anular este pedido?</DialogTitle>
             <DialogDescription>
-              Pedido #{formatOrderCode(order.seq)}
+              Pedido #{formatOrderCode(ticketOf(order))}
               {order.customerName ? ` · ${order.customerName}` : ""} por{" "}
               {formatPrice(order.total)}.
             </DialogDescription>
@@ -404,7 +409,7 @@ function OrderDetail({
           <DialogHeader>
             <DialogTitle>Aplicar descuento</DialogTitle>
             <DialogDescription>
-              Pedido #{formatOrderCode(order.seq)}
+              Pedido #{formatOrderCode(ticketOf(order))}
               {order.customerName ? ` · ${order.customerName}` : ""} por{" "}
               {formatPrice(order.total)}.
             </DialogDescription>
@@ -725,7 +730,9 @@ export function OrdersClient({
       let cmp = 0;
       switch (sort.key) {
         case "seq":
-          cmp = (a.seq ?? 0) - (b.seq ?? 0);
+          cmp =
+            (a.orderDate ?? "").localeCompare(b.orderDate ?? "") ||
+            (a.daySeq ?? 0) - (b.daySeq ?? 0);
           break;
         case "createdAt":
           cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();

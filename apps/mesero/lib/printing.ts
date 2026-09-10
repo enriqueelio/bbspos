@@ -137,6 +137,7 @@ interface ComandaItem {
 
 interface ComandaOrder {
   seq: number | null;
+  daySeq: number | null;
   customerName: string | null;
   createdAt: Date;
   total: number;
@@ -223,7 +224,7 @@ export function formatComanda(order: ComandaOrder): string {
 
   lines.push(repeat("=", WIDTH));
   lines.push(centered("BUBBLE DRINK"));
-  lines.push(centered(`COMANDA #${String(order.seq ?? 0).padStart(5, "0")}`));
+  lines.push(centered(`COMANDA #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")}`));
   lines.push(repeat("=", WIDTH));
 
   if (order.customerName) {

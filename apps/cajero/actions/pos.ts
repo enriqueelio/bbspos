@@ -1,7 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma, todayMenuItems, cartaMenuItems } from "@bbspos/db";
+import {
+  prisma,
+  todayMenuItems,
+  cartaMenuItems,
+  todayKey,
+} from "@bbspos/db";
 import {
   OrderStatus,
   cartItemUnitTotal,
@@ -85,7 +90,7 @@ export async function createPosOrder(
   customerName?: string,
   deliveryType?: "MESA" | "LLEVAR" | null,
   notes?: string | null,
-): Promise<{ orderId: string; seq: number; total: number }> {
+): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
 
   if (items.length === 0) {
@@ -141,16 +146,23 @@ export async function createPosOrder(
   let order: Awaited<ReturnType<typeof prisma.order.create>>;
   try {
     order = await prisma.$transaction(async (tx) => {
-      // El número de pedido se reinicia a 1 cada medianoche: se busca el mayor
-      // seq del día y se suma 1, de modo que un día nuevo empieza en #001.
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const last = await tx.order.findFirst({
-        where: { createdAt: { gte: startOfDay } },
+      // El seq es global y único (nunca se repite en la BD): es la clave de
+      // orden cronológico de todo el historial. El ticket visible al cliente
+      // es el daySeq, que sí se reinicia a 1 cada medianoche.
+      const first = await tx.order.findFirst({
         orderBy: { seq: "desc" },
         select: { seq: true },
       });
-      const seq = (last?.seq ?? 0) + 1;
+      const seq = (first?.seq ?? 0) + 1;
+
+      const orderDate = todayKey();
+      const last = await tx.order.findFirst({
+        where: { orderDate },
+        orderBy: { daySeq: "desc" },
+        select: { daySeq: true },
+      });
+      const daySeq = (last?.daySeq ?? 0) + 1;
+
       return tx.order.create({
         data: {
           customerName: customerName?.trim() || null,
@@ -158,6 +170,8 @@ export async function createPosOrder(
           notes: notes?.trim() || null,
           status: OrderStatus.ACEPTADO,
           seq,
+          orderDate,
+          daySeq,
           total,
           userId: dbUser ? dbUser.id : null,
           items: {
@@ -189,6 +203,7 @@ export async function createPosOrder(
           printerName,
           formatComanda({
             seq: printed.seq,
+            daySeq: printed.daySeq,
             customerName: printed.customerName,
             createdAt: printed.createdAt,
             total: printed.total,
@@ -214,5 +229,5 @@ export async function createPosOrder(
     console.error("No se pudo imprimir la comanda al crear el pedido:", e);
   }
 
-  return { orderId: order.id, seq: order.seq ?? 0, total };
+  return { orderId: order.id, seq: order.seq ?? 0, daySeq: order.daySeq ?? 0, total };
 }

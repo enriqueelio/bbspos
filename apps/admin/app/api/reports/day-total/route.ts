@@ -22,6 +22,7 @@ export async function GET(request: Request) {
         where: { createdAt: { gte, lt } },
         select: {
           seq: true,
+          daySeq: true,
           createdAt: true,
           customerName: true,
           total: true,
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
 
     const orderRows: DayTotalOrderRow[] = orders.map((o) => ({
       seq: o.seq,
+      daySeq: o.daySeq,
       createdAt: o.createdAt.toISOString(),
       customerName: o.customerName,
       total: o.total,
@@ -69,7 +71,7 @@ export async function GET(request: Request) {
       const csvRows = orderRows.map((o) => {
         const d = new Date(o.createdAt);
         return [
-          o.seq ?? "—",
+          o.daySeq ?? o.seq ?? "—",
           localDateKey(query.from),
           d.toLocaleTimeString("es-BO", {
             timeZone: "America/La_Paz",

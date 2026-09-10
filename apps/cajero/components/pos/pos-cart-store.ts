@@ -216,8 +216,23 @@ function subscribe(listener: () => void) {
   };
 }
 
+// Snapshot fijo para el servidor (SSR/hidratación): el carrito vive en
+// localStorage del navegador y el SSR debe renderizar SIEMPRE el estado vacío.
+// Tras hidratar, useSyncExternalStore cambia a getSnapshot y el carrito se
+// pinta con un update normal (nunca con un mismatch de hidratación).
+const SERVER_SNAPSHOT: PosCartSnapshot = {
+  items: [],
+  customerName: "",
+  deliveryType: "",
+  notes: "",
+};
+
 export function usePosCart() {
-  const state = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+  const state = useSyncExternalStore(
+    subscribe,
+    () => snapshot,
+    () => SERVER_SNAPSHOT,
+  );
   return {
     ...state,
     addItem: addPosItem,

@@ -33,6 +33,8 @@ export default async function OrdersPage({
   const orders: Order[] = rawOrders.map((o) => ({
     id: o.id,
     seq: o.seq,
+    orderDate: o.orderDate,
+    daySeq: o.daySeq,
     status: o.status,
     customerName: o.customerName,
     total: o.total,

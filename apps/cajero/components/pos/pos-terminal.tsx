@@ -10,6 +10,7 @@ import {
   MenuCategoryLabel,
   MenuCategoryList,
   cartItemUnitTotal,
+  formatOrderCode,
   formatPrice,
   Role,
   type Catalog,
@@ -406,7 +407,7 @@ export function PosTerminal({
       setBubaCategory(firstActiveCategory(catalog));
       setActivePane(defaultPane(catalog));
       setNotice(
-        `Pedido #${result.seq} creado · Total ${formatPrice(result.total)}`,
+        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}`,
       );
       // El pedido se registra y el cajero/mesero se mantiene en Nueva Venta.
       router.push("/?tab=venta");

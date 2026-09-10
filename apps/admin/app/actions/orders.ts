@@ -245,6 +245,7 @@ export async function reprintOrder(orderId: string): Promise<string> {
     printerName,
     formatComanda({
       seq: order.seq,
+      daySeq: order.daySeq,
       customerName: order.customerName,
       createdAt: order.createdAt,
       total: order.total,
@@ -264,5 +265,5 @@ export async function reprintOrder(orderId: string): Promise<string> {
     }),
   );
 
-  return `Comanda #${String(order.seq ?? 0).padStart(5, "0")} enviada a "${printerName}".`;
+  return `Comanda #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")} enviada a "${printerName}".`;
 }

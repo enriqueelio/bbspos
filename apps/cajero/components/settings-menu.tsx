@@ -14,6 +14,7 @@ import { reprintOrder } from "@/app/actions/printing";
 export type ReprintOrderOption = {
   id: string;
   seq: number | null;
+  daySeq: number | null;
   customerName: string | null;
   createdAt: string;
 };
@@ -128,7 +129,7 @@ export function SettingsMenu({
                     className="flex items-center gap-2 px-3 py-2 hover:bg-slate-800"
                   >
                     <span className="shrink-0 text-xs font-black text-white">
-                      #{formatOrderCode(o.seq)}
+                      #{formatOrderCode(o.daySeq ?? o.seq)}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-xs font-bold text-primary">
                       {o.customerName ?? "Sin nombre"}

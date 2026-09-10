@@ -1,7 +1,7 @@
 "use server";
 
 import { after } from "next/server";
-import { prisma } from "@bbspos/db";
+import { prisma, todayKey } from "@bbspos/db";
 import { cartItemUnitTotal, type CartItem } from "@bbspos/types";
 import { formatComanda, getPrinterName, printText } from "@/lib/printing";
 
@@ -9,7 +9,7 @@ export async function createOrder(
   items: CartItem[],
   customerName?: string,
   deliveryType?: "MESA" | "LLEVAR" | null,
-): Promise<{ orderId: string; seq: number; total: number }> {
+): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   if (items.length === 0) {
     throw new Error("El carrito está vacío");
   }
@@ -45,20 +45,28 @@ export async function createOrder(
   );
 
   const order = await prisma.$transaction(async (tx) => {
-    // El número de pedido se reinicia a 1 cada medianoche.
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const last = await tx.order.findFirst({
-      where: { createdAt: { gte: startOfDay } },
+    // El seq es global y único; el ticket visible es el daySeq diario (#001...).
+    const first = await tx.order.findFirst({
       orderBy: { seq: "desc" },
       select: { seq: true },
     });
-    const seq = (last?.seq ?? 0) + 1;
+    const seq = (first?.seq ?? 0) + 1;
+
+    const orderDate = todayKey();
+    const last = await tx.order.findFirst({
+      where: { orderDate },
+      orderBy: { daySeq: "desc" },
+      select: { daySeq: true },
+    });
+    const daySeq = (last?.daySeq ?? 0) + 1;
+
     return tx.order.create({
       data: {
         customerName: customerName.trim(),
         deliveryType: deliveryType ?? undefined,
         seq,
+        orderDate,
+        daySeq,
         total,
         items: {
           create: orderItems,
@@ -83,6 +91,7 @@ export async function createOrder(
         printerName,
         formatComanda({
           seq: full.seq,
+          daySeq: full.daySeq,
           customerName: full.customerName,
           createdAt: full.createdAt,
           total: full.total,
@@ -106,5 +115,5 @@ export async function createOrder(
     }
   });
 
-  return { orderId: order.id, seq: order.seq ?? 0, total };
+  return { orderId: order.id, seq: order.seq ?? 0, daySeq: order.daySeq ?? 0, total };
 }

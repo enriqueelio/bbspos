@@ -59,6 +59,7 @@ export async function GET(request: Request) {
       select: {
         id: true,
         seq: true,
+        daySeq: true,
         total: true,
         status: true,
         discountAmount: true,
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
         items.push({
           type: "cancellation",
           orderId: order.id,
-          orderSeq: order.seq,
+          orderSeq: order.daySeq ?? order.seq,
           amount: order.total,
           reason: order.cancelReason ?? "",
           byUser: (order.canceledBy ?? order.user)
@@ -103,7 +104,7 @@ export async function GET(request: Request) {
         items.push({
           type: "discount",
           orderId: order.id,
-          orderSeq: order.seq,
+          orderSeq: order.daySeq ?? order.seq,
           amount: order.discountAmount ?? 0,
           reason: order.discountReason ?? "",
           byUser: (order.discountedBy ?? order.user)

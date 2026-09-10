@@ -94,7 +94,7 @@ export async function checkDelayedOrders(): Promise<number> {
         { status: "ENTREGADO" }, // Entregado sin cobrar (fuga de caja)
       ],
     },
-    select: { id: true, seq: true, customerName: true, createdAt: true, status: true },
+    select: { id: true, seq: true, daySeq: true, customerName: true, createdAt: true, status: true },
   });
 
   let sent = 0;
@@ -110,7 +110,7 @@ export async function checkDelayedOrders(): Promise<number> {
     if (claim.count === 0) continue; // Otra instancia ya lo está enviando.
 
     const ok = await sendAlert(
-      order.seq ?? 0,
+      order.daySeq ?? order.seq ?? 0,
       order.customerName,
       minutes,
       order.status,

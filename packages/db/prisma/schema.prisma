@@ -153,12 +153,15 @@ model CustomerLedger {
 model Order {
   id             String         @id @default(cuid())
   seq            Int?           @unique
+  orderDate      String?
+  daySeq         Int?
   status         OrderStatus    @default(RECIBIDO)
   customerName   String?
   deliveryType   DeliveryType?
   notes          String?
   total          Int
   createdAt      DateTime       @default(now())
+  acceptedAt     DateTime?
   paidAt         DateTime?
   deliveredAt    DateTime?
   items          OrderItem[]
@@ -188,6 +191,7 @@ model Order {
   @@index([userId])
   @@index([userId, status])
   @@index([customerId])
+  @@unique([orderDate, daySeq])
 }
 
 model OrderItem {

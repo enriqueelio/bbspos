@@ -126,8 +126,8 @@ export function CustomersClient({
                     colSpan={7}
                     className="px-4 py-8 text-center text-muted-foreground"
                   >
-                    Aún no hay clientes registrados. Crea el primero con "Nuevo
-                    cliente".
+Aún no hay clientes registrados. Crea el primero con &ldquo;Nuevo
+cliente&rdquo;.
                   </td>
                 </tr>
               )}

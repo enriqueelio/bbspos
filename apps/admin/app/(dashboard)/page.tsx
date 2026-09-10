@@ -106,7 +106,7 @@ export default async function DashboardPage() {
               <CardContent className="flex items-center justify-between gap-3 p-4">
                 <div className="min-w-0">
                   <div className="truncate font-medium">
-                    Pedido #{formatOrderCode(order.seq)}
+                    Pedido #{formatOrderCode(order.daySeq ?? order.seq)}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {order.items.reduce((acc, i) => acc + i.quantity, 0)} bebida

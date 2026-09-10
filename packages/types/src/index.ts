@@ -409,12 +409,15 @@ export interface OrderItem {
 export interface Order {
   id: string;
   seq: number | null;
+  orderDate?: string | null;
+  daySeq?: number | null;
   status: OrderStatus;
   customerName: string | null;
   notes?: string | null;
   customerId?: string | null;
   total: number;
   createdAt: string;
+  acceptedAt?: string | null;
   paidAt?: string | null;
   deliveredAt?: string | null;
   items: OrderItem[];
@@ -570,6 +573,7 @@ export interface DailyReportData {
  */
 export interface DayTotalOrderRow {
   seq: number | null;
+  daySeq: number | null;
   createdAt: string;
   customerName: string | null;
   total: number;

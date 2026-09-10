@@ -19,12 +19,15 @@ type Tab = "venta" | "reporte";
 function toPlainOrder(order: {
   id: string;
   seq: number | null;
+  orderDate: string | null;
+  daySeq: number | null;
   status: string;
   customerName: string | null;
   notes: string | null;
   customerId: string | null;
   total: number;
   createdAt: Date;
+  acceptedAt: Date | null;
   deliveredAt: Date | null;
   delayNotified: boolean;
   paidAt: Date | null;
@@ -48,12 +51,15 @@ function toPlainOrder(order: {
   return {
     id: order.id,
     seq: order.seq,
+    orderDate: order.orderDate,
+    daySeq: order.daySeq,
     status: order.status as Order["status"],
     customerName: order.customerName,
     notes: order.notes,
     customerId: order.customerId,
     total: order.total,
     createdAt: order.createdAt.toISOString(),
+    acceptedAt: order.acceptedAt?.toISOString() ?? null,
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
     delayNotified: order.delayNotified,
     paidAt: order.paidAt?.toISOString() ?? null,
@@ -119,7 +125,9 @@ async function getQueueData() {
     creditLimit: c.creditLimit,
   }));
 
-  return { orders: rows.map(toPlainOrder), pensionCustomers };
+  const orders = rows.map(toPlainOrder);
+
+  return { orders, pensionCustomers };
 }
 
 /** Pedidos reimprimibles del día (Recibido o Aceptado), los más recientes
@@ -137,6 +145,7 @@ async function getPrintableOrders(): Promise<ReprintOrderOption[]> {
     select: {
       id: true,
       seq: true,
+      daySeq: true,
       customerName: true,
       createdAt: true,
     },
@@ -145,6 +154,7 @@ async function getPrintableOrders(): Promise<ReprintOrderOption[]> {
   return rows.map((r) => ({
     id: r.id,
     seq: r.seq,
+    daySeq: r.daySeq,
     customerName: r.customerName,
     createdAt: r.createdAt.toISOString(),
   }));

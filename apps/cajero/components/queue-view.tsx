@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  cn,
 } from "@bbspos/ui";
 import {
   formatOrderCode,
@@ -24,15 +25,28 @@ import {
   type Order,
   type Role as RoleType,
 } from "@bbspos/types";
-import { acceptOrder, acceptPensionOrder, deliverOrder } from "@/app/actions/orders";
+import {
+  acceptOrder,
+  acceptPensionOrder,
+  acceptQueueOrder,
+  deliverOrder,
+} from "@/app/actions/orders";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 import {
   PensionPaymentDialog,
   type PensionCustomerOption,
 } from "@/components/pension-payment-dialog";
+import {
+  AGE_CRITICAL_MINUTES,
+  ageTextVariants,
+  orderBadgeVariants,
+  orderCardVariants,
+  visualStateOf,
+} from "@/components/orders/statusVariants";
 
-function ageMinutes(createdAtIso: string, now: number): number {
-  return Math.max(0, Math.floor((now - new Date(createdAtIso).getTime()) / 60_000));
+// El ticket que ve el cliente es el daySeq diario (#001...), no el seq global.
+function ticketOf(o: { seq: number | null; daySeq?: number | null }): number {
+  return o.daySeq ?? o.seq ?? 0;
 }
 
 // Hora de creación en formato 24h (ej. "11:10" / "20:45", sin a.m./p.m.).
@@ -148,47 +162,43 @@ function AgeBadge({
   order: Order;
   now: number;
 }) {
-  // Semáforo de demora basado en los minutos transcurridos desde createdAt:
-  //  >= 10 min -> rojo pulsante (crítico)
-  //  >= 7 min  -> ámbar (precaución)
-  //  < 7 min   -> gris pizarra (normal)
-  // Entregado: tiempo fijo desde el ingreso hasta la entrega.
+  // RECIBIDO (pedido del store sin aceptar): aún no arranca el reloj de
+  // producción, así que no se muestra antigüedad.
+  if (order.status === OrderStatus.RECIBIDO) return null;
+
+  // Entregado: tiempo fijo desde que se aceptó hasta la entrega.
   if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
+    const start = order.acceptedAt ?? order.createdAt;
     const minutes = Math.max(
       0,
       Math.floor(
-        (new Date(order.deliveredAt).getTime() -
-          new Date(order.createdAt).getTime()) /
+        (new Date(order.deliveredAt).getTime() - new Date(start).getTime()) /
           60_000,
       ),
     );
     return (
-      <span className="font-bold text-red-500">
+      <span className={cn("font-bold", ageTextVariants({ critical: true }))}>
         ⏱ Tardó {formatDurationMinutes(minutes)}
       </span>
     );
   }
 
-  const minutes = ageMinutes(order.createdAt, now);
+  // En producción: el reloj corre desde que se aceptó el pedido.
+  const start = order.acceptedAt ?? order.createdAt;
+  const minutes = Math.max(
+    0,
+    Math.floor((now - new Date(start).getTime()) / 60_000),
+  );
   return (
-    <span className="font-bold text-red-500">
+    <span
+      className={cn(
+        "font-bold",
+        ageTextVariants({ critical: minutes > AGE_CRITICAL_MINUTES }),
+      )}
+    >
       Ingresado hace {formatDurationMinutes(minutes)}
     </span>
   );
-}
-
-/** Color del estado: azul recibido (por cobrar), verde aceptado/entregado. */
-function statusVariant(status: Order["status"]) {
-  switch (status) {
-    case OrderStatus.RECIBIDO:
-      return "default" as const;
-    case OrderStatus.ACEPTADO:
-      return "success" as const;
-    case OrderStatus.ENTREGADO:
-      return "success" as const;
-    default:
-      return "secondary" as const;
-  }
 }
 
 function ItemsList({
@@ -404,20 +414,25 @@ function OrderCard({
 }) {
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
-  const isFresh =
-    order.status === OrderStatus.RECIBIDO ||
-    (order.status === OrderStatus.ACEPTADO && !order.paidAt);
+  const visual = visualStateOf(order);
   const isDeliveredNotPaid =
     order.deliveredAt !== null && order.paidAt === null;
-  const isPaidNotDelivered =
-    order.paidAt !== null && order.deliveredAt === null;
   const isPending = clock.busyId === order.id;
   // Finalizado = cobrado Y entregado. Se auto-contrae (acordeón cerrado).
   const isFinished = Boolean(order.paidAt && order.deliveredAt);
   // En modo compact (cola del 20%) TODOS los pedidos nacen contraídos y cada
   // tarjeta se expande/contrae manualmente al hacer clic.
   const isOpen = expandedId === order.id;
-  const collapsed = compact ? !isOpen : isFinished && !isOpen;
+  const collapsed = !isOpen;
+  // Auto-contraer solo al pasar a "completado" (cobrado y entregado); los
+  // pedidos pendientes quedan desplegados como entran.
+  const prevFinished = useRef(isFinished);
+  useEffect(() => {
+    if (isFinished && !prevFinished.current) {
+      setExpandedId(null);
+    }
+    prevFinished.current = isFinished;
+  }, [isFinished, setExpandedId]);
   const payLabel = order.paymentMethod
     ? order.paymentMethod2 && order.paymentAmount2 != null
       ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
@@ -432,15 +447,10 @@ function OrderCard({
       }`}
     >
       <Card
-        className={`animate-in fade-in slide-in-from-bottom-4 duration-200 ${
-          isDeliveredNotPaid
-            ? "border-red-500/80 animate-glow-red ring-1 ring-red-500/60"
-            : isPaidNotDelivered
-              ? "border-emerald-500/80 animate-glow-green ring-1 ring-emerald-500/60"
-              : isFresh
-                ? "border-primary/80 animate-glow ring-1 ring-primary/60"
-                : ""
-        }`}
+        className={cn(
+          "animate-in fade-in slide-in-from-bottom-4 duration-200",
+          orderCardVariants({ visual }),
+        )}
       >
       {collapsed ? (
         <button
@@ -459,7 +469,7 @@ function OrderCard({
                 compact ? "text-sm" : "text-lg"
               }`}
             >
-              #{formatOrderCode(order.seq)}
+              #{formatOrderCode(ticketOf(order))}
             </span>
             {order.customerName && (
               <span
@@ -505,9 +515,9 @@ function OrderCard({
             // cantidades…), no se contrae la tarjeta.
             const target = e.target as HTMLElement;
             if (target.closest("button")) return;
-            if (compact || isFinished) setExpandedId(null);
+            setExpandedId(null);
           }}
-          className={compact || isFinished ? "cursor-pointer" : ""}
+          className="cursor-pointer"
         >
       <CardHeader className={compact ? "pb-1 pt-2 px-3" : "pb-3"}>
         <div className="min-w-0">
@@ -519,7 +529,7 @@ function OrderCard({
                 compact ? "text-base" : "text-2xl"
               }`}
             >
-              #{formatOrderCode(order.seq)}
+              #{formatOrderCode(ticketOf(order))}
             </CardTitle>
             {order.customerName && (
               <span
@@ -574,8 +584,7 @@ function OrderCard({
                 </span>
               )}
               <Badge
-                variant={statusVariant(order.status)}
-                className="shrink-0 text-xs"
+                className={cn("shrink-0 text-xs", orderBadgeVariants({ visual }))}
               >
                 {OrderStatusLabel[order.status]}
               </Badge>
@@ -594,26 +603,28 @@ function OrderCard({
             </span>
           )}
           <div className={`flex items-center gap-2 ${compact ? "w-full" : "ml-auto"}`}>
-            {/* Pedido en RECIBIDO (legado de pedidos web/store): se cobra y se acepta */}
-            {order.status === OrderStatus.RECIBIDO &&
-              (billing ? (
-                <ChargeButton
-                  order={order}
-                  clock={clock}
-                  onSplit={() => setShowSplit(true)}
-                onPension={() => setShowPension(true)}
-                compact={compact}
-  />
-              ) : (
-                <div className="flex w-full justify-center py-1">
-                  <Badge
-                    variant="outline"
-                    className="border-amber-500 text-amber-500"
-                  >
-                    Esperando pago en caja...
-                  </Badge>
-                </div>
-              ))}
+            {/* Pedido RECIBIDO (llegó del store): al aceptarlo arranca la producción
+                y aparecen los botones de cobrar/entregar */}
+            {order.status === OrderStatus.RECIBIDO && (
+              <Button
+                size={compact ? "default" : "lg"}
+                className={`bg-primary hover:bg-primary/80 text-white ${
+                  compact ? "h-10 w-full text-sm" : "h-14"
+                }`}
+                disabled={clock.busyId === order.id}
+                onClick={() =>
+                  clock.askConfirm(
+                    order.id,
+                    "¿Aceptas este pedido para prepararlo? El reloj de producción se inicia ahora.",
+                    async () => {
+                      await acceptQueueOrder(order.id);
+                    },
+                  )
+                }
+              >
+                {clock.busyId === order.id ? "Aceptando…" : "Aceptar"}
+              </Button>
+            )}
 
             {/* ACEPTADO sin cobrar: el cajero puede registrar el pago después */}
             {order.status === OrderStatus.ACEPTADO &&
@@ -676,8 +687,10 @@ function OrderCard({
           </div>
           {!compact && (
             <Badge
-              variant={statusVariant(order.status)}
-              className="shrink-0 text-base"
+              className={cn(
+                "shrink-0 text-base",
+                orderBadgeVariants({ visual }),
+              )}
             >
               {OrderStatusLabel[order.status]}
             </Badge>
@@ -903,7 +916,10 @@ export function QueueView({
     const fresh = orders.filter((o) => !knownIds.current!.has(o.id));
     if (fresh.length === 0) return;
     knownIds.current = new Set(orders.map((o) => o.id));
-    const newest = fresh.reduce((a, b) => (a.seq ?? 0) >= (b.seq ?? 0) ? a : b);
+    const newest = fresh.reduce((a, b) => (ticketOf(a) >= ticketOf(b) ? a : b));
+    // El pedido nuevo aterriza desplegado (para ver sus ítems y botones). Al
+    // ser acordeón único, esto cierra cualquier otra tarjeta abierta.
+    setExpandedId(newest.id);
     // Parpadeo azul de 2s en la tarjeta de cada pedido que acaba de entrar.
     const ids = fresh.map((o) => o.id);
     setFlashingIds((prev) => {
@@ -955,14 +971,14 @@ export function QueueView({
     const bDone = isComplete(b) ? 0 : 1;
     const diff = aDone - bDone;
     if (diff !== 0) return diff;
-    return (a.seq ?? 0) - (b.seq ?? 0);
+    return ticketOf(a) - ticketOf(b);
   });
 
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
   const q = query.trim().toLowerCase();
   const filtered = q
     ? ordered.filter((order) => {
-        const code = formatOrderCode(order.seq).toLowerCase();
+        const code = formatOrderCode(ticketOf(order)).toLowerCase();
         const name = order.customerName?.toLowerCase() ?? "";
         const hour = horaCreacion(order).toLowerCase();
         return code.includes(q) || name.includes(q) || hour.includes(q);

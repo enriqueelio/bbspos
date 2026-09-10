@@ -14,6 +14,41 @@ import {
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
+/** Acepta en la cola un pedido RECIBIDO proveniente de la tienda web: lo pasa
+ *  a ACEPTADO (empieza a prepararse en cocina) y arranca el timer de
+ *  producción (acceptedAt). El cobro y la entrega se gestionan por separado;
+ *  la comanda ya se imprimió al crear el pedido en el store. */
+export async function acceptQueueOrder(orderId: string) {
+  // Exige sesión iniciada; cualquier rol del terminal puede aceptar.
+  await getRequiredSession();
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("El pedido está anulado.");
+  }
+
+  if (order.status !== OrderStatus.RECIBIDO) {
+    throw new Error("Este pedido ya fue aceptado.");
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: OrderStatus.ACEPTADO,
+      acceptedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/");
+}
+
 /** Registra el pago de un pedido. Al cobrar un pedido RECIBIDO (proveniente
  *  de la tienda web) lo pasa a ACEPTADO; los pedidos ya ACEPTADO o ENTREGADO
  *  (tomados en el POS) se cobran sin cambiar su estado, pues el cliente puede

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Search, ChevronDown, Armchair, ShoppingBag, Truck } from "lucide-react";
+import { Search, ChevronDown, Utensils, Bike } from "lucide-react";
 import {
   Badge,
   Button,
@@ -51,6 +51,33 @@ function ticketOf(o: { seq: number | null; daySeq?: number | null }): number {
   return o.daySeq ?? o.seq ?? 0;
 }
 
+// Icono lucide "paper-bag": lucide-react 0.468 no lo incluye, así que se
+// embebe el SVG oficial directamente (mismo viewBox y estilo stroke 24×24).
+function PaperBag({
+  className,
+  ["aria-hidden"]: ariaHidden = true,
+}: {
+  className?: string;
+  "aria-hidden"?: boolean;
+}) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      className={className}
+      aria-hidden={ariaHidden}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5.364 3.848C4 6 3 9.652 3 12.652V19a2 2 0 002 2h14a2 2 0 002-2v-5c0-2.334-1.816-4.668-2.622-7.002" />
+      <path d="M7 3h11.379a2 2 0 011.789 1.106l.723 1.447A1 1 0 0119.997 7h-8.525a2 2 0 01-1.789-1.106L8.79 4.105a2 2 0 10-3.579 1.789l2.261 4.522A5 5 0 018 12.652V21" />
+    </svg>
+  );
+}
+
 function DeliveryTypeIcon({
   orderType,
   className = "",
@@ -61,10 +88,13 @@ function DeliveryTypeIcon({
   const type = orderType ?? OrderType.LLEVAR;
   const base = "shrink-0 opacity-60";
   const size = className ? "" : "h-4 w-4";
-  const props = { className: cn(base, size, className), "aria-hidden": true };
-  if (type === OrderType.DELIVERY) return <Truck {...props} />;
-  if (type === OrderType.MESA) return <Armchair {...props} />;
-  return <ShoppingBag {...props} />;
+  const props = {
+    className: cn(base, size, className),
+    "aria-hidden": true,
+  };
+  if (type === OrderType.DELIVERY) return <Bike {...props} />;
+  if (type === OrderType.MESA) return <Utensils {...props} />;
+  return <PaperBag {...props} />;
 }
 
 // Hora de creación en formato 24h (ej. "11:10" / "20:45", sin a.m./p.m.).

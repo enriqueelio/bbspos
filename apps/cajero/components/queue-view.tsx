@@ -1110,13 +1110,11 @@ export function QueueView({
         ) : (
           <>
             <QueueGroupAccordion
-              title="Pedidos completados"
-              count={completados.length}
-              open={completedOpen}
-              collapsible
-              onToggle={() => setCompletedOpen((v) => !v)}
+              title="Pedidos pendientes"
+              count={pendientes.length}
+              open
             >
-              {completados.map((order) => (
+              {pendientes.map((order) => (
                 <div
                   key={order.id}
                   ref={(el) => {
@@ -1138,11 +1136,13 @@ export function QueueView({
               ))}
             </QueueGroupAccordion>
             <QueueGroupAccordion
-              title="Pedidos pendientes"
-              count={pendientes.length}
-              open
+              title="Pedidos completados"
+              count={completados.length}
+              open={completedOpen}
+              collapsible
+              onToggle={() => setCompletedOpen((v) => !v)}
             >
-              {pendientes.map((order) => (
+              {completados.map((order) => (
                 <div
                   key={order.id}
                   ref={(el) => {

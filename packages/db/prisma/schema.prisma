@@ -19,6 +19,7 @@ model User {
   orders    Order[]
   cancelledOrders Order[] @relation("OrderCanceledBy")
   discountedOrders Order[] @relation("OrderDiscountedBy")
+  cashCloses CashClose[]
 }
 
 model Size {
@@ -234,6 +235,41 @@ model DailyReportLog {
   // Día (YYYY-MM-DD) cuyo cierre de caja ya se envió a Telegram.
   date   String   @id
   sentAt DateTime @default(now())
+}
+
+// Cierre de caja: arqueo físico de efectivo por denominación y contraste con
+// lo registrado en el sistema (ventas + recargas de pensionados). Puede haber
+// varios cierres al día (ej. un turno de mañana y otro de tarde): cada uno
+// guarda su histórico con fecha, hora y cajero para auditoría y reimpresión.
+model CashClose {
+  id             String   @id @default(cuid())
+  // Día local (YYYY-MM-DD) que se está cerrando.
+  date           String
+  closedAt       DateTime @default(now())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  // Desglose del efectivo contado por denominación: JSON con pares
+  // [["200",2],["100",3],...], en Bs. countedCash = Σ valor × cantidad.
+  denominations  String
+  countedCash    Int
+  // Contrastes calculados por el sistema (los pagos divididos ya quedaron
+  // prorrateados entre sus métodos).
+  systemCash     Int
+  systemQr       Int
+  systemCard     Int
+  // Consumos del día cobrados a cuenta de pensionados (NO entran a la caja).
+  pensionSales   Int
+  // Recargas/pagos de deuda de pensionados (SÍ entran a la caja ese día).
+  rechargeCash   Int
+  rechargeQr     Int
+  // sobranate/faltante de efectivo = countedCash - systemCash (systemCash ya
+  // incluye rechargeCash).
+  diffCash       Int
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([date])
+  @@index([closedAt])
 }
 
 enum FlavorCategory {

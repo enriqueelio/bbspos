@@ -765,3 +765,88 @@ export function zonedClockMinutes(
     .map(Number);
   return h * 60 + m;
 }
+
+// ===== Cierre de caja (arqueo de efectivo y contraste) =====
+
+/** Denominaciones de la gaveta (Bs): billetes y monedas enteros. El sistema
+ *  opera en Bs enteros, por eso se omiten las monedas fraccionarias. */
+export const CashDenominations = [200, 100, 50, 20, 10, 5, 2, 1] as const;
+
+/** Cantidad contada de una denominación (valor en Bs + unidades). */
+export interface CashDenominationCount {
+  value: number;
+  count: number;
+}
+
+/** Contraste del día según el sistema (para la vista de Cierre de Caja).
+ *  Los pagos divididos ya quedaron prorrateados entre sus métodos. */
+export interface CashCloseStats {
+  date: string;
+  deliveredOrders: number;
+  /** Ventas del día cobradas en efectivo (incluye la parte efectivo de divididos). */
+  systemCash: number;
+  /** Ventas del día cobradas por QR (incluye la parte QR de divididos). */
+  systemQr: number;
+  systemCard: number;
+  /** Consumos cobrados a cuenta de pensionados (NO entran a la caja). */
+  pensionSales: number;
+  /** Recargas / pagos de deuda de pensionados en efectivo (ingreso real de caja). */
+  rechargeCash: number;
+  /** Recargas / pagos de deuda de pensionados por QR (ingreso real de caja). */
+  rechargeQr: number;
+  /** Efectivo esperado en gaveta = systemCash + rechargeCash. */
+  expectedCash: number;
+  /** Pedidos del día con pago dividido (efectivo + QR prorrateado). */
+  splitOrders: number;
+}
+
+/** Registro histórico de un cierre de caja guardado en CashClose. */
+export interface CashCloseRecord {
+  id: string;
+  date: string;
+  closedAt: string;
+  userName: string;
+  denominations: CashDenominationCount[];
+  countedCash: number;
+  systemCash: number;
+  systemQr: number;
+  systemCard: number;
+  pensionSales: number;
+  rechargeCash: number;
+  rechargeQr: number;
+  expectedCash: number;
+  diffCash: number;
+  notes: string | null;
+}
+
+/** Reconstruye el desglose de denominaciones guardado como JSON ["200",2,...]. */
+export function parseDenominations(json: string): CashDenominationCount[] {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const result: CashDenominationCount[] = [];
+    for (const pair of parsed) {
+      if (
+        !Array.isArray(pair) ||
+        pair.length !== 2 ||
+        typeof pair[0] !== "number" ||
+        typeof pair[1] !== "number"
+      ) {
+        continue;
+      }
+      result.push({ value: pair[0], count: pair[1] });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+/** Serializa el desglose de denominaciones para la columna denominations. */
+export function stringifyDenominations(
+  counts: CashDenominationCount[],
+): string {
+  return JSON.stringify(
+    counts.map((c) => [c.value, c.count]),
+  );
+}

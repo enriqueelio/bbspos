@@ -1,10 +1,12 @@
 import { prisma } from "@bbspos/db";
-import { OrderStatus, OrderType, type Order } from "@bbspos/types";
+import { OrderStatus, OrderType, Role, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";
+import { getCashCloseStats, getCashCloses } from "@/lib/cash-close";
 import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
+import { CashCloseView } from "@/components/cash-close-view";
 import { PosTerminal } from "@/components/pos/pos-terminal";
 import { SignOutButton } from "@/components/sign-out-button";
 import {
@@ -14,7 +16,7 @@ import {
 import { getPosCatalog } from "@/actions/pos";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 
-type Tab = "venta" | "reporte";
+type Tab = "venta" | "reporte" | "cierre";
 
 function toPlainOrder(order: {
   id: string;
@@ -174,9 +176,14 @@ export default async function CashierPage({
 }) {
   const session = await getRequiredSession();
   const { tab: tabParam } = await searchParams;
-  // Nueva Venta es la pantalla por defecto (mesero y cajero); el reporte solo
-  // se abre si se pide explícitamente con ?tab=reporte.
-  const tab: Tab = tabParam === "reporte" ? "reporte" : "venta";
+  // Nueva Venta es la pantalla por defecto (mesero y cajero); el reporte y el
+  // cierre de caja solo se abren si se piden explícitamente con su tab.
+  const tab: Tab =
+    tabParam === "reporte"
+      ? "reporte"
+      : tabParam === "cierre"
+        ? "cierre"
+        : "venta";
 
   if (tab === "venta") {
     const catalog = await getPosCatalog();
@@ -223,6 +230,33 @@ export default async function CashierPage({
           <div className="print-report-area">
             <ReportView data={data} myName={session.user.name ?? ""} />
           </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (tab === "cierre") {
+    const key = todayKey();
+    const [stats, closes, printableOrders] = await Promise.all([
+      getCashCloseStats(key),
+      getCashCloses(key),
+      getPrintableOrders(),
+    ]);
+
+    return (
+      <main className="h-full overflow-y-auto overscroll-contain">
+        <div className="mx-auto w-full max-w-[70vw] space-y-6 px-4 py-5">
+          <Header
+            name={session.user.name ?? ""}
+            role={session.user.role}
+            printableOrders={printableOrders}
+          />
+          <h1 className="text-xl font-bold">Cierre de caja</h1>
+          <CashCloseView
+            stats={stats}
+            closes={closes}
+            canClose={session.user.role !== Role.MESERO}
+          />
         </div>
       </main>
     );

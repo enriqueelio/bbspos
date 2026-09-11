@@ -20,7 +20,7 @@ export type ReprintOrderOption = {
 };
 
 /** Rueda dentada (esquina superior derecha) con el menú de navegación:
- *  Ventas · Reportes · Reimpresión de comandas. */
+ *  Ventas · Reportes · Cierre de caja · Reimpresión de comandas. */
 export function SettingsMenu({
   printableOrders,
 }: {
@@ -169,6 +169,13 @@ export function SettingsMenu({
                 className="flex w-full items-center gap-2 border-b border-slate-800 px-4 py-3 text-sm font-black uppercase tracking-wide text-white transition-colors hover:bg-slate-800"
               >
                 Reportes
+              </button>
+              <button
+                type="button"
+                onClick={() => go("/?tab=cierre")}
+                className="flex w-full items-center gap-2 border-b border-slate-800 px-4 py-3 text-sm font-black uppercase tracking-wide text-white transition-colors hover:bg-slate-800"
+              >
+                Cierre de caja
               </button>
               <button
                 type="button"

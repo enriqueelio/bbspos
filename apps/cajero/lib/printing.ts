@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { readFileSync } from "fs";
 import { join } from "path";
 import {
+  type CashCloseRecord,
   type CashierDailyData,
   formatDurationMinutes,
   PaymentMethodLabel,
@@ -338,6 +339,67 @@ export function formatReportText(
   }
 
   lines.push(repeat("=", WIDTH));
+
+  return `${lines.join("\n")}\n`;
+}
+
+function diffLabel(diff: number): string {
+  if (diff > 0) return `Sobrante: ${money(diff)}`;
+  if (diff < 0) return `Faltante: ${money(diff)}`;
+  return "Cuadrado";
+}
+
+/** Formatea el ticket resumen de un cierre de caja para impresora térmica. */
+export function formatCashCloseText(record: CashCloseRecord): string {
+  const lines: string[] = [];
+
+  lines.push(repeat("=", WIDTH));
+  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("CIERRE DE CAJA"));
+  lines.push(repeat("=", WIDTH));
+
+  const closed = new Date(record.closedAt);
+  const localTime = `${String(closed.getHours()).padStart(2, "0")}:${String(
+    closed.getMinutes(),
+  ).padStart(2, "0")}`;
+  lines.push(row("Fecha:", record.date));
+  lines.push(row("Hora:", localTime));
+  lines.push(row("Cajero:", truncate(record.userName, WIDTH - 8)));
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("ARQUEO DE EFECTIVO"));
+  for (const d of record.denominations) {
+    if (d.count <= 0) continue;
+    lines.push(pricedRow(`${money(d.value)} x ${d.count}`, d.value * d.count));
+  }
+  lines.push(repeat("-", WIDTH));
+  lines.push(pricedRow("TOTAL CONTADO", record.countedCash));
+
+  lines.push(repeat("-", WIDTH));
+  lines.push(centered("CONTRASTE DEL SISTEMA"));
+  lines.push(pricedRow("Efectivo esperado", record.expectedCash));
+  lines.push(row("Efectivo contado:", money(record.countedCash)));
+  lines.push(diffLabel(record.diffCash));
+  lines.push(pricedRow("QR (validar banco)", record.systemQr));
+  if (record.systemCard > 0) {
+    lines.push(pricedRow("Tarjeta", record.systemCard));
+  }
+  lines.push(
+    pricedRow("Pensionados (consumos)", record.pensionSales),
+  );
+  if (record.rechargeCash > 0 || record.rechargeQr > 0) {
+    lines.push(pricedRow("Recargas pension Ef.", record.rechargeCash));
+    lines.push(pricedRow("Recargas pension QR", record.rechargeQr));
+  }
+
+  lines.push(repeat("=", WIDTH));
+  if (record.notes) {
+    lines.push(...wrap(`Nota: ${record.notes}`, WIDTH));
+    lines.push(repeat("-", WIDTH));
+  }
+  lines.push(centered("Firma cajero:"));
+  lines.push("");
+  lines.push(centered("Firma supervisor:"));
 
   return `${lines.join("\n")}\n`;
 }

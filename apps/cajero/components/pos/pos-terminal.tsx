@@ -810,20 +810,11 @@ export function PosTerminal({
             className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
           />
 
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold uppercase tracking-wide text-white">
-              Total
-            </span>
-            <span className="font-mono text-xl font-black text-white">
-              {formatPrice(cartTotal)}
-            </span>
-          </div>
-
           <button
             type="button"
             disabled={busy || !formOk}
             onClick={submit}
-            className={`w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`mt-2 w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
               isBilling
                 ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/40 hover:from-blue-400 hover:to-blue-600"
                 : "bg-gradient-to-b from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700"
@@ -831,6 +822,8 @@ export function PosTerminal({
           >
             {busy ? (
               "Enviando…"
+            ) : cartTotal === 0 ? (
+              "COMPLETAR PEDIDO"
             ) : isBilling ? (
               <>
                 <span className="text-base font-bold">ACEPTAR</span>

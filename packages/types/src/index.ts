@@ -768,9 +768,9 @@ export function zonedClockMinutes(
 
 // ===== Cierre de caja (arqueo de efectivo y contraste) =====
 
-/** Denominaciones de la gaveta (Bs): billetes y monedas enteros. El sistema
- *  opera en Bs enteros, por eso se omiten las monedas fraccionarias. */
-export const CashDenominations = [200, 100, 50, 20, 10, 5, 2, 1] as const;
+/** Denominaciones de la gaveta (Bs): billetes de 200..10, monedas de 5, 2, 1
+ *  y la fraccionaria de 0,50 Bs. Los totales pueden quedar en .50. */
+export const CashDenominations = [200, 100, 50, 20, 10, 5, 2, 1, 0.5] as const;
 
 /** Cantidad contada de una denominación (valor en Bs + unidades). */
 export interface CashDenominationCount {

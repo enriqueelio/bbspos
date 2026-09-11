@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { cva } from "class-variance-authority";
 import {
   AlertTriangle,
   Banknote,
@@ -22,7 +23,6 @@ import {
   cn,
 } from "@bbspos/ui";
 import {
-  CashDenominations,
   formatPrice,
   type CashCloseRecord,
   type CashCloseStats,
@@ -44,6 +44,39 @@ function DiffBadge({ diff }: { diff: number }) {
   );
 }
 
+// Formatea "X Bs": sin decimales cuando es entero y con 2 decimales cuando
+// intervienen monedas de 0,50 Bs (p. ej. 1.50 Bs).
+function fmtBs(n: number): string {
+  return Number.isInteger(n) ? `${n} Bs` : `${n.toFixed(2)} Bs`;
+}
+
+interface Denomination {
+  valor: number;
+  tipo: "BILLETE" | "MONEDA";
+}
+
+const DENOMINACIONES: Denomination[] = [
+  { valor: 200, tipo: "BILLETE" },
+  { valor: 100, tipo: "BILLETE" },
+  { valor: 50, tipo: "BILLETE" },
+  { valor: 20, tipo: "BILLETE" },
+  { valor: 10, tipo: "BILLETE" },
+  { valor: 5, tipo: "MONEDA" },
+  { valor: 2, tipo: "MONEDA" },
+  { valor: 1, tipo: "MONEDA" },
+  { valor: 0.5, tipo: "MONEDA" },
+];
+
+// Rayado cebra de la grilla: filas pares con fondo, impares transparentes.
+const arqueoRow = cva("border-b border-slate-800/70 transition-colors", {
+  variants: {
+    zebra: {
+      par: "bg-slate-900/40",
+      impar: "bg-transparent",
+    },
+  },
+});
+
 export function CashCloseView({
   stats,
   closes,
@@ -54,7 +87,8 @@ export function CashCloseView({
   canClose: boolean;
 }) {
   const router = useRouter();
-  const [counts, setCounts] = useState<Record<number, string>>({});
+  const [conteo, setConteo] = useState<Record<number, number>>({});
+  const [active, setActive] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
   const [printClose, setPrintClose] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -63,26 +97,39 @@ export function CashCloseView({
     ok: boolean;
     text: string;
   } | null>(null);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const countedCash = CashDenominations.reduce(
-    (sum, value) => sum + value * (parseInt(counts[value] ?? "0", 10) || 0),
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
+
+  const countedCash = DENOMINACIONES.reduce(
+    (sum, d) => sum + d.valor * (conteo[d.valor] ?? 0),
     0,
   );
   const diffCash = countedCash - stats.expectedCash;
 
-  function setCount(value: number, raw: string) {
-    setResult(null);
-    const clean = raw.replace(/\D/g, "").slice(0, 4);
-    setCounts((prev) => ({ ...prev, [value]: clean }));
+  function onKeyDown(
+    e: React.KeyboardEvent<HTMLInputElement>,
+    index: number,
+  ) {
+    const refs = inputRefs.current;
+    if (e.key === "ArrowDown" || e.key === "Enter") {
+      e.preventDefault();
+      if (index + 1 < refs.length) refs[index + 1]?.focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (index - 1 >= 0) refs[index - 1]?.focus();
+    }
   }
 
   function onConfirm() {
     setResult(null);
     startTransition(async () => {
       try {
-        const denominations = CashDenominations.map((value) => ({
-          value,
-          count: parseInt(counts[value] ?? "0", 10) || 0,
+        const denominations = DENOMINACIONES.map((d) => ({
+          value: d.valor,
+          count: conteo[d.valor] ?? 0,
         }));
         const res = await confirmCashClose({
           denominations,
@@ -128,46 +175,98 @@ export function CashCloseView({
             Ingresa cuántos de cada denominación hay físicamente en la caja.
           </p>
         </CardHeader>
-        <CardContent className="space-y-1">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {CashDenominations.map((value) => (
-              <label
-                key={value}
-                className="flex items-center justify-between gap-2 rounded-lg border border-slate-700 px-3 py-2"
-              >
-                <span className="text-white">
-                  <span className="block font-black">
-                    Bs {value}
-                  </span>
-                  <span className="block text-[10px] uppercase text-slate-400">
-                    {value >= 10 ? "Billete" : "Moneda"}
-                  </span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <Input
-                    inputMode="numeric"
-                    min={0}
-                    value={counts[value] ?? ""}
-                    onChange={(e) => setCount(value, e.target.value)}
-                    placeholder="0"
-                    className="h-9 w-16 text-center"
-                    aria-label={`Cantidad de ${value} bolivianos`}
-                  />
-                  <span className="w-20 shrink-0 text-right tabular-nums text-emerald-300">
-                    {formatPrice(value * (parseInt(counts[value] ?? "0", 10) || 0))}
-                  </span>
-                </div>
-              </label>
-            ))}
+        <CardContent>
+          <div className="overflow-hidden rounded-lg border border-slate-700">
+            <div className="max-h-[52vh] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase tracking-wide text-slate-400">
+                  <tr className="border-b border-slate-700">
+                    <th className="px-4 py-2 text-left font-semibold">
+                      Denominación
+                    </th>
+                    <th className="w-24 px-2 py-2 text-center font-semibold">
+                      Cantidad
+                    </th>
+                    <th className="px-4 py-2 text-right font-semibold">
+                      Subtotal
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DENOMINACIONES.map((d, i) => {
+                    const count = conteo[d.valor] ?? 0;
+                    const activa = active === d.valor;
+                    return (
+                      <tr
+                        key={d.valor}
+                        className={cn(
+                          arqueoRow({ zebra: i % 2 === 1 ? "par" : "impar" }),
+                          activa && "hover:bg-slate-800/60",
+                          count > 0 ? "text-emerald-400" : "text-white",
+                        )}
+                      >
+                        <td className="px-4 py-1.5">
+                          <span className="font-black">
+                            Bs {d.valor}
+                          </span>
+                          <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
+                            {d.tipo}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <Input
+                            ref={(el) => {
+                              inputRefs.current[i] = el;
+                            }}
+                            inputMode="numeric"
+                            min={0}
+                            autoComplete="off"
+                            value={count === 0 ? "" : String(count)}
+                            onChange={(e) => {
+                              setResult(null);
+                              const digits = e.target.value
+                                .replace(/[^\d]/g, "")
+                                .slice(0, 4);
+                              setConteo((prev) => ({
+                                ...prev,
+                                [d.valor]: digits === "" ? 0 : parseInt(digits, 10),
+                              }));
+                            }}
+                            onFocus={(e) => {
+                              setActive(d.valor);
+                              e.currentTarget.select();
+                            }}
+                            onKeyDown={(e) => onKeyDown(e, i)}
+                            placeholder="0"
+                            className="h-9 w-20 text-center tabular-nums"
+                            aria-label={`Cantidad de ${d.valor} bolivianos`}
+                          />
+                        </td>
+                        <td className="px-4 py-1.5 text-right font-semibold tabular-nums">
+                          {fmtBs(d.valor * count)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="sticky bottom-0 z-10 bg-slate-950">
+                  <tr className="border-t border-emerald-500/30">
+                    <td className="px-4 py-3 font-black uppercase tracking-wide text-emerald-300">
+                      Total General
+                    </td>
+                    <td></td>
+                    <td className="px-4 py-3 text-right text-3xl font-black tabular-nums text-emerald-300">
+                      {fmtBs(countedCash)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
-          <div className="mt-3 flex items-center justify-between rounded-lg bg-emerald-500/10 px-4 py-3">
-            <span className="font-black uppercase tracking-wide text-emerald-300">
-              Total en efectivo contado
-            </span>
-            <span className="text-3xl font-black tabular-nums text-emerald-300">
-              {formatPrice(countedCash)}
-            </span>
-          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            Tip: escribe la cantidad y pulsa ↓ o Enter para pasar a la siguiente
+            denominación.
+          </p>
         </CardContent>
       </Card>
 

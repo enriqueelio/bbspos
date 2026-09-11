@@ -251,20 +251,20 @@ model CashClose {
   // Desglose del efectivo contado por denominación: JSON con pares
   // [["200",2],["100",3],...], en Bs. countedCash = Σ valor × cantidad.
   denominations  String
-  countedCash    Int
+  countedCash    Float
   // Contrastes calculados por el sistema (los pagos divididos ya quedaron
   // prorrateados entre sus métodos).
-  systemCash     Int
-  systemQr       Int
-  systemCard     Int
+  systemCash     Float
+  systemQr       Float
+  systemCard     Float
   // Consumos del día cobrados a cuenta de pensionados (NO entran a la caja).
-  pensionSales   Int
+  pensionSales   Float
   // Recargas/pagos de deuda de pensionados (SÍ entran a la caja ese día).
-  rechargeCash   Int
-  rechargeQr     Int
+  rechargeCash   Float
+  rechargeQr     Float
   // sobranate/faltante de efectivo = countedCash - systemCash (systemCash ya
   // incluye rechargeCash).
-  diffCash       Int
+  diffCash       Float
   notes          String?
   createdAt      DateTime @default(now())
 

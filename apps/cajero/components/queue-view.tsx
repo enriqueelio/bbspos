@@ -38,13 +38,13 @@ import {
   type PensionCustomerOption,
 } from "@/components/pension-payment-dialog";
 import {
-  AGE_CRITICAL_MINUTES,
-  ageTextVariants,
   orderBadgeVariants,
   orderCardVariants,
+  orderDelayVariants,
   orderTypeBackgroundVariants,
   visualStateOf,
 } from "@/components/orders/statusVariants";
+import { delayLevelOf, delayMinutes, getStartTime } from "@/lib/time";
 
 // El ticket que ve el cliente es el daySeq diario (#001...), no el seq global.
 function ticketOf(o: { seq: number | null; daySeq?: number | null }): number {
@@ -216,32 +216,36 @@ function AgeBadge({
 
   // Entregado: tiempo fijo desde que se aceptó hasta la entrega.
   if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
-    const start = order.acceptedAt ?? order.createdAt;
+    const deliveredAtMs = new Date(order.deliveredAt).getTime();
     const minutes = Math.max(
       0,
-      Math.floor(
-        (new Date(order.deliveredAt).getTime() - new Date(start).getTime()) /
-          60_000,
-      ),
+      Math.floor((deliveredAtMs - getStartTime(order).getTime()) / 60_000),
     );
+    const demora = delayMinutes(order, deliveredAtMs);
     return (
-      <span className={cn("font-bold", ageTextVariants({ critical: true }))}>
+      <span
+        className={cn(
+          "font-bold",
+          orderDelayVariants({ delay: delayLevelOf(demora) }),
+        )}
+      >
         ⏱ Tardó {formatDurationMinutes(minutes)}
       </span>
     );
   }
 
-  // En producción: el reloj corre desde que se aceptó el pedido.
-  const start = order.acceptedAt ?? order.createdAt;
+  // En producción: el reloj corre desde que se aceptó el pedido. La demora es
+  // el transcurrido menos el tiempo estimado del pedido.
   const minutes = Math.max(
     0,
-    Math.floor((now - new Date(start).getTime()) / 60_000),
+    Math.floor((now - getStartTime(order).getTime()) / 60_000),
   );
+  const demora = delayMinutes(order, now);
   return (
     <span
       className={cn(
         "font-bold",
-        ageTextVariants({ critical: minutes > AGE_CRITICAL_MINUTES }),
+        orderDelayVariants({ delay: delayLevelOf(demora) }),
       )}
     >
       Ingresado hace {formatDurationMinutes(minutes)}
@@ -486,6 +490,9 @@ function OrderCard({
       ? `${PaymentMethodLabel[order.paymentMethod]} + ${PaymentMethodLabel[order.paymentMethod2]}`
       : PaymentMethodLabel[order.paymentMethod]
     : null;
+  // Demora frente al tiempo estimado: positiva = el pedido ya se tardó. Se usa
+  // para el puntito de la vista colapsada (mismo reloj que AgeBadge/Telegram).
+  const demora = delayMinutes(order, clock.now);
 
   return (
     <div
@@ -520,6 +527,9 @@ function OrderCard({
             >
               #{formatOrderCode(ticketOf(order))}
             </span>
+            {demora > 0 && (
+              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
+            )}
             {order.customerName && (
               <span
                 className={`truncate font-black text-primary ${

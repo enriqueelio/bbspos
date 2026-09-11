@@ -31,6 +31,7 @@ function toPlainOrder(order: {
   acceptedAt: Date | null;
   deliveredAt: Date | null;
   delayNotified: boolean;
+  tiempoEstimado: number;
   paidAt: Date | null;
   paymentMethod: string | null;
   paymentMethod2: string | null;
@@ -46,6 +47,7 @@ function toPlainOrder(order: {
     menuItemOptionName: string | null;
     unitPrice: number;
     quantity: number;
+    tiempoProduccion: number;
     toppings: { toppingName: string; unitPrice: number }[];
   }[];
 }): Order {
@@ -65,6 +67,7 @@ function toPlainOrder(order: {
     acceptedAt: order.acceptedAt?.toISOString() ?? null,
     deliveredAt: order.deliveredAt?.toISOString() ?? null,
     delayNotified: order.delayNotified,
+    tiempoEstimado: order.tiempoEstimado,
     paidAt: order.paidAt?.toISOString() ?? null,
     paymentMethod:
       (order.paymentMethod as Order["paymentMethod"]) ?? null,
@@ -84,6 +87,7 @@ function toPlainOrder(order: {
       menuItemOptionName: item.menuItemOptionName,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
+      tiempoProduccion: item.tiempoProduccion,
       toppings: item.toppings,
     })),
   };

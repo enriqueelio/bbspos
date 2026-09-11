@@ -1,15 +1,15 @@
-// Worker de alertas de pedidos retrasados por Telegram. Revisa cada minuto
-// todos los pedidos activos que superan el límite de minutos (default 10) y
-// envía un aviso, una sola vez por pedido. Corre en segundo plano dentro del
-// contenedor (docker-entrypoint.sh). Toda la lógica vive en
-// @bbspos/db/src/telegram-alert.ts (misma fuente que el botón de prueba manual).
+// Worker de alertas de pedidos retrasados por Telegram. Revisa todos los
+// pedidos activos cuyo tiempo transcurrido supera el tiempo estimado de
+// producción del pedido y envía un aviso, una sola vez por pedido. Corre en
+// segundo plano dentro del contenedor (docker-entrypoint.sh). Toda la lógica
+// vive en @bbspos/db/src/telegram-alert.ts (misma fuente que el botón de
+// prueba manual).
 //
 // Uso:
-//   tsx telegram-alert-worker.ts          -> bucle del servicio (cada 60s)
+//   tsx telegram-alert-worker.ts          -> bucle del servicio (cada 15s)
 //   tsx telegram-alert-worker.ts --once   -> una sola pasada y sale
 //
-// Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (requeridos),
-//      DELAY_ALERT_MINUTES (opcional, default 10).
+// Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (requeridos).
 import { checkDelayedOrders } from "../src/telegram-alert";
 
 const LOOP_MS = 15_000;

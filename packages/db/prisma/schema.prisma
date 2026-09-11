@@ -180,6 +180,7 @@ model Order {
   canceledById   String?
   canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
   delayNotified  Boolean        @default(false)
+  tiempoEstimado  Int            @default(10)
   customerId     String?
   customer       Customer?      @relation(fields: [customerId], references: [id])
   ledgerEntries  CustomerLedger[]
@@ -208,6 +209,7 @@ model OrderItem {
   menuItemDetail   String?
   unitPrice        Int
   quantity         Int
+  tiempoProduccion Int            @default(5)
   toppings         OrderItemTopping[]
 
   @@index([orderId])

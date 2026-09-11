@@ -61,21 +61,21 @@ export const orderCardVariants = cva("animate-in fade-in slide-in-from-bottom-4 
 });
 
 /* ------------------------------------------------------------------ */
-/*  Texto de antigüedad ("hace X min / tardó X")                       */
+/*  Texto de antigüedad según la demora vs el tiempo estimado          */
 /* ------------------------------------------------------------------ */
 
-/** A partir de esta antigüedad el tiempo se pinta rojo (crítico).
- *  Por debajo, se muestra en el color neutro del encabezado. */
-export const AGE_CRITICAL_MINUTES = 30;
-
-export const ageTextVariants = cva("font-bold", {
+/** Según la demora (transcurrido - tiempoEstimado) el texto de antigüedad
+ *  cambia de color: verde dentro del estimado, amarillo de aviso y rojo
+ *  pulsante cuando supera la demora crítica. */
+export const orderDelayVariants = cva("", {
   variants: {
-    critical: {
-      true: "text-red-500",
-      false: "text-slate-400",
+    delay: {
+      ok: "text-green-400",
+      warning: "text-yellow-400",
+      critical: "text-red-500 animate-pulse",
     },
   },
-  defaultVariants: { critical: false },
+  defaultVariants: { delay: "ok" },
 });
 
 export const orderTypeBackgroundVariants = cva("transition-all duration-300", {

@@ -4,6 +4,9 @@ import { after } from "next/server";
 import { prisma, todayKey } from "@bbspos/db";
 import { cartItemUnitTotal, type CartItem } from "@bbspos/types";
 import { formatComanda, getPrinterName, printText } from "@/lib/printing";
+import productosTiempoData from "../../../../data/productos-tiempo.json";
+
+const productosTiempo = productosTiempoData as Record<string, number>;
 
 export async function createOrder(
   items: CartItem[],
@@ -30,6 +33,7 @@ export async function createOrder(
       bobaTypeName: item.bobaType.name,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
+      tiempoProduccion: productosTiempo["Bubble Tea"] ?? 5,
       toppings: {
         create: item.toppings.map((t) => ({
           toppingName: t.name,
@@ -38,6 +42,9 @@ export async function createOrder(
       },
     };
   });
+
+  // La tienda solo vende bebidas de té: el estimado es el "Bubble Tea".
+  const tiempoEstimado = productosTiempo["Bubble Tea"] ?? 5;
 
   const total = items.reduce(
     (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
@@ -68,6 +75,7 @@ export async function createOrder(
         orderDate,
         daySeq,
         total,
+        tiempoEstimado,
         items: {
           create: orderItems,
         },

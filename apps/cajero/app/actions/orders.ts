@@ -134,6 +134,9 @@ export async function acceptOrder(
       ...(order.status === OrderStatus.RECIBIDO
         ? { status: OrderStatus.ACEPTADO }
         : {}),
+      // Unifica el inicio del reloj: si el pedido aún no fue aceptado
+      // (RECIBIDO cobrado al instante), el timer arranca en este momento.
+      acceptedAt: order.acceptedAt ?? new Date(),
       paymentMethod: method as PaymentMethodType,
       paymentMethod2,
       paymentAmount2,
@@ -239,6 +242,9 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         ...(order.status === OrderStatus.RECIBIDO
           ? { status: OrderStatus.ACEPTADO }
           : {}),
+        // Unifica el inicio del reloj: si el pedido aún no fue aceptado
+        // (RECIBIDO cobrado contra la cuenta al instante), arranca ahora.
+        acceptedAt: order.acceptedAt ?? new Date(),
         paymentMethod: PaymentMethod.PENSION,
         paidAt: new Date(),
         userId,

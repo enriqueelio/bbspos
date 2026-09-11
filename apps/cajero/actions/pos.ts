@@ -15,6 +15,19 @@ import {
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { printText, formatComanda, getPrinterName } from "@/lib/printing";
+import productosTiempoData from "../../../data/productos-tiempo.json";
+
+const productosTiempo = productosTiempoData as Record<string, number>;
+
+/** Minutos de producción de un producto según data/productos-tiempo.json.
+ *  Las bebidas de té usan la clave base "Bubble Tea"; los platillos se
+ *  buscan por nombre (y opción) con 10 min como respaldo. */
+function productionMinutesFor(item: CartItem): number {
+  if (item.kind === "DRINK") return productosTiempo["Bubble Tea"] ?? 5;
+  return (
+    productosTiempo[item.name] ?? productosTiempo[item.optionName ?? ""] ?? 10
+  );
+}
 
 /** Catálogo activo para el punto de venta: tamaños, sabores, tipos de boba,
  *  la matriz de precios, los toppings disponibles, el Menú del Día vigente
@@ -121,6 +134,7 @@ export async function createPosOrder(
           bobaTypeName: item.bobaType.name,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
+          tiempoProduccion: productionMinutesFor(item),
           toppings: {
             create: item.toppings.map((t) => ({
               toppingName: t.name,
@@ -135,7 +149,14 @@ export async function createPosOrder(
           menuItemDetail: item.detail,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
+          tiempoProduccion: productionMinutesFor(item),
         },
+  );
+
+  // El tiempo estimado del pedido es el del producto que más tarda.
+  const tiempoEstimado = items.reduce(
+    (max, item) => Math.max(max, productionMinutesFor(item)),
+    0,
   );
 
   const total = items.reduce(
@@ -173,6 +194,7 @@ export async function createPosOrder(
           orderDate,
           daySeq,
           total,
+          tiempoEstimado,
           userId: dbUser ? dbUser.id : null,
           items: {
             create: orderItems,

@@ -417,6 +417,9 @@ export interface OrderItem {
   menuItemOptionName: string | null;
   unitPrice: number;
   quantity: number;
+  /** Minutos estimados de producción de este producto (más uno de los
+   *  ingredientes, ej. la carne o la base saborizante). */
+  tiempoProduccion?: number;
   toppings: OrderItemTopping[];
 }
 
@@ -449,6 +452,10 @@ export interface Order {
   cancelReason?: string | null;
   canceledBy?: { name: string; role: Role } | null;
   delayNotified?: boolean;
+  /** Minutos estimados de producción del pedido = max(tiempoProduccion de sus
+   *  items). Frente al reloj unificado (acceptedAt ?? createdAt), la demora
+   *  es: transcurrido - tiempoEstimado. */
+  tiempoEstimado?: number;
 }
 
 export interface CashierDailyData {

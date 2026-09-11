@@ -565,7 +565,11 @@ function OrderCard({
         className={cn(
           "animate-in fade-in slide-in-from-bottom-4 duration-200",
           orderCardVariants({ visual }),
-          orderTypeBackgroundVariants({ orderType: order.orderType ?? OrderType.LLEVAR }),
+          isFinished
+            ? ""
+            : orderTypeBackgroundVariants({
+                orderType: order.orderType ?? OrderType.LLEVAR,
+              }),
         )}
       >
       {collapsed ? (

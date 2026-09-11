@@ -84,7 +84,7 @@ export const orderTypeBackgroundVariants = cva("transition-all duration-300", {
       MESA: "",
       LLEVAR: "",
       DELIVERY:
-        "bg-purple-500/15 shadow-[0_0_14px_rgba(168,85,247,0.9),0_0_45px_rgba(168,85,247,0.35)]",
+        "bg-purple-900/40 shadow-[inset_0_0_16px_rgba(168,85,247,0.45),inset_0_0_60px_rgba(168,85,247,0.18)]",
     },
   },
   defaultVariants: { orderType: OrderType.LLEVAR },

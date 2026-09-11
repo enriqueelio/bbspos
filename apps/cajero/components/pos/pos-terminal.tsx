@@ -670,7 +670,7 @@ export function PosTerminal({
         )}
 
         {/* Cuerpo del ticket: ítems scrolleables */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {cart.items.length === 0 && (
             <p className="text-sm text-slate-500">
               Agrega bebidas tocando un sabor o un plato del día en el
@@ -758,7 +758,7 @@ export function PosTerminal({
             type="text"
             value={cart.customerName}
             onChange={(e) => cart.setCustomerName(e.target.value.toUpperCase())}
-            placeholder="NOMBRE O MESA DEL CLIENTE (OBLIGATORIO)"
+            placeholder="NOMBRE"
             className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
               needsName
                 ? "border-amber-400/70 animate-name-glow"
@@ -779,9 +779,7 @@ export function PosTerminal({
                   onClick={() => cart.setDeliveryType(type)}
                   className={`${PAY_BUTTON} ${
                     cart.deliveryType === type
-                      ? type === "DELIVERY"
-                        ? "border-purple-500 bg-purple-500 text-white shadow-md shadow-purple-500/25"
-                        : "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25"
+                      ? "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25"
                       : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
                   }`}
                 >
@@ -791,21 +789,11 @@ export function PosTerminal({
             )}
           </div>
 
-          {(needsName || needsDelivery) && (
-            <p className="text-center text-xs font-bold uppercase tracking-wide text-amber-400">
-              {needsName && needsDelivery
-                ? "⚠ Completa nombre o mesa y elige MESA / LLEVAR / DELIVERY"
-                : needsName
-                  ? "⚠ Escribe el nombre o mesa del cliente"
-                  : "⚠ Elige MESA, LLEVAR o DELIVERY"}
-            </p>
-          )}
-
           <input
             type="text"
             value={cart.notes}
             onChange={(e) => cart.setNotes(e.target.value.toUpperCase())}
-            placeholder="INDICACIONES ESPECIALES (OPCIONAL)"
+            placeholder="INDICACIONES"
             title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
             className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
           />

@@ -145,7 +145,7 @@ El terminal SHALL mostrar un selector de tipo de entrega con dos opciones: MESA 
 
 ### Requirement: Botón de envío diferenciado por rol
 
-El terminal SHALL mostrar un botón de envío cuyo texto y comportamiento dependen del rol del usuario, habilitado únicamente cuando el ticket tiene ítems y los datos obligatorios están completos.
+El terminal SHALL mostrar un botón de envío cuyo texto y comportamiento dependen del rol del usuario, habilitado únicamente cuando el ticket tiene ítems y los datos obligatorios están completos. El total del ticket SHALL mostrarse únicamente dentro del botón de envío, sin una fila separada de "Total" en el ticket en curso.
 
 #### Scenario: Cajero/Admin envía pedido
 
@@ -156,6 +156,11 @@ El terminal SHALL mostrar un botón de envío cuyo texto y comportamiento depend
 
 - **WHEN** el usuario tiene rol MESERO y toca el botón de envío
 - **THEN** el botón muestra "Enviar a caja", el pedido se envía a la cola y el usuario permanece en el terminal POS para tomar otro pedido
+
+#### Scenario: Total dentro del botón sin fila redundante
+
+- **WHEN** el usuario arma un pedido con ítems y revisa el ticket en curso
+- **THEN** el total aparece dentro del botón de envío ("ACEPTAR {total}" o "COMPLETAR PEDIDO" sin ítems) y el ticket no muestra una fila separada de "Total"
 
 ### Requirement: Persistencia del carrito
 

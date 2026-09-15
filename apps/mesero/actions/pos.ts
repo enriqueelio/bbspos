@@ -9,7 +9,6 @@ import {
 } from "@bbspos/db";
 import {
   OrderStatus,
-  cartItemUnitTotal,
   type CartItem,
   type Catalog,
 } from "@bbspos/types";
@@ -62,7 +61,9 @@ export async function getPosCatalog(): Promise<Catalog> {
       price: number;
       description: string | null;
       imageUrl?: string | null;
-      options?: { id: string; name: string; price: number }[];
+      isMixtas: boolean;
+      requiredSauces: number | null;
+      options?: { id: string; name: string; price: number; requiredSauces: number | null }[];
     },
   ) => ({
     id: mi.id,
@@ -71,6 +72,8 @@ export async function getPosCatalog(): Promise<Catalog> {
     price: mi.price,
     description: mi.description,
     imageUrl: mi.imageUrl ?? null,
+    isMixtas: mi.isMixtas,
+    requiredSauces: mi.requiredSauces,
     options: mi.options ?? [],
   });
 
@@ -107,42 +110,107 @@ export async function createPosOrder(
     select: { id: true },
   });
 
-  const orderItems = items.map((item) =>
-    item.kind === "DRINK"
-      ? {
-          sizeName: item.size.name,
-          flavorName: item.flavor.name,
-          flavorCategory: item.category,
-          bobaTypeName: item.bobaType.name,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          tiempoProduccion: productionMinutesFor(item),
-          toppings: {
-            create: item.toppings.map((t) => ({
-              toppingName: t.name,
-              unitPrice: t.price,
-            })),
+  // ===== Precios autoritativos desde la BD =====
+  // Nunca se confía en item.unitPrice del cliente: se recalculan el precio de la
+  // bebida (matriz DrinkPrice + toppings) y el de los platillos (precio de la
+  // variante elegida o del producto base).
+  const toppingIds = [
+    ...new Set(
+      items.flatMap((i) =>
+        i.kind === "DRINK" ? i.toppings.map((t) => t.id) : [],
+      ),
+    ),
+  ];
+
+  const [dbToppings, drinkPrices, dbOptions, dbMenuItems] =
+    await Promise.all([
+      prisma.topping.findMany({ where: { id: { in: toppingIds } } }),
+      prisma.drinkPrice.findMany(),
+      prisma.menuItemOption.findMany({
+        where: {
+          id: {
+            in: items
+              .filter((i) => i.kind === "MENU_ITEM")
+              .map((i) => i.optionId)
+              .filter((id): id is string => Boolean(id)),
           },
-        }
-      : {
-          menuItemName: item.name,
-          menuItemCategory: item.category,
-          menuItemOptionName: item.optionName,
-          menuItemDetail: item.detail,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          tiempoProduccion: productionMinutesFor(item),
         },
+      }),
+      prisma.menuItem.findMany({
+        where: {
+          id: {
+            in: items
+              .filter((i) => i.kind === "MENU_ITEM")
+              .map((i) => i.menuItemId),
+          },
+        },
+      }),
+    ]);
+
+  const drinkPriceByCombo = new Map(
+    drinkPrices.map((p) => [`${p.category}|${p.sizeId}|${p.bobaTypeId}`, p.price]),
   );
+  const toppingById = new Map(dbToppings.map((t) => [t.id, t]));
+  const optionById = new Map(dbOptions.map((o) => [o.id, o]));
+  const menuItemById = new Map(dbMenuItems.map((m) => [m.id, m]));
+
+  let total = 0;
+  const orderItems = items.map((item) => {
+    if (item.quantity <= 0) {
+      throw new Error("PRECIO_INVALIDO");
+    }
+    if (item.kind === "DRINK") {
+      const base = drinkPriceByCombo.get(
+        `${item.category}|${item.size.id}|${item.bobaType.id}`,
+      );
+      if (base === undefined) {
+        throw new Error("COMBINACION_NO_DISPONIBLE");
+      }
+      const toppings = item.toppings.map((t) => {
+        const dbTopping = toppingById.get(t.id);
+        if (!dbTopping || dbTopping.price <= 0) {
+          throw new Error("PRECIO_INVALIDO");
+        }
+        return { toppingName: dbTopping.name, unitPrice: dbTopping.price };
+      });
+      if (base <= 0) {
+        throw new Error("PRECIO_INVALIDO");
+      }
+      total += (base + toppings.reduce((sum, t) => sum + t.unitPrice, 0)) * item.quantity;
+      return {
+        sizeName: item.size.name,
+        flavorName: item.flavor.name,
+        flavorCategory: item.category,
+        bobaTypeName: item.bobaType.name,
+        unitPrice: base,
+        quantity: item.quantity,
+        tiempoProduccion: productionMinutesFor(item),
+        toppings: {
+          create: toppings,
+        },
+      };
+    }
+    const unitPrice = item.optionId
+      ? optionById.get(item.optionId)?.price
+      : menuItemById.get(item.menuItemId)?.price;
+    if (unitPrice === undefined || unitPrice <= 0) {
+      throw new Error("PRECIO_INVALIDO");
+    }
+    total += unitPrice * item.quantity;
+    return {
+      menuItemName: item.name,
+      menuItemCategory: item.category,
+      menuItemOptionName: item.optionName,
+      menuItemDetail: item.detail,
+      unitPrice,
+      quantity: item.quantity,
+      tiempoProduccion: productionMinutesFor(item),
+    };
+  });
 
   // El tiempo estimado del pedido es el del producto que más tarda.
   const tiempoEstimado = items.reduce(
     (max, item) => Math.max(max, productionMinutesFor(item)),
-    0,
-  );
-
-  const total = items.reduce(
-    (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
     0,
   );
 

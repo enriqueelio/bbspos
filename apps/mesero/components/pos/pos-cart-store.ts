@@ -27,6 +27,9 @@ export interface AddPosMenuItemInput {
   name: string;
   category: MenuCategory;
   unitPrice: number;
+  /** Id de la variante (MenuItemOption) elegida, p.ej. un tamaño de alitas.
+   *  El server lo usa para recalcular el precio sin confiar en unitPrice. */
+  optionId?: string | null;
   optionName: string | null;
   /** Detalle elegido por el cajero (p.ej. salsas de las Alitas Mixtas); se
    *  imprime en la comanda y se guarda en el pedido. */
@@ -52,6 +55,7 @@ function normalizeStoredItem(item: unknown): CartItem | null {
   if (raw.kind === "MENU_ITEM") {
     return {
       ...(raw as object),
+      optionId: "optionId" in raw ? raw.optionId : null,
       optionName: "optionName" in raw ? raw.optionName : null,
       detail: "detail" in raw ? raw.detail : null,
     } as CartItem;
@@ -98,7 +102,8 @@ function emit() {
   for (const listener of listeners) listener();
 }
 
-export function addPosItem(input: AddPosItemInput) {
+export function addPosItem(input: AddPosItemInput, quantity = 1) {
+  const qty = Math.max(1, Math.trunc(quantity));
   const toppingKey = input.toppings
     .map((t) => t.id)
     .sort()
@@ -113,7 +118,7 @@ export function addPosItem(input: AddPosItemInput) {
   const existing = items.find((i) => i.id === id);
   if (existing) {
     items = items.map((i) =>
-      i.id === id ? { ...i, quantity: i.quantity + 1 } : i,
+      i.id === id ? { ...i, quantity: i.quantity + qty } : i,
     );
   } else {
     const item: CartItem = {
@@ -125,7 +130,7 @@ export function addPosItem(input: AddPosItemInput) {
       bobaType: input.bobaType,
       unitPrice: input.unitPrice,
       toppings: input.toppings,
-      quantity: 1,
+      quantity: qty,
     };
     items = [...items, item];
   }
@@ -150,6 +155,7 @@ export function addPosMenuItem(input: AddPosMenuItemInput) {
       name: input.name,
       category: input.category,
       unitPrice: input.unitPrice,
+      optionId: input.optionId ?? null,
       optionName: input.optionName,
       detail: input.detail ?? null,
       quantity: 1,

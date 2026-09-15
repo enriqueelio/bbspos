@@ -52,8 +52,8 @@ const toppings = [
 
 async function main() {
   const sizes = [
-    { name: "Grande", oz: 16 },
-    { name: "Extragrande", oz: 21 },
+    { name: "Grande", oz: 16, isDefault: true },
+    { name: "Extragrande", oz: 21, isDefault: false },
   ];
 
   for (const size of sizes) {
@@ -67,8 +67,8 @@ async function main() {
   await prisma.size.deleteMany({ where: { name: { notIn: sizeNames } } });
 
   const bobaTypes = [
-    { name: "Tapioca", kind: BobaKind.TAPIOCA },
-    { name: "Explosivas", kind: BobaKind.POPPING },
+    { name: "Tapioca", kind: BobaKind.TAPIOCA, isDefault: true },
+    { name: "Explosivas", kind: BobaKind.POPPING, isDefault: false },
   ];
 
   for (const boba of bobaTypes) {

@@ -8,27 +8,28 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  name      String
-  password  String
-  role      Role     @default(CAJERO)
-  shift     Shift    @default(SIN_TURNO)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  orders    Order[]
-  cancelledOrders Order[] @relation("OrderCanceledBy")
-  discountedOrders Order[] @relation("OrderDiscountedBy")
-  cashCloses CashClose[]
+  id               String      @id @default(cuid())
+  username         String      @unique
+  name             String
+  password         String
+  role             Role        @default(CAJERO)
+  shift            Shift       @default(SIN_TURNO)
+  active           Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  orders           Order[]
+  cancelledOrders  Order[]     @relation("OrderCanceledBy")
+  discountedOrders Order[]     @relation("OrderDiscountedBy")
+  cashCloses       CashClose[]
 }
 
 model Size {
-  id         String       @id @default(cuid())
-  name       String       @unique
-  oz         Int
-  available  Boolean      @default(true)
-  imageUrl   String?
-  createdAt  DateTime     @default(now())
+  id          String       @id @default(cuid())
+  name        String       @unique
+  oz          Int
+  available   Boolean      @default(true)
+  isDefault   Boolean      @default(false)
+  imageUrl    String?
+  createdAt   DateTime     @default(now())
   drinkPrices DrinkPrice[]
 }
 
@@ -42,34 +43,35 @@ model Flavor {
 }
 
 model FlavorCategoryLink {
-  id       String        @id @default(cuid())
-  flavorId String
-  flavor   Flavor        @relation(fields: [flavorId], references: [id], onDelete: Cascade)
-  category FlavorCategory
-  createdAt DateTime     @default(now())
+  id        String         @id @default(cuid())
+  flavorId  String
+  flavor    Flavor         @relation(fields: [flavorId], references: [id], onDelete: Cascade)
+  category  FlavorCategory
+  createdAt DateTime       @default(now())
 
   @@unique([flavorId, category])
 }
 
 model BobaType {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  kind      BobaKind
-  available Boolean  @default(true)
-  imageUrl  String?
-  createdAt DateTime @default(now())
+  id          String       @id @default(cuid())
+  name        String       @unique
+  kind        BobaKind
+  available   Boolean      @default(true)
+  isDefault   Boolean      @default(false)
+  imageUrl    String?
+  createdAt   DateTime     @default(now())
   drinkPrices DrinkPrice[]
 }
 
 model DrinkPrice {
-  id         String        @id @default(cuid())
+  id         String         @id @default(cuid())
   category   FlavorCategory
   sizeId     String
-  size       Size          @relation(fields: [sizeId], references: [id], onDelete: Cascade)
+  size       Size           @relation(fields: [sizeId], references: [id], onDelete: Cascade)
   bobaTypeId String
-  bobaType   BobaType      @relation(fields: [bobaTypeId], references: [id], onDelete: Cascade)
+  bobaType   BobaType       @relation(fields: [bobaTypeId], references: [id], onDelete: Cascade)
   price      Int
-  createdAt  DateTime      @default(now())
+  createdAt  DateTime       @default(now())
 
   @@unique([category, sizeId, bobaTypeId])
 }
@@ -84,18 +86,22 @@ model Topping {
 }
 
 model MenuItem {
-  id             String            @id @default(cuid())
+  id             String           @id @default(cuid())
   name           String
-  category       MenuCategory      @default(ALMUERZO)
+  category       MenuCategory     @default(ALMUERZO)
   price          Int
   description    String?
-  available      Boolean           @default(true)
-  enMenuDelDia   Boolean           @default(false)
+  available      Boolean          @default(true)
+  enMenuDelDia   Boolean          @default(false)
   menuDelDiaDate String?
   imageUrl       String?
+  // Alitas: true si el plato exige elegir salsas (Alitas Mixtas).
+  isMixtas       Boolean          @default(false)
+  // Salsas a elegir por defecto en las Alitas Mixtas (por plato).
+  requiredSauces Int?
   options        MenuItemOption[]
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@index([category, available])
 }
@@ -103,14 +109,25 @@ model MenuItem {
 // Opciones de un platillo con variantes de precio obligatorias, p. ej. las
 // milanesas "a la carta" que se cobra distinto Pollo vs Res.
 model MenuItemOption {
-  id         String   @id @default(cuid())
-  menuItemId String
-  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
-  name       String
-  price      Int
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  menuItemId     String
+  menuItem       MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name           String
+  price          Int
+  // Alitas Mixtas: salsas a elegir para este tamaño (6/8 = 2, 12 = 3).
+  requiredSauces Int?
+  createdAt      DateTime @default(now())
 
   @@unique([menuItemId, name])
+}
+
+// Salsas disponibles para las Alitas Mixtas (catálogo administrable por admin).
+model AlitaSauce {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  available Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Cuenta corriente de un cliente/pensionado. El saldo es Int (Bs, igual que el
@@ -137,55 +154,56 @@ model Customer {
 // el significado lo da el type. paymentMethod solo se registra en abonos
 // (RECARGA/PAGO_DEUDA) porque ahí entra efectivo/QR real a la caja.
 model CustomerLedger {
-  id            String        @id @default(cuid())
+  id            String         @id @default(cuid())
   customerId    String
-  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   type          String
   amount        Int
   paymentMethod PaymentMethod?
   orderId       String?
-  order         Order?        @relation(fields: [orderId], references: [id])
-  createdAt     DateTime      @default(now())
+  order         Order?         @relation(fields: [orderId], references: [id])
+  createdAt     DateTime       @default(now())
 
   @@index([customerId])
   @@index([createdAt])
 }
 
 model Order {
-  id             String         @id @default(cuid())
-  seq            Int?           @unique
+  id             String           @id @default(cuid())
+  seq            Int?             @unique
   orderDate      String?
   daySeq         Int?
-  status         OrderStatus    @default(RECIBIDO)
+  status         OrderStatus      @default(RECIBIDO)
   customerName   String?
   deliveryType   DeliveryType?
   notes          String?
   total          Int
-  createdAt      DateTime       @default(now())
+  createdAt      DateTime         @default(now())
   acceptedAt     DateTime?
   paidAt         DateTime?
   deliveredAt    DateTime?
   items          OrderItem[]
   userId         String?
-  user           User?          @relation(fields: [userId], references: [id])
+  user           User?            @relation(fields: [userId], references: [id])
   paymentMethod  PaymentMethod?
   paymentMethod2 PaymentMethod?
   paymentAmount2 Int?
-  discountAmount Int            @default(0)
+  discountAmount Int              @default(0)
   discountReason String?
   discountedAt   DateTime?
   discountedById String?
-  discountedBy   User?          @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
+  discountedBy   User?            @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
   cancelledAt    DateTime?
   cancelReason   String?
   canceledById   String?
-  canceledBy     User?          @relation("OrderCanceledBy", fields: [canceledById], references: [id])
-  delayNotified  Boolean        @default(false)
-  tiempoEstimado  Int            @default(10)
+  canceledBy     User?            @relation("OrderCanceledBy", fields: [canceledById], references: [id])
+  delayNotified  Boolean          @default(false)
+  tiempoEstimado Int              @default(10)
   customerId     String?
-  customer       Customer?      @relation(fields: [customerId], references: [id])
+  customer       Customer?        @relation(fields: [customerId], references: [id])
   ledgerEntries  CustomerLedger[]
 
+  @@unique([orderDate, daySeq])
   @@index([createdAt])
   @@index([createdAt, status])
   @@index([status, createdAt])
@@ -193,25 +211,24 @@ model Order {
   @@index([userId])
   @@index([userId, status])
   @@index([customerId])
-  @@unique([orderDate, daySeq])
 }
 
 model OrderItem {
-  id               String            @id @default(cuid())
-  orderId          String
-  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  sizeName         String?
-  flavorName       String?
-  flavorCategory   FlavorCategory?
-  bobaTypeName     String?
-  menuItemName     String?
-  menuItemCategory MenuCategory?
+  id                 String             @id @default(cuid())
+  orderId            String
+  order              Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sizeName           String?
+  flavorName         String?
+  flavorCategory     FlavorCategory?
+  bobaTypeName       String?
+  menuItemName       String?
+  menuItemCategory   MenuCategory?
   menuItemOptionName String?
-  menuItemDetail   String?
-  unitPrice        Int
-  quantity         Int
-  tiempoProduccion Int            @default(5)
-  toppings         OrderItemTopping[]
+  menuItemDetail     String?
+  unitPrice          Int
+  quantity           Int
+  tiempoProduccion   Int                @default(5)
+  toppings           OrderItemTopping[]
 
   @@index([orderId])
 }
@@ -242,31 +259,31 @@ model DailyReportLog {
 // varios cierres al día (ej. un turno de mañana y otro de tarde): cada uno
 // guarda su histórico con fecha, hora y cajero para auditoría y reimpresión.
 model CashClose {
-  id             String   @id @default(cuid())
+  id            String   @id @default(cuid())
   // Día local (YYYY-MM-DD) que se está cerrando.
-  date           String
-  closedAt       DateTime @default(now())
-  userId         String?
-  user           User?    @relation(fields: [userId], references: [id])
+  date          String
+  closedAt      DateTime @default(now())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
   // Desglose del efectivo contado por denominación: JSON con pares
   // [["200",2],["100",3],...], en Bs. countedCash = Σ valor × cantidad.
-  denominations  String
-  countedCash    Float
+  denominations String
+  countedCash   Float
   // Contrastes calculados por el sistema (los pagos divididos ya quedaron
   // prorrateados entre sus métodos).
-  systemCash     Float
-  systemQr       Float
-  systemCard     Float
+  systemCash    Float
+  systemQr      Float
+  systemCard    Float
   // Consumos del día cobrados a cuenta de pensionados (NO entran a la caja).
-  pensionSales   Float
+  pensionSales  Float
   // Recargas/pagos de deuda de pensionados (SÍ entran a la caja ese día).
-  rechargeCash   Float
-  rechargeQr     Float
+  rechargeCash  Float
+  rechargeQr    Float
   // sobranate/faltante de efectivo = countedCash - systemCash (systemCash ya
   // incluye rechargeCash).
-  diffCash       Float
-  notes          String?
-  createdAt      DateTime @default(now())
+  diffCash      Float
+  notes         String?
+  createdAt     DateTime @default(now())
 
   @@index([date])
   @@index([closedAt])

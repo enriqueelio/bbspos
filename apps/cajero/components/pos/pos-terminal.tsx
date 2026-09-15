@@ -77,25 +77,25 @@ const PANE_TITLE: Partial<Record<CatalogPane, string>> = {
 };
 
 // ===== Alitas: sabores simples y salsas de las alitas mixtas =====
-// Las alitas simples vienen bañadas en su salsa (Miel y Mostaza, Barbacoa, …);
-// las Alitas Mixtas obligan a elegir 2 salsas (6/8 unidades) o 3 (12 unidades).
-const ALITA_SAUCES = [
-  "Miel y Mostaza",
-  "Barbacoa",
-  "Barbacoa Picante",
-  "Buffalo",
-  "Agridulce",
-  "Crocantes",
-];
+// Las alitas simples vienen bañadas en su salsa; las Alitas Mixtas obligan a
+// elegir salsas. Todo sale de la BD: isMixtas/requiredSauces del plato y el
+// catálogo de salsas de /api/alita-sauces (nada hardcodeado).
 
-function isMixtasItem(item: Pick<MenuItemView, "name">): boolean {
-  return /mixtas/i.test(item.name);
+/** Salsas exigidas si ni el plato ni el tamaño definen cuántas elegir. */
+const FALLBACK_REQUIRED_SAUCES = 2;
+
+function isMixtasItem(item: MenuItemView): boolean {
+  return item.isMixtas === true;
 }
 
-/** Salsas exigidas para las Alitas Mixtas según las unidades del tamaño. */
-function requiredSauces(unitsLabel: string): number {
-  const units = Number(unitsLabel.match(/^(\d+)/)?.[1]) || 0;
-  return units >= 12 ? 3 : 2;
+/** Salsas a elegir: manda la del tamaño; si no, la del plato; si no, fallback. */
+function getRequiredSauces(
+  item: MenuItemView,
+  option: MenuItemView["options"][number],
+): number {
+  return (
+    option.requiredSauces ?? item.requiredSauces ?? FALLBACK_REQUIRED_SAUCES
+  );
 }
 
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
@@ -205,6 +205,7 @@ export function PosTerminal({
   const [bobaTypeId, setBobaTypeId] = useState<string>("");
   const [selectedFlavorId, setSelectedFlavorId] = useState<string | null>(null);
   const [toppingIds, setToppingIds] = useState<string[]>([]);
+  const [productQty, setProductQty] = useState(1);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +215,7 @@ export function PosTerminal({
   >(null);
   const [variantSauces, setVariantSauces] = useState<string[]>([]);
   const [isAfter16, setIsAfter16] = useState(false);
+  const [alitaSauces, setAlitaSauces] = useState<string[]>([]);
   const didMount = useRef(false);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
@@ -227,6 +229,7 @@ export function PosTerminal({
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setProductQty(1);
     setVariantItem(null);
     setVariantSize(null);
     setVariantSauces([]);
@@ -260,6 +263,16 @@ export function PosTerminal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Catálogo de salsas para las Alitas Mixtas, servido desde la BD.
+  useEffect(() => {
+    fetch("/api/alita-sauces")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { name: string }[]) =>
+        setAlitaSauces(data.map((s) => s.name)),
+      )
+      .catch(() => setAlitaSauces([]));
+  }, []);
+
   const sizes = catalog.sizes.filter((s) => s.available);
   const bobaTypes = catalog.bobaTypes.filter((b) => b.available);
   const toppings = catalog.toppings.filter((t) => t.available);
@@ -286,25 +299,26 @@ export function PosTerminal({
     return rank(a) - rank(b);
   });
 
-  function priceOf(): number {
-    if (!size || !bobaType) return 0;
-    return (
-      catalog.drinkPrices.find(
-        (p) =>
-          p.category === bubaCategory &&
-          p.sizeId === size.id &&
-          p.bobaTypeId === bobaType.id,
-      )?.price ?? 0
+  function priceOf(): number | null {
+    if (!size || !bobaType) return null;
+    const entry = catalog.drinkPrices.find(
+      (p) =>
+        p.category === bubaCategory &&
+        p.sizeId === size.id &&
+        p.bobaTypeId === bobaType.id,
     );
+    return entry ? entry.price : null;
   }
 
   const selectedToppings = toppingIds
     .map((id) => toppings.find((t) => t.id === id))
     .filter((t): t is Topping => Boolean(t));
 
-  // Subtotal del producto en proceso: bebida base + el costo de los extras seleccionados.
-  function preticketSubtotal(): number {
+  // Subtotal del producto en proceso: bebida base + el costo de los extras
+  // seleccionados. null = el combo de tamaño+boba no tiene precio (no disponible).
+  function preticketSubtotal(): number | null {
     const base = priceOf();
+    if (base === null) return null;
     const extras = selectedToppings.reduce((sum, t) => sum + t.price, 0);
     return base + extras;
   }
@@ -312,12 +326,22 @@ export function PosTerminal({
   const selectedFlavor =
     flavors.find((f) => f.id === selectedFlavorId) ?? null;
 
+  // Razón explícita por la que "Confirmar producto" queda deshabilitado, para
+  // que el cajero sepa qué falta sin silencio de UX.
+  const productBlockReason =
+    !size || !bobaType
+      ? "Falta elegir tamaño/boba"
+      : preticketSubtotal() === null
+        ? "Combinación no disponible"
+        : null;
+
   function switchBubaCategory(category: FlavorCategoryType) {
     setBubaCategory(category);
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setProductQty(1);
   }
 
   function switchPane(pane: CatalogPane) {
@@ -335,12 +359,13 @@ export function PosTerminal({
     );
   }
 
-  // Tocar un sabor marca el producto en construcción. Si ya había otro sabor,
-  // se reinicia la selección para recomenzar el cálculo desde cero.
+  // Tocar un sabor marca el producto en construcción. Los toppings se conservan
+  // al cambiar de sabor (un mismo vaso puede llevar la misma combinación); solo
+  // se reinician al cambiar de categoría o al confirmar el producto.
   function selectFlavor(flavor: Flavor) {
     setSelectedFlavorId((current) => {
       if (current !== flavor.id) {
-        setToppingIds([]);
+        setProductQty(1);
       }
       return flavor.id;
     });
@@ -350,24 +375,29 @@ export function PosTerminal({
   }
 
   function confirmProduct() {
-    if (!selectedSize || !bobaType || !selectedFlavor) return;
+    const unitPrice = priceOf();
+    if (unitPrice === null || !selectedSize || !bobaType || !selectedFlavor) return;
     setNotice(null);
-    cart.addItem({
-      size: selectedSize,
-      flavor: selectedFlavor,
-      category: bubaCategory,
-      bobaType,
-      unitPrice: priceOf(),
-      toppings: selectedToppings.map((t) => ({
-        id: t.id,
-        name: t.name,
-        price: t.price,
-      })),
-    });
+    cart.addItem(
+      {
+        size: selectedSize,
+        flavor: selectedFlavor,
+        category: bubaCategory,
+        bobaType,
+        unitPrice,
+        toppings: selectedToppings.map((t) => ({
+          id: t.id,
+          name: t.name,
+          price: t.price,
+        })),
+      },
+      productQty,
+    );
     // Restablece el selector para empezar a armar otro producto.
     setSelectedFlavorId(null);
     setSizeId("");
     setToppingIds([]);
+    setProductQty(1);
   }
 
   async function submit() {
@@ -406,6 +436,7 @@ export function PosTerminal({
       setSelectedFlavorId(null);
       setBubaCategory(firstActiveCategory(catalog));
       setActivePane(defaultPane(catalog));
+      setProductQty(1);
       setNotice(
         `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}`,
       );
@@ -432,6 +463,7 @@ export function PosTerminal({
     setVariantItem(null);
     setVariantSize(null);
     setVariantSauces([]);
+    setProductQty(1);
   }
 
   const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
@@ -498,6 +530,7 @@ export function PosTerminal({
       name: item.name,
       category: item.category,
       unitPrice: item.price,
+      optionId: null,
       optionName: null,
     });
   }
@@ -517,6 +550,7 @@ export function PosTerminal({
       name: variantItem.name,
       category: variantItem.category,
       unitPrice: option.price,
+      optionId: option.id,
       optionName: option.name,
     });
     setVariantItem(null);
@@ -526,13 +560,15 @@ export function PosTerminal({
   // 6/8 unidades, 3 en 12) antes de agregar la línea a la orden.
   function confirmMixtas() {
     if (!variantItem || !variantSize) return;
-    if (variantSauces.length !== requiredSauces(variantSize.name)) return;
+    if (variantSauces.length !== getRequiredSauces(variantItem, variantSize))
+      return;
     setNotice(null);
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
       unitPrice: variantSize.price,
+      optionId: variantSize.id,
       optionName: variantSize.name,
       detail: `Salsas: ${variantSauces.join(", ")}`,
     });
@@ -845,6 +881,7 @@ export function PosTerminal({
                         name: menuItem.name,
                         category: menuItem.category,
                         unitPrice: menuItem.price,
+                        optionId: null,
                         optionName: null,
                       });
                     }}
@@ -1017,22 +1054,61 @@ export function PosTerminal({
                           + {selectedToppings.map((t) => t.name).join(", ")}
                         </p>
                       )}
+                      {productBlockReason && (
+                        <p className="text-xs font-semibold text-amber-300">
+                          ⚠ {productBlockReason}
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+                        Cantidad
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          aria-label="Restar cantidad"
+                          disabled={productQty <= 1}
+                          onClick={() => setProductQty((q) => Math.max(1, q - 1))}
+                          className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          −
+                        </button>
+                        <span className="text-base font-bold w-6 text-center text-slate-200">
+                          {productQty}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Sumar cantidad"
+                          onClick={() => setProductQty((q) => q + 1)}
+                          className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
                         Subtotal
                       </span>
                       <span className="font-mono text-xl font-bold text-white">
-                        {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
+                        {preticketSubtotal() !== null
+                          ? formatPrice(preticketSubtotal()! * productQty)
+                          : "—"}
                       </span>
                     </div>
                     <button
                       type="button"
-                      disabled={!selectedSize || !selectedFlavor || !bobaType}
+                      disabled={
+                        !selectedSize ||
+                        !selectedFlavor ||
+                        !bobaType ||
+                        preticketSubtotal() === null
+                      }
                       onClick={confirmProduct}
                       className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Confirmar producto
+                      Confirmar producto{productQty > 1 ? ` × ${productQty}` : ""}
                     </button>
                   </section>
                 ) : (
@@ -1124,13 +1200,13 @@ export function PosTerminal({
                         <p className="text-xs text-slate-400">
                           Marca{" "}
                           <span className="font-bold text-amber-300">
-                            {requiredSauces(variantSize.name)}
+                            {getRequiredSauces(variantItem, variantSize)}
                           </span>{" "}
                           salsas ({variantSauces.length}/
-                          {requiredSauces(variantSize.name)})
+                          {getRequiredSauces(variantItem, variantSize)})
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {ALITA_SAUCES.map((sauce) => {
+                          {alitaSauces.map((sauce) => {
                             const on = variantSauces.includes(sauce);
                             return (
                               <button
@@ -1149,7 +1225,7 @@ export function PosTerminal({
                           })}
                         </div>
                         {variantSauces.length ===
-                          requiredSauces(variantSize.name) && (
+                          getRequiredSauces(variantItem, variantSize) && (
                           <button
                             type="button"
                             onClick={confirmMixtas}

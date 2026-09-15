@@ -34,7 +34,9 @@ export async function getCatalog(): Promise<Catalog> {
       price: number;
       description: string | null;
       imageUrl?: string | null;
-      options?: { id: string; name: string; price: number }[];
+      isMixtas: boolean;
+      requiredSauces: number | null;
+      options?: { id: string; name: string; price: number; requiredSauces: number | null }[];
     },
   ) => ({
     id: mi.id,
@@ -43,6 +45,8 @@ export async function getCatalog(): Promise<Catalog> {
     price: mi.price,
     description: mi.description,
     imageUrl: mi.imageUrl ?? null,
+    isMixtas: mi.isMixtas,
+    requiredSauces: mi.requiredSauces,
     options: mi.options ?? [],
   });
 

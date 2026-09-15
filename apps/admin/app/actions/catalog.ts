@@ -168,6 +168,42 @@ export async function deleteTopping(id: string) {
   revalidatePath("/menu");
 }
 
+export async function createAlitaSauce(input: { name: string }) {
+  await getRequiredSession();
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error("Datos inválidos: nombre es obligatorio.");
+  }
+  const exists = await prisma.alitaSauce.findUnique({ where: { name } });
+  if (exists) {
+    throw new Error("Ya existe una salsa con ese nombre.");
+  }
+  await prisma.alitaSauce.create({ data: { name } });
+  revalidatePath("/menu");
+}
+
+export async function updateAlitaSauce(
+  id: string,
+  input: { name: string; available: boolean },
+) {
+  await getRequiredSession();
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error("Datos inválidos: nombre es obligatorio.");
+  }
+  await prisma.alitaSauce.update({
+    where: { id },
+    data: { name, available: input.available },
+  });
+  revalidatePath("/menu");
+}
+
+export async function deleteAlitaSauce(id: string) {
+  await getRequiredSession();
+  await prisma.alitaSauce.delete({ where: { id } });
+  revalidatePath("/menu");
+}
+
 export async function saveDrinkPrices(input: {
   category: FlavorCategory;
   prices: { sizeId: string; bobaTypeId: string; price: number }[];

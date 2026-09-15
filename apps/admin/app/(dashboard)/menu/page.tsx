@@ -15,7 +15,7 @@ export default async function MenuPage() {
   const session = await getRequiredSession();
   const currentUserRole = session.user.role as Role;
 
-  const [sizes, flavors, bobaTypes, toppings, drinkPrices, menuItems] =
+  const [sizes, flavors, bobaTypes, toppings, drinkPrices, menuItems, alitaSauces] =
     await Promise.all([
       prisma.size.findMany({ orderBy: { oz: "asc" } }),
       prisma.flavor.findMany({
@@ -29,6 +29,7 @@ export default async function MenuPage() {
         include: { options: { orderBy: { name: "asc" } } },
         orderBy: [{ category: "asc" }, { name: "asc" }],
       }),
+      prisma.alitaSauce.findMany({ orderBy: { name: "asc" } }),
     ]);
 
   const today = zonedDateKey();
@@ -62,6 +63,11 @@ export default async function MenuPage() {
         available: mi.available,
         enMenuDelDiaHoy:
           mi.enMenuDelDia && mi.menuDelDiaDate === today,
+      }))}
+      alitaSauces={alitaSauces.map((s) => ({
+        id: s.id,
+        name: s.name,
+        available: s.available,
       }))}
     />
   );

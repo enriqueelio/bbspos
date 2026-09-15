@@ -88,6 +88,8 @@ export interface MenuItemOptionView {
   id: string;
   name: string;
   price: number;
+  /** Alitas Mixtas: salsas a elegir para este tamaño (null = usar el del plato). */
+  requiredSauces: number | null;
 }
 
 /** Vista de un platillo entregado a las terminales: solo Menú del Día vigente
@@ -99,6 +101,10 @@ export interface MenuItemView {
   price: number;
   description: string | null;
   imageUrl: string | null;
+  /** Alitas: true si el plato exige elegir salsas (Alitas Mixtas). */
+  isMixtas: boolean;
+  /** Alitas Mixtas: salsas por defecto cuando el tamaño no tiene el suyo. */
+  requiredSauces: number | null;
   options: MenuItemOptionView[];
 }
 
@@ -195,7 +201,8 @@ export interface DrinkCartItem {
 /** Platillo agregado con precio fijo. Si tiene variante (Pollo/Res) se guarda
  *  el nombre de la opción elegida y su precio como unitPrice. `detail` guarda
  *  el detalle elegido por el cajero (p.ej. las salsas de las Alitas Mixtas)
- *  para imprimirlo con claridad en la comanda. */
+ *  para imprimirlo con claridad en la comanda. `optionId` es el id de la
+ *  variante (MenuItemOption) para que el server recalcule el precio. */
 export interface MenuItemCartItem {
   kind: "MENU_ITEM";
   id: string;
@@ -203,6 +210,7 @@ export interface MenuItemCartItem {
   name: string;
   category: MenuCategory;
   unitPrice: number;
+  optionId: string | null;
   optionName: string | null;
   detail?: string | null;
   quantity: number;

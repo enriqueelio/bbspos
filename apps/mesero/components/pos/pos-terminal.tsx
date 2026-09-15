@@ -24,24 +24,24 @@ const CATEGORIES = FlavorCategoryList;
 
 // ===== Alitas: sabores simples y salsas de las alitas mixtas =====
 // Las alitas simples vienen bañadas en su salsa; las Alitas Mixtas obligan a
-// elegir 2 salsas (6/8 unidades) o 3 (12 unidades) antes de confirmar.
-const ALITA_SAUCES = [
-  "Miel y Mostaza",
-  "Barbacoa",
-  "Barbacoa Picante",
-  "Buffalo",
-  "Agridulce",
-  "Crocantes",
-];
+// elegir salsas. Todo sale de la BD: isMixtas/requiredSauces del plato y el
+// catálogo de salsas de /api/alita-sauces (nada hardcodeado).
 
-function isMixtasItem(item: Pick<MenuItemView, "name">): boolean {
-  return /mixtas/i.test(item.name);
+/** Salsas exigidas si ni el plato ni el tamaño definen cuántas elegir. */
+const FALLBACK_REQUIRED_SAUCES = 2;
+
+function isMixtasItem(item: MenuItemView): boolean {
+  return item.isMixtas === true;
 }
 
-/** Salsas exigidas para las Alitas Mixtas según las unidades del tamaño. */
-function requiredSauces(unitsLabel: string): number {
-  const units = Number(unitsLabel.match(/^(\d+)/)?.[1]) || 0;
-  return units >= 12 ? 3 : 2;
+/** Salsas a elegir: manda la del tamaño; si no, la del plato; si no, fallback. */
+function getRequiredSauces(
+  item: MenuItemView,
+  option: MenuItemView["options"][number],
+): number {
+  return (
+    option.requiredSauces ?? item.requiredSauces ?? FALLBACK_REQUIRED_SAUCES
+  );
 }
 
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
@@ -82,6 +82,8 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     MenuItemView["options"][number] | null
   >(null);
   const [variantSauces, setVariantSauces] = useState<string[]>([]);
+  const [alitaSauces, setAlitaSauces] = useState<string[]>([]);
+  const [productQty, setProductQty] = useState(1);
 
   // Al entrar (montar) se dejan los selectores en blanco para arrancar
   // un pedido nuevo sin arrastrar selecciones.
@@ -90,6 +92,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setProductQty(1);
     setVariantItem(null);
     setVariantSize(null);
     setVariantSauces([]);
@@ -103,6 +106,16 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     cart.clear();
     // La limpieza es solo al montar: se ignora el resto de dependencias.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Catálogo de salsas para las Alitas Mixtas, servido desde la BD.
+  useEffect(() => {
+    fetch("/api/alita-sauces")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { name: string }[]) =>
+        setAlitaSauces(data.map((s) => s.name)),
+      )
+      .catch(() => setAlitaSauces([]));
   }, []);
 
   // Toast de éxito: aparece suavemente, permanece ~3s y se desvanece solo.
@@ -158,25 +171,26 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     [catalog.flavors, activeCategory],
   );
 
-  function priceOf(): number {
-    if (!size || !bobaType) return 0;
-    return (
-      catalog.drinkPrices.find(
-        (p) =>
-          p.category === activeCategory &&
-          p.sizeId === size.id &&
-          p.bobaTypeId === bobaType.id,
-      )?.price ?? 0
+  function priceOf(): number | null {
+    if (!size || !bobaType) return null;
+    const entry = catalog.drinkPrices.find(
+      (p) =>
+        p.category === activeCategory &&
+        p.sizeId === size.id &&
+        p.bobaTypeId === bobaType.id,
     );
+    return entry ? entry.price : null;
   }
 
   const selectedToppings = toppingIds
     .map((id) => toppings.find((t) => t.id === id))
     .filter((t): t is Topping => Boolean(t));
 
-  // Subtotal del producto en proceso: bebida base + el costo de los extras seleccionados.
-  function preticketSubtotal(): number {
+  // Subtotal del producto en proceso: bebida base + el costo de los extras
+  // seleccionados. null = el combo de tamaño+boba no tiene precio (no disponible).
+  function preticketSubtotal(): number | null {
     const base = priceOf();
+    if (base === null) return null;
     const extras = selectedToppings.reduce((sum, t) => sum + t.price, 0);
     return base + extras;
   }
@@ -184,12 +198,22 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   const selectedFlavor =
     flavors.find((f) => f.id === selectedFlavorId) ?? null;
 
+  // Razón explícita por la que "Confirmar producto" queda deshabilitado, para
+  // que el mesero sepa qué falta sin silencio de UX.
+  const productBlockReason =
+    !size || !bobaType
+      ? "Falta elegir tamaño/boba"
+      : preticketSubtotal() === null
+        ? "Combinación no disponible"
+        : null;
+
   function switchCategory(category: FlavorCategoryType) {
     setActiveCategory(category);
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
     setToppingIds([]);
+    setProductQty(1);
   }
 
   function toggleTopping(id: string) {
@@ -200,10 +224,13 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     );
   }
 
+  // Tocar un sabor marca el producto en construcción. Los toppings se conservan
+  // al cambiar de sabor (un mismo vaso puede llevar la misma combinación); solo
+  // se reinician al cambiar de categoría o al confirmar el producto.
   function selectFlavor(flavor: Flavor) {
     setSelectedFlavorId((current) => {
       if (current !== flavor.id) {
-        setToppingIds([]);
+        setProductQty(1);
       }
       return flavor.id;
     });
@@ -213,23 +240,28 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   }
 
   function confirmProduct() {
-    if (!selectedSize || !bobaType || !selectedFlavor) return;
-    cart.addItem({
-      size: selectedSize,
-      flavor: selectedFlavor,
-      category: activeCategory,
-      bobaType,
-      unitPrice: priceOf(),
-      toppings: selectedToppings.map((t) => ({
-        id: t.id,
-        name: t.name,
-        price: t.price,
-      })),
-    });
+    const unitPrice = priceOf();
+    if (unitPrice === null || !selectedSize || !bobaType || !selectedFlavor) return;
+    cart.addItem(
+      {
+        size: selectedSize,
+        flavor: selectedFlavor,
+        category: activeCategory,
+        bobaType,
+        unitPrice,
+        toppings: selectedToppings.map((t) => ({
+          id: t.id,
+          name: t.name,
+          price: t.price,
+        })),
+      },
+      productQty,
+    );
     setSelectedFlavorId(null);
     setSizeId("");
     setBobaTypeId("");
     setToppingIds([]);
+    setProductQty(1);
     catalogScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -252,6 +284,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       setBobaTypeId("");
       setSelectedFlavorId(null);
       setActiveCategory(firstActiveCategory(catalog));
+      setProductQty(1);
       showToast(
         `¡Pedido enviado a caja con éxito! · Total ${formatPrice(result.total)}`,
       );
@@ -273,6 +306,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
     setVariantItem(null);
     setVariantSize(null);
     setVariantSauces([]);
+    setProductQty(1);
   }
 
   const cartaItems =
@@ -292,6 +326,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       name: item.name,
       category: item.category,
       unitPrice: item.price,
+      optionId: null,
       optionName: null,
     });
   }
@@ -310,6 +345,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       name: variantItem.name,
       category: variantItem.category,
       unitPrice: option.price,
+      optionId: option.id,
       optionName: option.name,
     });
     setVariantItem(null);
@@ -319,12 +355,14 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   // 6/8 unidades, 3 en 12) antes de agregar la línea a la orden.
   function confirmMixtas() {
     if (!variantItem || !variantSize) return;
-    if (variantSauces.length !== requiredSauces(variantSize.name)) return;
+    if (variantSauces.length !== getRequiredSauces(variantItem, variantSize))
+      return;
     cart.addMenuItem({
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
       unitPrice: variantSize.price,
+      optionId: variantSize.id,
       optionName: variantSize.name,
       detail: `Salsas: ${variantSauces.join(", ")}`,
     });
@@ -552,6 +590,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                         name: menuItem.name,
                         category: menuItem.category,
                         unitPrice: menuItem.price,
+                        optionId: null,
                         optionName: null,
                       })
                     }
@@ -665,13 +704,13 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                       <p className="text-xs text-slate-300">
                         Marca{" "}
                         <span className="font-bold text-amber-300">
-                          {requiredSauces(variantSize.name)}
+                          {getRequiredSauces(variantItem, variantSize)}
                         </span>{" "}
                         salsas ({variantSauces.length}/
-                        {requiredSauces(variantSize.name)})
+                        {getRequiredSauces(variantItem, variantSize)})
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {ALITA_SAUCES.map((sauce) => {
+                        {alitaSauces.map((sauce) => {
                           const on = variantSauces.includes(sauce);
                           return (
                             <button
@@ -690,7 +729,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                         })}
                       </div>
                       {variantSauces.length ===
-                        requiredSauces(variantSize.name) && (
+                        getRequiredSauces(variantItem, variantSize) && (
                         <button
                           type="button"
                           onClick={confirmMixtas}
@@ -853,22 +892,61 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                     + {selectedToppings.map((t) => t.name).join(", ")}
                   </p>
                 )}
+                {productBlockReason && (
+                  <p className="text-sm font-semibold text-amber-300">
+                    ⚠ {productBlockReason}
+                  </p>
+                )}
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-base font-semibold uppercase tracking-wide text-white">
+                  Cantidad
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Restar cantidad"
+                    disabled={productQty <= 1}
+                    onClick={() => setProductQty((q) => Math.max(1, q - 1))}
+                    className="h-10 w-10 rounded-lg bg-slate-700 text-white text-xl font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    −
+                  </button>
+                  <span className="text-2xl font-black w-8 text-center text-white">
+                    {productQty}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Sumar cantidad"
+                    onClick={() => setProductQty((q) => q + 1)}
+                    className="h-10 w-10 rounded-lg bg-slate-700 text-white text-xl font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
               <div className="mt-3 flex items-center justify-between">
                 <span className="text-base font-semibold uppercase tracking-wide text-white">
                   Subtotal
                 </span>
                 <span className="font-mono text-2xl font-black text-white">
-                  {selectedSize && bobaType ? formatPrice(preticketSubtotal()) : "—"}
+                  {preticketSubtotal() !== null
+                    ? formatPrice(preticketSubtotal()! * productQty)
+                    : "—"}
                 </span>
               </div>
               <button
                 type="button"
-                disabled={!selectedSize || !selectedFlavor || !bobaType}
+                disabled={
+                  !selectedSize ||
+                  !selectedFlavor ||
+                  !bobaType ||
+                  preticketSubtotal() === null
+                }
                 onClick={confirmProduct}
                 className="mt-3 h-16 w-full rounded-xl bg-emerald-600 text-2xl font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Confirmar producto
+                Confirmar producto{productQty > 1 ? ` × ${productQty}` : ""}
               </button>
             </section>
           )}

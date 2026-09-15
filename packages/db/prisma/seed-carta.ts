@@ -18,7 +18,9 @@ interface ParsedItem {
   category: PrismaMenuCategory;
   price: number;
   description: string;
-  options: { name: string; price: number }[];
+  isMixtas?: boolean;
+  requiredSauces?: number | null;
+  options: { name: string; price: number; requiredSauces?: number | null }[];
 }
 
 const HEADER_TO_CATEGORY: Record<string, PrismaMenuCategory> = {
@@ -80,6 +82,8 @@ function pushAlitasGroup(items: ParsedItem[], group: AlitaSizes) {
         price: Math.min(...group.sizes.map((s) => s.price)),
         description:
           "Acompañadas de papas fritas y salsa de la casa.",
+        isMixtas: false,
+        requiredSauces: null,
         options: group.sizes.map((s) => ({
           name: `${s.units} Unidades`,
           price: s.price,
@@ -94,11 +98,38 @@ function pushAlitasGroup(items: ParsedItem[], group: AlitaSizes) {
     price: Math.min(...group.sizes.map((s) => s.price)),
     description:
       "2 salsas a elección (6 y 8 unidades) o 3 salsas (12 unidades). Acompañadas de papas fritas y salsa de la casa.",
+    isMixtas: true,
+    requiredSauces: 2,
     options: group.sizes.map((s) => ({
       name: `${s.units} Unidades`,
       price: s.price,
+      // 6/8 unidades = 2 salsas; 12 unidades = 3 salsas.
+      requiredSauces: Number(s.units) >= 12 ? 3 : 2,
     })),
   });
+}
+
+/** Salsas del catálogo de las Alitas Mixtas (disponibles a elección). */
+const ALITA_SAUCES = ALITA_FLAVORS;
+
+/** Hace upsert del catálogo de salsas de alitas. Idempotente: reactiva las
+ *  que hayan sido deshabilitadas sin borrar historial. */
+async function seedAlitaSauces() {
+  let created = 0;
+  let updated = 0;
+  for (const name of ALITA_SAUCES) {
+    const existing = await prisma.alitaSauce.findUnique({ where: { name } });
+    await prisma.alitaSauce.upsert({
+      where: { name },
+      update: { available: true },
+      create: { name, available: true },
+    });
+    if (existing) updated++;
+    else created++;
+  }
+  console.log(
+    `Salsas de alitas: ${created} creadas | ${updated} actualizadas`,
+  );
 }
 
 const EXTRAS_ITEMS: ParsedItem[] = [
@@ -252,18 +283,28 @@ async function keepOrUpdate(item: ParsedItem) {
     available: true,
     enMenuDelDia: false,
     menuDelDiaDate: null,
+    isMixtas: item.isMixtas ?? false,
+    requiredSauces: item.requiredSauces ?? null,
   };
 
   if (existing) {
     let changed = false;
     if (
       existing.price !== item.price ||
-      existing.description !== (item.description || null)
+      existing.description !== (item.description || null) ||
+      existing.isMixtas !== (item.isMixtas ?? false) ||
+      existing.requiredSauces !== (item.requiredSauces ?? null)
     ) {
       changed = true;
     }
-    const existingOptions = existing.options.map((o) => `${o.name}:${o.price}`).sort().join("|");
-    const newOptions = item.options.map((o) => `${o.name}:${o.price}`).sort().join("|");
+    const existingOptions = existing.options
+      .map((o) => `${o.name}:${o.price}:${o.requiredSauces ?? "null"}`)
+      .sort()
+      .join("|");
+    const newOptions = item.options
+      .map((o) => `${o.name}:${o.price}:${o.requiredSauces ?? "null"}`)
+      .sort()
+      .join("|");
     if (existingOptions !== newOptions) {
       changed = true;
       await prisma.menuItemOption.deleteMany({ where: { menuItemId: existing.id } });
@@ -273,6 +314,7 @@ async function keepOrUpdate(item: ParsedItem) {
             menuItemId: existing.id,
             name: o.name,
             price: o.price,
+            requiredSauces: o.requiredSauces ?? null,
           })),
         });
       }
@@ -291,7 +333,11 @@ async function keepOrUpdate(item: ParsedItem) {
       ...data,
       name: item.name,
       options: {
-        create: item.options.map((o) => ({ name: o.name, price: o.price })),
+        create: item.options.map((o) => ({
+          name: o.name,
+          price: o.price,
+          requiredSauces: o.requiredSauces ?? null,
+        })),
       },
     },
   });
@@ -301,6 +347,8 @@ async function keepOrUpdate(item: ParsedItem) {
 async function main() {
   const parsed = parseFile();
   const withExtras = [...parsed, ...EXTRAS_ITEMS];
+
+  await seedAlitaSauces();
 
   // Las alitas pasaron de "Alitas (N Unidades)" genéricas a platillos por
   // sabor con los tamaños como variantes: se descartan los nombres antiguos.

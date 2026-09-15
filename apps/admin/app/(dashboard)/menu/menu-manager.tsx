@@ -41,11 +41,13 @@ import {
   type Topping,
 } from "@bbspos/types";
 import {
+  createAlitaSauce,
   createBoba,
   createFlavor,
   createMenuItem,
   createSize,
   createTopping,
+  deleteAlitaSauce,
   deleteBoba,
   deleteFlavor,
   deleteMenuItem,
@@ -53,6 +55,7 @@ import {
   deleteTopping,
   saveDrinkPrices,
   setMenuItemMenuDelDia,
+  updateAlitaSauce,
   updateBoba,
   updateFlavor,
   updateMenuItem,
@@ -194,6 +197,24 @@ export interface MenuItemAdminView {
   available: boolean;
   enMenuDelDiaHoy: boolean;
 }
+
+export interface AlitaSauceAdminView {
+  id: string;
+  name: string;
+  available: boolean;
+}
+
+/** Tabs de la página de gestión del menú: una sección visible a la vez. */
+const MENU_TABS = [
+  { key: "almuerzos", label: "Almuerzos" },
+  { key: "carta", label: "Platos a la carta" },
+  { key: "bebidas", label: "Bebidas" },
+  { key: "cafeteria", label: "Cafetería" },
+  { key: "bubas", label: "Bubas" },
+  { key: "salsas", label: "Salsas Alitas" },
+] as const;
+
+type MenuTabKey = (typeof MENU_TABS)[number]["key"];
 
 function CollapsibleCard({
   title,
@@ -517,6 +538,7 @@ function MenuSection({
   onEdit,
   onDelete,
   isSuperAdmin,
+  defaultOpen,
 }: {
   title: string;
   items: MenuItemAdminView[];
@@ -532,9 +554,10 @@ function MenuSection({
   onEdit: (item: MenuItemAdminView) => void;
   onDelete: (item: MenuItemAdminView) => void;
   isSuperAdmin: boolean;
+  defaultOpen?: boolean;
 }) {
   return (
-    <CollapsibleCard title={title} defaultOpen={false}>
+    <CollapsibleCard title={title} defaultOpen={defaultOpen ?? false}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-xs">
@@ -668,6 +691,7 @@ export function MenuManager({
   toppings,
   drinkPrices,
   menuItems,
+  alitaSauces,
 }: {
   currentUserRole: Role;
   sizes: Size[];
@@ -676,6 +700,7 @@ export function MenuManager({
   toppings: Topping[];
   drinkPrices: DrinkPrice[];
   menuItems: MenuItemAdminView[];
+  alitaSauces: AlitaSauceAdminView[];
 }) {
   const isSuperAdmin = currentUserRole === Role.SUPER_ADMIN;
   const [sizeForm, setSizeForm] = useState({ name: "", oz: "" });
@@ -731,6 +756,12 @@ export function MenuManager({
     description: "",
   });
   const [almuerzosQuery, setAlmuerzosQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<MenuTabKey>("carta");
+  const [salsaForm, setSalsaForm] = useState({ name: "" });
+  const [editingSalsa, setEditingSalsa] = useState<AlitaSauceAdminView | null>(
+    null,
+  );
+  const [salsaEdit, setSalsaEdit] = useState({ name: "" });
 
   const almuerzos = menuItems
     .filter((i) => i.category === MenuCategory.ALMUERZO)
@@ -961,19 +992,47 @@ export function MenuManager({
     setToppingEdit({ name: topping.name, price: String(topping.price) });
   }
 
+  function openSalsaEdit(salsa: AlitaSauceAdminView) {
+    setEditingSalsa(salsa);
+    setSalsaEdit({ name: salsa.name });
+  }
+
   return (
     <div className="space-y-6">
       <div className="mb-6 border-b border-slate-800 pb-4">
         <h1 className="text-xl font-bold text-white">Gestión del menú</h1>
 <p className="text-muted-foreground">
-          El menú se organiza en cinco secciones: Almuerzos, Platos a la carta,
-          Bebidas, Cafetería y Bubas.
+          El menú se organiza en secciones por tipo: Almuerzos, Platos a la
+          carta, Bebidas, Cafetería, Bubas y las Salsas de las Alitas Mixtas.
         </p>
       </div>
 
+      {/* Barra de tabs: muestra una sección a la vez */}
+      <div className="flex flex-wrap gap-1 border-b border-slate-800">
+        {MENU_TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "-mb-px rounded-t-lg border-b-2 px-4 py-2 text-sm font-semibold transition-colors",
+                active
+                  ? "border-primary bg-slate-900 text-white"
+                  : "border-transparent text-muted-foreground hover:text-white",
+              )}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "almuerzos" && (
       <CollapsibleCard
         title="Almuerzos"
-        defaultOpen={false}
+        defaultOpen
       >
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1097,59 +1156,70 @@ export function MenuManager({
           </div>
         </div>
       </CollapsibleCard>
+      )}
 
-      <MenuSection
-        title="Platos a la carta"
-        items={cartaItems}
-        filteredItems={filteredCartaItems}
-        disponibles={cartaDisponibles}
-        query={cartaQuery}
-        onQueryChange={setCartaQuery}
-        openNew={() => openNewCarta(MenuCategoryList[0])}
-        newButtonLabel="Nuevo Plato"
-        emptyText="No hay platos a la carta registrados."
-        showCategory
-        onToggle={toggleAvailable}
-        onEdit={openEditCarta}
-        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-        isSuperAdmin={isSuperAdmin}
-      />
+      {activeTab === "carta" && (
+        <MenuSection
+          title="Platos a la carta"
+          items={cartaItems}
+          filteredItems={filteredCartaItems}
+          disponibles={cartaDisponibles}
+          query={cartaQuery}
+          onQueryChange={setCartaQuery}
+          openNew={() => openNewCarta(MenuCategoryList[0])}
+          newButtonLabel="Nuevo Plato"
+          emptyText="No hay platos a la carta registrados."
+          showCategory
+          onToggle={toggleAvailable}
+          onEdit={openEditCarta}
+          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          isSuperAdmin={isSuperAdmin}
+          defaultOpen
+        />
+      )}
 
-      <MenuSection
-        title="Bebidas"
-        items={bebidasItems}
-        filteredItems={filteredBebidasItems}
-        disponibles={bebidasDisponibles}
-        query={bebidasQuery}
-        onQueryChange={setBebidasQuery}
-        openNew={() => openNewCarta(MenuCategory.BEBIDA)}
-        newButtonLabel="Nueva Bebida"
-        emptyText="No hay bebidas registradas."
-        showCategory={false}
-        onToggle={toggleAvailable}
-        onEdit={openEditCarta}
-        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-        isSuperAdmin={isSuperAdmin}
-      />
+      {activeTab === "bebidas" && (
+        <MenuSection
+          title="Bebidas"
+          items={bebidasItems}
+          filteredItems={filteredBebidasItems}
+          disponibles={bebidasDisponibles}
+          query={bebidasQuery}
+          onQueryChange={setBebidasQuery}
+          openNew={() => openNewCarta(MenuCategory.BEBIDA)}
+          newButtonLabel="Nueva Bebida"
+          emptyText="No hay bebidas registradas."
+          showCategory={false}
+          onToggle={toggleAvailable}
+          onEdit={openEditCarta}
+          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          isSuperAdmin={isSuperAdmin}
+          defaultOpen
+        />
+      )}
 
-      <MenuSection
-        title="Cafetería"
-        items={cafeteriaItems}
-        filteredItems={filteredCafeteriaItems}
-        disponibles={cafeteriaDisponibles}
-        query={cafeteriaQuery}
-        onQueryChange={setCafeteriaQuery}
-        openNew={() => openNewCarta(MenuCategory.PANCAKE)}
-        newButtonLabel="Nuevo Producto"
-        emptyText="No hay productos de cafetería registrados."
-        showCategory
-        onToggle={toggleAvailable}
-        onEdit={openEditCarta}
-        onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-        isSuperAdmin={isSuperAdmin}
-      />
+      {activeTab === "cafeteria" && (
+        <MenuSection
+          title="Cafetería"
+          items={cafeteriaItems}
+          filteredItems={filteredCafeteriaItems}
+          disponibles={cafeteriaDisponibles}
+          query={cafeteriaQuery}
+          onQueryChange={setCafeteriaQuery}
+          openNew={() => openNewCarta(MenuCategory.PANCAKE)}
+          newButtonLabel="Nuevo Producto"
+          emptyText="No hay productos de cafetería registrados."
+          showCategory
+          onToggle={toggleAvailable}
+          onEdit={openEditCarta}
+          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          isSuperAdmin={isSuperAdmin}
+          defaultOpen
+        />
+      )}
 
-      <CollapsibleCard title="Bubas" defaultOpen={false}>
+      {activeTab === "bubas" && (
+      <CollapsibleCard title="Bubas" defaultOpen>
         <div className="space-y-4">
           <SubSection title="Tamaños de vaso">
             <div className="space-y-4">
@@ -1571,6 +1641,98 @@ export function MenuManager({
           ))}
         </div>
       </CollapsibleCard>
+      )}
+
+      {activeTab === "salsas" && (
+        <CollapsibleCard title="Salsas de Alitas" defaultOpen>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                className="max-w-64"
+                placeholder="Nombre de la salsa"
+                value={salsaForm.name}
+                onChange={(e) =>
+                  setSalsaForm({ ...salsaForm, name: e.target.value })
+                }
+              />
+              <Button
+                onClick={() =>
+                  run(() =>
+                    createAlitaSauce({ name: salsaForm.name }).then(() =>
+                      setSalsaForm({ name: "" }),
+                    ),
+                  )
+                }
+              >
+                <Plus className="h-4 w-4" /> Agregar salsa
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Badge variant="success">
+                {alitaSauces.filter((s) => s.available).length} disponibles
+              </Badge>
+              <Badge variant="secondary">{alitaSauces.length} totales</Badge>
+            </div>
+
+            <div className="space-y-2">
+              {alitaSauces.map((sauce) => (
+                <div
+                  key={sauce.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="font-medium">{sauce.name}</div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={sauce.available ? "success" : "secondary"}>
+                      {sauce.available ? "Disponible" : "No disponible"}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        run(() =>
+                          updateAlitaSauce(sauce.id, {
+                            name: sauce.name,
+                            available: !sauce.available,
+                          }),
+                        )
+                      }
+                    >
+                      {sauce.available ? "Desactivar" : "Activar"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label="Editar"
+                      onClick={() => openSalsaEdit(sauce)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    {isSuperAdmin && (
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        aria-label="Eliminar"
+                        onClick={() =>
+                          confirmDelete(() => deleteAlitaSauce(sauce.id))
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {alitaSauces.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No hay salsas registradas. Agrega las que ofrecerás para las
+                  Alitas Mixtas.
+                </p>
+              )}
+            </div>
+          </div>
+        </CollapsibleCard>
+      )}
 
       <Dialog
         open={editingSize !== null}
@@ -2015,6 +2177,47 @@ export function MenuManager({
             </Button>
             <Button onClick={saveCarta}>
               {cartaModal.editing ? "Guardar" : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editingSalsa !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditingSalsa(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar salsa de alitas</DialogTitle>
+            <DialogDescription>
+              Actualiza el nombre de la salsa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Nombre"
+              value={salsaEdit.name}
+              onChange={(e) => setSalsaEdit({ ...salsaEdit, name: e.target.value })}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingSalsa(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() =>
+                editingSalsa &&
+                run(() =>
+                  updateAlitaSauce(editingSalsa.id, {
+                    name: salsaEdit.name,
+                    available: editingSalsa.available,
+                  }).then(() => setEditingSalsa(null)),
+                )
+              }
+            >
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>

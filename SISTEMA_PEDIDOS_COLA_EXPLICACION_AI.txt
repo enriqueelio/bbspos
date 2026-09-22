@@ -1,0 +1,967 @@
+================================================================================
+BBSPOS — SISTEMA DE PEDIDOS EN COLA (COLA DE PEDIDOS / KDS)
+Documento técnico de referencia para otra IA. 100% basado en el código fuente
+actual del monorepo (revisado contra los archivos en disco).
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. OBJETIVO GENERAL DEL SISTEMA
+--------------------------------------------------------------------------------
+
+**Qué es**
+
+BBSPOS es un POS (punto de venta) para una tienda de té con burbujas (bubble
+tea, marca "Bubble Drink") que también vende platillos de carta (almuerzos,
+sandwiches, alitas, milanesas, lomos, waffles, etc.). El "sistema de pedidos
+en cola" es la pieza central que muestra, en tiempo real, los pedidos que están
+en producción en cocina para que el cajero los administre: aceptar lo que llega
+de la tienda web, cobrar, marcar entregado, ver demoras y completar el ciclo de
+venta.
+
+La cola NO es un módulo aislado: es la columna izquierda (20%) de la pantalla
+principal del **Cajero** (`apps/cajero`), y su contraparte administrativa es la
+tabla de **Pedidos** del Admin (`apps/admin/app/(dashboard)/orders`).
+
+**Para qué sirve**
+
+1. Ver en una sola pantalla todos los pedidos activos del día (RECIBIDO,
+   ACEPTADO y ENTREGADO) sin recargar la página.
+2. Permitir que el personal pase el pedido por su ciclo de vida: aceptar
+   (arranca cocina), cobrar (efectivo / QR / dividido / cuenta pensionado),
+   marcar entregado.
+3. Mostrar la antigüedad/demora de cada pedido contra su tiempo estimado de
+   producción, con un reloj unificado.
+4. Detectar visualmente un pedido recién entrado (parpadeo azul + auto-scroll).
+5. Alertar por Telegram (un worker de servidor) cuando un pedido supera su
+   tiempo estimado.
+
+**Flujo general de usuario (el ciclo de vida de un pedido)**
+
+El ticket visible al cliente es `daySeq` (secuencia diaria #001, #002…). El
+`seq` es global y único en toda la vida de la BD (usado solo internamente y
+para el orden cronológico absoluto).
+
+Flujo A — Pedido tomado en el POS (cajero o mesero):
+  1. El operador arma el carrito y presiona ENVIAR (`createPosOrder`).
+  2. El pedido nace en estado `ACEPTADO` (se asume que al tomarlo ya empieza la
+     preparación) con `seq` y `daySeq` asignados, e imprime la comanda.
+  3. Aparece en la cola del cajero (panel izquierdo) en el grupo "Pedidos
+     pendientes". El reloj de producción arranca con `acceptedAt`.
+  4. El cajero presiona "Cobrar" (efectivo/QR/dividido/pensionado) → se llena
+     `paidAt`.
+  5. Se presiona "Marcar entregado" → `status=ENTREGADO`, `deliveredAt`.
+  6. Si el cliente paga después de la entrega, se cobra igual y la tarjeta pasa
+     a "Pedidos completados" (cobrado Y entregado).
+
+Flujo B — Pedido tomado en la tienda web (`apps/store`):
+  1. El cliente arma una bebida y la paga/finaliza (`createOrder` de la store).
+  2. El pedido nace en estado `RECIBIDO` (el default del schema) e imprime
+     comanda en la impresora (best-effort, fuera del request).
+  3. Aparece en la cola del cajero como `RECIBIDO` (badge gris, borde azul).
+  4. El cajero debe presionar "Aceptar" (o cobrarlo directo) → pasa a
+     `ACEPTADO` y arranca `acceptedAt` (el reloj de demora).
+  5. Cobro, entrega y cierre igual que el flujo A.
+
+Flujo C — Pedido anulado:
+  1. Solo el Admin puede anular (`cancelOrder`), con motivo obligatorio.
+  2. El pedido pasa a `ANULADO` y desaparece de la cola activa (la cola solo
+     consulta RECIBIDO/ACEPTADO/ENTREGADO).
+
+Nota importante: el mesero (`apps/mesero`) NO tiene cola de pedidos; solo tiene
+el terminal de toma de pedido. La cola del cajero es la única vista "viva" de
+producción. El admin tiene la tabla de gestión completa (filtros, sort,
+descuentos, anulaciones) pero sin auto-refresco.
+
+
+--------------------------------------------------------------------------------
+2. ARQUITECTURA Y TECNOLOGIAS
+--------------------------------------------------------------------------------
+
+**Stack**
+
+- Monorepo pnpm (`pnpm@11.21.0`, `node >= 20.9.0`), workspaces.
+- Next.js 15.5 (App Router, Server Components, Server Actions, `revalidatePath`,
+  `router.refresh`), React 19.
+- Tailwind CSS 3.4 con preset compartido (`packages/config/src/tailwind.ts`).
+- `class-variance-authority` (cva) para variantes de color/estado.
+- `lucide-react@^0.468.0` para iconos.
+- `next-auth@^4.24.11` para sesiones.
+- Base de datos: SQLite + Prisma (cliente único en `packages/db`).
+- Estado local del carrito: `useSyncExternalStore` + `localStorage`
+  (key `"bbspos-pos-cart"`).
+- Impresión por ticket térmico vía PowerShell (`System.Drawing.Printing`).
+
+**Estructura del monorepo**
+
+```
+bbspos/
+├── apps/
+│   ├── admin/          # Gestión (pedidos, catálogo, reportes, cierres) — puerto 3001
+│   ├── cajero/         # Terminal POS + COLA DE PEDIDOS (KDS) — puerto 3002
+│   ├── mesero/         # Terminal POS para tomar pedidos (sin cola)
+│   └── store/          # Tienda pública (dulphin): pedidos entran como RECIBIDO
+├── packages/
+│   ├── db/             # Prisma + SQLite, utilidades de día, workers (Telegram, cierre)
+│   ├── types/          # Tipos y constantes compartidas (@bbspos/types)
+│   ├── ui/             # Componentes UI (Button, Badge, Card, Dialog, Input…)
+│   └── config/         # Preset de Tailwind y tsconfigs
+└── data/
+    └── productos-tiempo.json   # minutos de producción por producto (nombre → int)
+```
+
+**Dónde vive la lógica de la cola** (rutas absolutas):
+
+| Responsabilidad | Archivo |
+|---|---|
+| UI de la cola (componentes + hook de tiempo real) | `apps/cajero/components/queue-view.tsx` |
+| Variantes de color/estado (CVA) y `visualStateOf` | `apps/cajero/components/orders/statusVariants.ts` |
+| Reloj de demora (getStartTime/delayMinutes/delayLevelOf) | `apps/cajero/lib/time.ts` |
+| Server Component que alimenta la cola (`getQueueData`) | `apps/cajero/app/page.tsx` |
+| Acciones de estado (aceptar/cobrar/entregar) | `apps/cajero/app/actions/orders.ts` |
+| Creación de pedido POS (entra ACEPTADO, imprime comanda) | `apps/cajero/actions/pos.ts` |
+| Gestión admin completa (filtros/sort/anular/descontar) | `apps/admin/app/(dashboard)/orders/orders-client.tsx` y `page.tsx` |
+| Acciones admin (cobrar/entregar/anular/descontar/reimprimir) | `apps/admin/app/actions/orders.ts` |
+| Creación de pedido store (entra RECIBIDO) | `apps/store/app/actions/order.ts` |
+| Alertas de atraso por Telegram (worker server-side) | `packages/db/src/telegram-alert.ts` + `packages/db/scripts/telegram-alert-worker.ts` |
+
+**Base de datos (SQLite, Prisma)**
+
+Esquema en `packages/db/prisma/schema.prisma`. Las tablas del dominio de
+pedidos:
+
+- `Order` — el pedido. Columnas clave:
+  - `id` cuid.
+  - `seq Int? @unique` — número de orden GLOBAL, nunca se repite en la BD
+    (clave del orden cronológico absoluto del historial).
+  - `orderDate String?` — día local en formato `YYYY-MM-DD` (zona
+    `America/La_Paz`, UTC-4 fijo).
+  - `daySeq Int?` — ticket visible del día (#001, #002…). Se reinicia en cada
+    medianoche. Garantía: `@@unique([orderDate, daySeq])`.
+  - `status OrderStatus @default(RECIBIDO)` — enum: RECIBIDO | ACEPTADO |
+    ENTREGADO | ANULADO.
+  - `customerName`, `deliveryType` (MESA | LLEVAR | DELIVERY), `notes`.
+  - `total Int` (en Bs, entero), `discountAmount Int @default(0)`.
+  - `createdAt DateTime @default(now())` — en SQLite se guarda como entero ms.
+  - `acceptedAt DateTime?`, `paidAt DateTime?`, `deliveredAt DateTime?` —
+    los 3 timestamps que definen cobrado/entregado y el reloj de demora.
+  - `userId` (quién tomó/cobró la orden), `canceledById`, `discountedById`
+    (auditoría con relaciones `@relation("OrderCanceledBy")`, etc.).
+  - `delayNotified Boolean @default(false)` — anti-spam del worker de Telegram.
+  - `tiempoEstimado Int @default(10)` — minutos estimados del pedido
+    = `max(tiempoProduccion)` de sus ítems.
+  - `customerId` — FK opcional a `Customer` (cuenta pensionado).
+  - Índices útiles: `@@index([createdAt, status])`, `@@index([status, createdAt])`,
+    `@@index([deliveredAt])`, `@@index([userId, status])`, `@@index([customerId])`.
+- `OrderItem` — línea del pedido (bebida: `sizeName/flavorName/flavorCategory/
+  bobaTypeName`; platillo: `menuItemName/menuItemCategory/menuItemOptionName/
+  menuItemDetail`). Guarda `unitPrice Int`, `quantity Int`,
+  `tiempoProduccion Int @default(5)` y `toppings` (relación `OrderItemTopping`).
+- `OrderItemTopping` — topping de una línea con `toppingName` y `unitPrice`.
+- `User` — empleados (`role` enum, `shift` enum MANANA/TARDE/SIN_TURNO, `active`).
+- `Customer` / `CustomerLedger` — clientes pensionados (`pensionType`
+  PREPAGO/POSTPAGO, `balance`, `creditLimit`) y su cuenta corriente (ledger
+  type String: "RECARGA"/"PAGO_DEUDA"/"CONSUMO").
+- `PaymentConfig`, `CashClose`, `DailyReportLog` — pagos QR, cierres y log.
+- Catálogo: `Size`, `Flavor`, `FlavorCategoryLink`, `BobaType`, `DrinkPrice`
+  (matriz `@@unique([category, sizeId, bobaTypeId])`), `Topping`,
+  `MenuItem`, `MenuItemOption`, `AlitaSauce`.
+
+Enums relevantes (en el schema):
+
+```prisma
+enum OrderStatus { RECIBIDO ACEPTADO ENTREGADO ANULADO }
+enum DeliveryType { MESA LLEVAR DELIVERY }
+enum PaymentMethod { EFECTIVO QR TARJETA PENSION }
+enum Role { SUPER_ADMIN ADMIN CAJERO MESERO }
+enum Shift { MANANA TARDE SIN_TURNO }
+enum PensionType { PREPAGO POSTPAGO }
+```
+
+**Zona horaria y fechas**
+
+- La aplicación usa fija la zona `America/La_Paz` (UTC-4, sin horario de
+  verano). El "día" local se calcula en JS con `Intl.DateTimeFormat` en
+  `packages/db/src/day.ts` (`localDayKey`, `todayKey`, `dayBounds`).
+- En SQL raw (migraciones), `createdAt` es un entero ms, por lo que el día
+  local se obtiene con `date("createdAt" / 1000, 'unixepoch', '-4 hours')`.
+- `Order.orderDate` (string YYYY-MM-DD) es la fuente del "día" del ticket.
+
+**Componentes principales de la UI**
+
+- `QueueView` (`apps/cajero/components/queue-view.tsx`) — componente cliente
+  que renderiza toda la cola. Exporta además los sub-componentes internos:
+  `useQueueClock` (hook de tiempo real), `AgeBadge`, `ItemsList`,
+  `ChargeButton`, `OrderCard`, `EmptyQueue`, `ConfirmDialog`,
+  `QueueGroupAccordion`.
+- `PosTerminal` (`apps/cajero/components/pos/pos-terminal.tsx`) — la pantalla
+  del cajero, integra la cola al 20% izquierdo.
+- `SplitPaymentDialog`, `PensionPaymentDialog`, `SettingsMenu` — diálogos de
+  cobro dividido, cuenta pensionado y reimpresión.
+- `orders-client.tsx` (admin) — tabla de gestión de pedidos del día (y todos).
+
+
+--------------------------------------------------------------------------------
+3. DISEÑO UI/UX EN DETALLE
+--------------------------------------------------------------------------------
+
+**3.1 La cola del cajero (KDS)**
+
+- Está embebida como la **Columna 1 (20%)** de la pantalla del cajero, un
+  layout de 3 columnas 20/20/60 (cola | ticket en curso | catálogo):
+  `apps/cajero/components/pos/pos-terminal.tsx:656-667`:
+  ```tsx
+  <div className="flex h-full w-full bg-slate-950 overflow-hidden">
+    <aside className="flex w-1/5 min-w-[300px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <QueueView orders={queueOrders} role={role} customers={customers} compact />
+      </div>
+    </aside>
+  ```
+- Es una **lista vertical de tarjetas** (no grid, no kanban). Cada pedido es
+  una `Card` apilada en `space-y-3`. No es kanban porque no hay columnas por
+  estado: los estados se distinguen por color/borde/badge, y los pedidos se
+  agrupan en dos bloques tipo acordeón:
+  - **"Pedidos pendientes"** — siempre abierto (no colapsa), contiene todo lo
+    no completado.
+  - **"Pedidos completados"** (cobrado Y entregado) — contraído por defecto,
+    colapsable.
+- **Acordeón único**: solo una tarjeta puede estar expandida en todo momento
+  (`expandedId`). En modo `compact` (cola del 20%) las tarjetas nacen
+  contraídas y se expanden al hacer clic en la fila. Al pasar a "completado"
+  la tarjeta se auto-contrae (`useEffect` en `OrderCard`).
+- **Entrada de pedido nuevo**: cuando `knownIds` detecta ids nuevos en `orders`
+  (diferencia con el render anterior), se expande automáticamente el pedido más
+  nuevo (`ticketOf` más alto), se le aplica un **parpadeo azul de 2 s**
+  (`animate-flash-blue`) y se hace `scrollIntoView({ behavior: "smooth" })`
+  (`apps/cajero/components/queue-view.tsx:1026-1059`).
+
+**Tarjeta en estado contraído** (fila): un `<button>` de ancho completo con:
+- `#ticket` en `font-black text-white` (`text-sm` compacto).
+- Un **puntito rojo pulsante** (`h-2 w-2 animate-pulse rounded-full bg-red-500`)
+  si `demora > 0` (el pedido ya se tardó).
+- Nombre del cliente/mesa en `font-black text-primary` (azul), truncado.
+- Total en `font-black tabular-nums text-emerald-300`.
+- Hora de creación (HH:MM, formato 24h) en `text-slate-400`.
+- Icono del tipo de entrega (mesa/llevar/delivery).
+- Padding `px-3 py-2` (compacto). Hover: `hover:bg-slate-900/60`.
+
+**Tarjeta en estado expandido**: `CardHeader` con `#ticket` (`text-base`) +
+nombre (`text-primary`), hora + badge de antigüedad debajo (`text-xs slate-400`,
+`text-slate-400`), icono de entrega a la derecha. `CardContent` con:
+- Lista de ítems (`ItemsList`): `cantidad× Sabor (Tamaño) · boba`, toppings en
+  línea indentada `+ Tapioca extra…`, y precio de la línea a la derecha.
+- Notas especiales ("Indicaciones especiales", `text-[10px] uppercase` +
+  texto `text-amber-300`).
+- En compacto, una fila con total + badge de estado + botones de acción.
+- En no-compacto, el total gigante (`text-4xl font-mono font-black`) con los
+  iconos de entrega y método de pago, los botones de acción y el badge.
+
+**Botones de acción** (según estado):
+- `RECIBIDO`: botón **"Aceptar"** `bg-primary` (azul) → confirma y llama
+  `acceptQueueOrder`.
+- `ACEPTADO` sin cobrar (con permiso de cobrar): botón **"Cobrar"**
+  (`bg-gradient-to-b from-red-500 to-red-600`, `animate-pulse`, `font-black`,
+  hover quita la animación) que abre un **menú flotante** (portal a
+  `document.body`) con PENSIONADO / DIVIDIDO / QR / EFECTIVO.
+- Sin permiso de cobrar (mesero): badge "Pendiente de pago"
+  (`border-amber-500 text-amber-500`).
+- `ACEPTADO`: botón verde **"Marcar entregado"** (`bg-emerald-500`).
+- Entregado: el pedido sale de los pendientes (completado) o se cobra si aún
+  no pagó.
+
+**Buscar**: campo de búsqueda tipo `<Input>` con icono `Search` (lucide) a la
+izquierda (`pl-8`) sobre la cola, filtra por número de pedido, nombre/mesa u
+hora (`queue-view.tsx:1092-1101`). En modo compacto la cabecera "PEDIDOS EN
+COLA" + búsqueda es `sticky top-0 z-10` con fondo `bg-slate-900`.
+
+**Estados vacíos**: `EmptyQueue` — card centrada con "No hay pedidos por
+preparar" y "Los pedidos nuevos aparecerán aquí automáticamente."
+
+**Diálogo de confirmación**: `ConfirmDialog` — overlay `fixed inset-0 z-50
+bg-black/70`, panel `max-w-lg rounded-xl border-slate-700 bg-slate-900`, título
+"Confirmar acción", botón verde "Aceptar" (`bg-emerald-600 h-14`) y "Cancelar"
+(variant secondary). Cierra con transición `scale-95/scale-100` y
+`opacity-0/100` en 200 ms.
+
+**Errores**: overlay a pantalla completa `bg-red-600` con el mensaje del error
+de la server action y botón blanco "Aceptar".
+
+**Loading por acción**: mientras se ejecuta una server action, la tarjeta queda
+`opacity-50 pointer-events-none` y en el centro se superpone un **spinner SVG**
+(`h-12 w-12 animate-spin text-primary`). Los botones muestran "Aceptando… /
+Cobrando… / Entregando…".
+
+**3.2 La tabla de pedidos del admin**
+
+`apps/admin/app/(dashboard)/orders/orders-client.tsx`:
+- Tabla (fila + fila de detalle expandible), 7 columnas: #Ticket (mono),
+  createdAt (fecha corta `es-MX`), Cliente, Mesero/Cajero, Total
+  (`font-mono text-emerald-400`), Descuento (`text-warning` si > 0, "—" si no),
+  Estado (badge + método de pago), chevrón.
+- Filas zebra: `index % 2 === 0 ? "bg-slate-900/40" : "bg-slate-900/20"`;
+  expandida: `bg-primary/10 border-l-2 border-l-primary`. Hover
+  `hover:bg-slate-800/60`.
+- Detalle expandido por transición `max-height` 300 ms; muestra metadatos
+  (pago/entrega/anulación/descuento con fechas y responsable), lista de ítems
+  con toppings, y botones Descontar (`bg-warning`), Anular (`bg-red-700`),
+  Reimprimir y acciones primarias (cobrar EFECTIVO/QR/Dividir, entregar).
+- Filtros: por estado (Todos/Recibidos/Aceptados/Entregados/Anulados), por
+  turno (`ShiftLabel`) y por rango de fechas (`DateRangePicker`, inputs
+  `type="date"` + botón "Hoy").
+- Sort por columna: `seq` (orderDate + daySeq), `createdAt`, `customerName`,
+  `userName`, `total`, `discountAmount`, `status`; clic alterna asc/desc.
+- No tiene polling: los pedidos llegan por props de un Server Component
+  (`orders/page.tsx` con `prisma.order.findMany`) y las server actions ejecutan
+  `revalidatePath("/orders")`.
+
+**3.3 Responsive**
+
+- Cajero: layout de 3 columnas con `min-w-[300px]` (cola) y `min-w-[280px]`
+  (ticket), pensado para monitores/pantallas táctiles de caja; en pantallas
+  angostas la cola mantiene su scroll propio.
+- Mesero: contenedor `max-w-[950px]` centrado, una sola columna (terminal).
+- Admin: tabla con scroll horizontal (`overflow-x-auto`) y estilos `dark`.
+- El tema es **oscuro** en todas las apps (bg slate-950/900).
+
+**3.4 Tipografías, tamaños e iconos (resumen)**
+
+- Fuente base: `--font-sans` (ui-sans-serif / system-ui / Segoe UI…). Los
+  totales/códigos usan `font-mono` y `tabular-nums` para que los precios no
+  bailen.
+- Tamaños representativos en la cola compacta: ticket `text-sm`, nombre
+  `text-sm`, hora `text-xs`, total `text-sm`, iconos `h-3.5/h-4/h-5` w-3.5/4/5,
+  badges `text-xs`, botones `h-10 text-sm px-4`. En la vista completa (admin):
+  títulos de tarjeta `text-2xl`, total `text-4xl`, botones `h-14 text-xl`,
+  badge `text-base`.
+- Iconos lucide: `Search`, `ChevronDown`, `Utensils` (mesa), `Bike`
+  (delivery), `Banknote` (efectivo), `QrCode` (QR), `Users` (pensionado),
+  `CreditCard` (dividido/tarjeta), y un **PaperBag (bolsa de llevar) como SVG
+  embebido** porque lucide 0.468 no lo incluye (`queue-view.tsx:64-93`).
+
+
+--------------------------------------------------------------------------------
+4. COLORES Y ESTILOS
+--------------------------------------------------------------------------------
+
+**4.1 Tema oscuro base (variables CSS)**
+
+Definido en `apps/cajero/app/globals.css` (`:root`) y proyectos hermanos, con
+sintaxis HSL de Tailwind. Valores aproximados en HEX de Tailwind:
+
+| Variable | HSL | HEX aprox. | Uso |
+|---|---|---|---|
+| `--background` | `222.2 47.4% 11.2%` | `#0f172a` (slate-900) | fondo general |
+| `--card` | `222.2 84% 4.9%` | `#020817` (≈slate-950) | fondo de Card |
+| `--primary` | `221.2 83.2% 53.3%` | `#2563eb` (blue-600) | botón Aceptar, títulos, tema |
+| `--primary-foreground` | `0 0% 100%` | `#ffffff` | texto sobre primary |
+| `--secondary` | `215.3 19.3% 34.5%` | `#475569` (slate-600) | badges secundarios |
+| `--success` | `160.1 84.1% 39.4%` | `#11b981` (emerald-500) | entregado / acciones verdes |
+| `--warning` | `37.7 92.1% 50.2%` | `#f59e0b` (amber-500) | RECIBIDO en admin, avisos |
+| `--destructive` | `346.8 77.2% 49.8%` | `#e11d48` (rose-600) | errores, anular |
+| `--muted` | `217.2 32.6% 17.5%` | `#122648` (≈slate-800) | áreas atenuadas |
+| `--muted-foreground` | `215 20.2% 65.1%` | `#94a3b8` (slate-400) | texto secundario |
+| `--border` / `--input` | `217.2 32.6% 17.5%` | `#1e293b`-ish (slate-800) | bordes |
+| `--ring` | `221.2 83.2% 53.3%` | `#2563eb` | focus rings |
+| `--radius` | `0.75rem` | — | bordes redondeados |
+
+Paleta decorativa de la marca (`packages/config/src/tailwind.ts`, token `boba`):
+
+| Token | HEX |
+|---|---|
+| `boba.milk` | `#f9f5ef` |
+| `boba.cream` | `#efe0d0` |
+| `boba.bubble` | `#d9a066` |
+| `boba.matcha` | `#8fbf72` |
+| `boba.taro` | `#c9a5dc` |
+| `boba.boba` | `#6b4226` |
+| `boba.popping` | `#ff6b8a` |
+
+**4.2 Colores de los 4 estados de BD y 5 estados visuales**
+
+La paleta oficial vive en `apps/cajero/components/orders/statusVariants.ts`
+(tres variantes CVA + `visualStateOf`). Los 5 estados visuales provienen de
+combinar `status`, `paidAt` y `deliveredAt`:
+
+| Estado visual | Badge (`orderBadgeVariants`) | Borde/glow de tarjeta (`orderCardVariants`) |
+|---|---|---|
+| `RECIBIDO` | `bg-slate-400 text-slate-950` (gris) | `border-blue-500 animate-glow ring-1 ring-blue-500/60` (azul pulsante) |
+| `ACEPTADO` | `bg-blue-500 text-white` (azul) | `border-amber-500 animate-name-glow ring-1 ring-amber-500/60` (amarillo pulsante) |
+| `ENTREGADO_SIN_COBRAR` | `bg-green-500 text-white` (verde) | `border-red-500 animate-glow-red ring-1 ring-red-500/60` (rojo pulsante) |
+| `ENTREGADO_COBRADO` | `bg-green-500 text-white` (verde) | `""` (sin borde/glow: normal) |
+| `PAGADO_SIN_ENTREGAR` | `bg-orange-500 text-white` (naranja) | `border-green-500 animate-glow-green ring-1 ring-green-500/60` (verde pulsante) |
+
+Código exacto:
+
+```ts
+export const orderBadgeVariants = cva("shrink-0 border-transparent font-bold", {
+  variants: {
+    visual: {
+      RECIBIDO: "bg-slate-400 text-slate-950",
+      ACEPTADO: "bg-blue-500 text-white",
+      ENTREGADO_SIN_COBRAR: "bg-green-500 text-white",
+      ENTREGADO_COBRADO: "bg-green-500 text-white",
+      PAGADO_SIN_ENTREGAR: "bg-orange-500 text-white",
+    },
+  },
+  defaultVariants: { visual: "ACEPTADO" },
+});
+
+export const orderCardVariants = cva("animate-in fade-in slide-in-from-bottom-4 duration-200", {
+  variants: {
+    visual: {
+      RECIBIDO: "border-blue-500 animate-glow ring-1 ring-blue-500/60",
+      ACEPTADO: "border-amber-500 animate-name-glow ring-1 ring-amber-500/60",
+      ENTREGADO_SIN_COBRAR: "border-red-500 animate-glow-red ring-1 ring-red-500/60",
+      ENTREGADO_COBRADO: "",
+      PAGADO_SIN_ENTREGAR: "border-green-500 animate-glow-green ring-1 ring-green-500/60",
+    },
+  },
+  defaultVariants: { visual: "ACEPTADO" },
+});
+```
+
+Detalle: el badge muestra `OrderStatusLabel[order.status]` (texto del estado de
+BD, no del visual): "Recibido", "Aceptado", "Entregado", "Anulado". El color
+del badge es del estado **visual** (depende también de pago/entrega).
+
+**4.3 Animaciones (keyframes en `globals.css` del cajero)**
+
+- `card-enter` / `.animate-in.fade-in.slide-in-from-bottom-4`: entrada 200 ms
+  (opacity + translateY(16px→0)).
+- `glow` (2s, delay 200ms, infinite): pulso azul — box-shadow
+  `rgba(37,99,235,.55)` a `rgba(37,99,235,.15)` en radio 0→6px → RECIBIDO.
+- `name-glow` (2s infinite): pulso amarillo `rgba(251,191,36,…)`, con anillo
+  1-2px y glow exterior hasta 22px → ACEPTADO.
+- `glow-red` (2s infinite): `rgba(220,38,38,.55→.18)` → ENTREGADO sin cobrar.
+- `glow-green` (2s infinite): `rgba(16,185,129,.55→.18)` → pagado sin entregar.
+- `flash-blue` (2s, 3 destellos de `rgba(37,99,235,.5)` en 16/48/80%) →
+  pedido recién entrado.
+- RGB usados en los glows: azul `#2563eb` (37,99,235), amarillo `#f59e0b`
+  (251,191,36), rojo `#dc2626` (220,38,38), verde `#10b981` (16,185,129).
+
+**4.4 Colores de demora (reloj)** — `orderDelayVariants`:
+
+```ts
+export const orderDelayVariants = cva("", {
+  variants: {
+    delay: {
+      ok: "text-green-400",        // a tiempo
+      warning: "text-yellow-400",  // < 5 min de atraso
+      critical: "text-red-500 animate-pulse", // >= 5 min de atraso
+    },
+  },
+  defaultVariants: { delay: "ok" },
+});
+```
+
+**4.5 Otros colores semánticos de la tarjeta**
+
+- Total: `text-emerald-300` (cola) / `text-emerald-400` (admin). En tarjeta
+  expandida con `font-mono font-black`; si está entregado pero no cobrado, en
+  `text-red-500`.
+- Nombre/cliente: `text-primary` (azul).
+- Hora: `text-slate-400`.
+- Fondo para DELIVERY: `bg-purple-900/40` + brillo interior violeta
+  `shadow-[inset_0_0_16px_rgba(168,85,247,0.45),inset_0_0_60px_rgba(168,85,247,0.18)]`
+  (`orderTypeBackgroundVariants`).
+- Iconos de pago: EFECTIVO `text-emerald-400`, QR `text-sky-400`,
+  PENSIONADO `text-amber-400`, DIVIDIDO/TARJETA `text-violet-400`/`text-blue-400`.
+- Iconos de entrega: MESA `text-amber-400`, LLEVAR `text-emerald-400`,
+  DELIVERY `text-sky-400`.
+- Notas del pedido: `text-amber-300`.
+- Bordes de grupo/búsqueda: `border-slate-800`, `bg-slate-900`.
+
+**4.6 Estados hover / active / disabled de los botones**
+
+Definidos en `packages/ui/src/components/ui/button.tsx`:
+
+```ts
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-75 hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  { variants: { variant: {
+      default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+      destructive: "bg-destructive … hover:bg-destructive/90",
+      outline: "border … hover:bg-accent hover:text-accent-foreground",
+      secondary: "bg-secondary … hover:bg-secondary/80",
+    }, size: { default: "h-9 px-4 py-2", sm: "h-8 rounded-md px-3 text-xs", lg: "h-10 rounded-md px-8" } } });
+```
+
+Y los botones particulares de la cola (en `queue-view.tsx`):
+
+- "Cobrar": `animate-pulse bg-gradient-to-b from-red-500 to-red-600 font-black
+  text-white shadow-lg shadow-red-950/50 transition-all hover:from-red-400
+  hover:to-red-500 hover:animate-none active:scale-[0.98]`.
+- "Aceptar": `bg-primary hover:bg-primary/80`, `disabled` cuando la acción está
+  en curso.
+- "Marcar entregado": `bg-emerald-500 hover:bg-emerald-600`.
+- Todas se desactivan con `disabled={clock.busyId === order.id}` (durante la
+  ejecución de la acción).
+
+Badge (`packages/ui/src/components/ui/badge.tsx`): base `inline-flex items-center
+rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors
+focus:ring-2 focus:ring-ring`. Variantes: `default` (primary), `secondary`,
+`destructive`, `outline`, `success` (emerald), `warning` (amber).
+
+
+--------------------------------------------------------------------------------
+5. ESTADOS DEL PEDIDO (LA PARTE MÁS IMPORTANTE)
+--------------------------------------------------------------------------------
+
+**5.1 Estados en base de datos (enum `OrderStatus`)**
+
+Solo 4 valores en BD. **"Cobrado" no es un estado**: se lee de `paidAt`.
+**"Entregado" también es un timestamp** (`deliveredAt`) además del estado.
+
+| Estado BD | Significado | Texto visible |
+|---|---|---|
+| `RECIBIDO` | Llegó de la tienda web; nadie lo aceptó aún. La producción NO empezó. | "Recibido" |
+| `ACEPTADO` | Está en producción (cocina). `acceptedAt` arranca el reloj de demora. | "Aceptado" |
+| `ENTREGADO` | La comanda salió a la mano del cliente (o se marcó entregado). Puede estar cobrado o no. | "Entregado" |
+| `ANULADO` | El admin lo canceló con motivo. No aparece en la cola activa. | "Anulado" |
+
+`OrderStatusSequence = [RECIBIDO, ACEPTADO, ENTREGADO]` (sin ANULADO) está en
+`packages/types/src/index.ts`.
+
+**5.2 Los 5 estados visuales de la cola (los que ve el cajero)**
+
+`visualStateOf(order)` (`apps/cajero/components/orders/statusVariants.ts:18`):
+
+```ts
+export function visualStateOf(order: Order): OrderVisualState {
+  if (order.paidAt && order.deliveredAt) return "ENTREGADO_COBRADO";
+  if (order.deliveredAt) return "ENTREGADO_SIN_COBRAR";
+  if (order.paidAt) return "PAGADO_SIN_ENTREGAR";
+  if (order.status === OrderStatus.RECIBIDO) return "RECIBIDO";
+  return "ACEPTADO";
+}
+```
+
+Prioridad de decisión: **paidAt+deliveredAt → deliveredAt → paidAt → status**.
+Esto significa que un pedido ENTREGADO sin pago se pinta ROJO (importante para
+el cajero: hay que cobrarlo), y que un pedido cobrado sin entregar se pinta
+VERDE pulsante (importante: hay que entregarlo).
+
+| Estado visual | Cuándo ocurre | Badge | Borde/glow | Icono en la tarjeta |
+|---|---|---|---|---|
+| `RECIBIDO` | status=RECIBIDO y sin pago ni entrega | gris `bg-slate-400` | azul pulsante | (botón Aceptar) |
+| `ACEPTADO` | status=ACEPTADO sin pago ni entrega | azul `bg-blue-500` | amarillo pulsante | botón Cobrar (rojo) + Entregar (verde) |
+| `ENTREGADO_SIN_COBRAR` | deliveredAt sí, paidAt no | verde `bg-green-500` | rojo pulsante | total en rojo + botón Cobrar |
+| `ENTREGADO_COBRADO` | paidAt y deliveredAt | verde `bg-green-500` | sin glow (normal) | pasa al grupo "Completados" |
+| `PAGADO_SIN_ENTREGAR` | paidAt sí, deliveredAt no | naranja `bg-orange-500` | verde pulsante | botón Entregar |
+
+El badge siempre muestra el **label del estado de BD**
+(`OrderStatusLabel[order.status]`), no el visual; el color del badge es del
+estado visual.
+
+**5.3 Qué evento dispara cada cambio de estado** (server actions)
+
+Cajero — `apps/cajero/app/actions/orders.ts`:
+
+1. **`acceptQueueOrder(orderId)`** — RECIBIDO → ACEPTADO.
+   Código (líneas 21-50):
+   ```ts
+   export async function acceptQueueOrder(orderId: string) {
+     await getRequiredSession();
+     const order = await prisma.order.findUnique({ where: { id: orderId } });
+     if (!order) throw new Error("Pedido no encontrado.");
+     if (order.status === OrderStatus.ANULADO) throw new Error("El pedido está anulado.");
+     if (order.status !== OrderStatus.RECIBIDO) throw new Error("Este pedido ya fue aceptado.");
+     await prisma.order.update({
+       where: { id: orderId },
+       data: { status: OrderStatus.ACEPTADO, acceptedAt: new Date() },
+     });
+     revalidatePath("/");
+   }
+   ```
+   Se dispara desde el botón "Aceptar" de las tarjetas RECIBIDO, previa
+   confirmación en `ConfirmDialog` ("¿Aceptas este pedido para prepararlo? El
+   reloj de producción se inicia ahora.").
+
+2. **`acceptOrder(orderId, method, method2?, amount2?)`** — registra el pago.
+   - Valida: el MESERO no cobra; method ∈ {EFECTIVO, QR}; el pedido no está
+     ANULADO ni ya cobrado (`paidAt`); pago dividido (M1+M2 distinto, monto2
+     entre 0 y total).
+   - Efectos: si el pedido estaba `RECIBIDO` lo pasa a `ACEPTADO`
+     (cobro-al-instante de la tienda web); si estaba `ACEPTADO`/`ENTREGADO`,
+     deja el estado intacto (solo marca pago). Fija `acceptedAt` si no tenía.
+   - Datos guardados: `paymentMethod`, `paymentMethod2`, `paymentAmount2`,
+     `paidAt: new Date()`, `userId`.
+   - Revalidate `"/"`.
+
+3. **`acceptPensionOrder(orderId, customerId)`** — cobra contra la cuenta del
+   pensionado (`paymentMethod = PENSION`), dentro de una `$transaction`:
+   ```
+   prisma.$transaction([
+     customer.update({ balance: nextBalance }),     // PREPAGO exige saldo >= total;
+     customerLedger.create({ type: "CONSUMO", … }), // POSTPAGO respeta creditLimit
+     order.update({ ... , paidAt, paymentMethod: PENSION, customerId }),
+   ])
+   ```
+
+4. **`deliverOrder(orderId)`** — ACEPTADO → ENTREGADO (líneas 261-302):
+   ```ts
+   if (order.status === OrderStatus.ANULADO) throw new Error("El pedido está anulado.");
+   if (order.status !== OrderStatus.ACEPTADO) throw new Error("El pedido ya fue entregado.");
+   await prisma.order.update({
+     where: { id: orderId },
+     data: { status: OrderStatus.ENTREGADO, deliveredAt: order.deliveredAt ?? new Date(), userId },
+   });
+   ```
+   Se dispara desde el botón verde "Marcar entregado" (solo tarjetas ACEPTADO),
+   con confirmación ("¿Confirmas la entrega de este pedido? Esta acción no se
+   puede deshacer.").
+
+Admin — `apps/admin/app/actions/orders.ts`:
+
+5. **`cancelOrder(orderId, reason)`** — → ANULADO. Exige motivo (`reason.trim()`),
+   valida que no esté ANULADO; graba `cancelledAt`, `cancelReason`,
+   `canceledById` y `userId`. Revalida `/orders` y `/`.
+6. **`applyDiscount(orderId, amountBs, reason)`** — descuenta restando del
+   `total` y guardando `discountAmount` acumulado, motivo, fecha y responsable.
+   Regla: `amount < order.total`.
+7. `acceptOrder` (copias del cajero) y `deliverOrder` — para el admin el cobro
+   de un pedido RECIBIDO también lo pasa a ACEPTADO.
+8. **`reprintOrder(orderId)`** — valida que el pedido esté RECIBIDO o ACEPTADO
+   y reimprime la comanda.
+
+**5.4 Reglas invariantes de la máquina de estados**
+
+- RECIBIDO → ACEPTADO: por aceptar o por cobrar (cobrar implica aceptar).
+- ACEPTADO → ENTREGADO: por `deliverOrder` (con o sin pago previo).
+- Cualquier estado (menos ANULADO) puede recibir pago (RECIBIDO/ACEPTADO/
+  ENTREGADO). Cobrar RECIBIDO lo avanza a ACEPTADO.
+- ANULADO es terminal: nada más se puede hacer con él (todas las acciones lo
+  validan con "El pedido está anulado").
+- Un pedido ENTREGADO sin cobrar sigue en "pendientes" hasta cobrarse.
+- Un pedido ANULADO se excluye de la cola por el `where` de `getQueueData`
+  (`status in [RECIBIDO, ACEPTADO, ENTREGADO]`).
+
+**5.5 Lista blanca de acciones por estado (UI cajero)** — `OrderCard`:
+
+| status BD | Botones que muestra |
+|---|---|
+| RECIBIDO | Aceptar (solo; el cobro se hace después) |
+| ACEPTADO & !paidAt | Cobrar (si rol cobra) o badge "Pendiente de pago" (mesero) + Marcar entregado |
+| ACEPTADO & paidAt | Marcar entregado |
+| ENTREGADO & !paidAt | Cobrar (si rol cobra) |
+| ENTREGADO & paidAt | Ninguno (completado, grupo colapsado) |
+| ANULADO | No aparece en la cola |
+
+El permiso de cobro (`billing`) es `role === CAJERO || ADMIN || SUPER_ADMIN`
+(`queue-view.tsx:1008`).
+
+**5.6 Lógica de "completado", conteo y orden en la UI**
+
+```ts
+const isComplete = (o: Order) =>
+  o.status === OrderStatus.ENTREGADO && Boolean(o.paidAt);
+
+const pendingCount = orders.filter(
+  (o) => o.status === RECIBIDO || o.status === ACEPTADO ||
+         (o.status === ENTREGADO && !o.paidAt),
+).length;
+```
+
+- `pendingCount` se muestra en el badge amarillo de "PEDIDOS EN COLA".
+- Los completados van al acordeón contraído "Pedidos completados".
+
+
+--------------------------------------------------------------------------------
+6. LOGICA Y FLUJO INTERNO
+--------------------------------------------------------------------------------
+
+**6.1 Cómo entra un pedido a la cola**
+
+Tres productores, todos escriben directo a SQLite vía Prisma:
+
+1. **Store web** (`apps/store/app/actions/order.ts:createOrder`) — crea el
+   pedido SIN especificar status → queda `RECIBIDO` (default del schema).
+   Imprime comanda en `after()` (best-effort). Solo bebidas (DRINK); el
+   `tempoEstimado` es el del "Bubble Tea".
+2. **POS cajero** (`apps/cajero/actions/pos.ts:createPosOrder`) — crea el
+   pedido en `ACEPTADO` (pendiente de cobro), recalcula precios desde la BD
+   (matriz DrinkPrice, toppings, opciones de carta), asigna `seq`+`daySeq`,
+   calcula `tiempoEstimado = max(tiempoProduccion)` e imprime la comanda
+   best-effort (no bloquea la respuesta).
+3. **POS mesero** (`apps/mesero/actions/pos.ts:createPosOrder`) — idéntico al
+   del cajero pero fuerza `MESA` como `deliveryType` y sin interfaz de cobro.
+
+**Asignación de `seq` y `daySeq`** (transacción atómica) — patrón repetido en
+los 3 productores:
+
+```ts
+// dentro de prisma.$transaction(async (tx) => { ... })
+const first = await tx.order.findFirst({ orderBy: { seq: "desc" }, select: { seq: true } });
+const seq = (first?.seq ?? 0) + 1;                       // global, único
+
+const orderDate = todayKey();                             // YYYY-MM-DD local
+const last = await tx.order.findFirst({
+  where: { orderDate }, orderBy: { daySeq: "desc" }, select: { daySeq: true },
+});
+const daySeq = (last?.daySeq ?? 0) + 1;                   // diario, reinicia a medianoche
+```
+
+La unicidad la respalda el schema: `seq @unique` (global) y
+`@@unique([orderDate, daySeq])` (diario). El ticket visible usa
+`daySeq ?? seq` (`queue-view.tsx:58-60` y `orders-client.tsx:38-40`).
+
+**6.2 Cómo se ordena la cola**
+
+El servidor trae los pedidos del día con
+`orderBy: [{ createdAt: "desc" }, { seq: "desc" }]` (los recientes primero),
+pero el cliente los REORDENA antes de pintar
+(`apps/cajero/components/queue-view.tsx:1084-1090`):
+
+```ts
+const ordered = [...orders].sort((a, b) => {
+  const aDone = isComplete(a) ? 0 : 1;   // completados (entregado+cobrado) primero
+  const bDone = isComplete(b) ? 0 : 1;
+  const diff = aDone - bDone;
+  if (diff !== 0) return diff;
+  return ticketOf(a) - ticketOf(b);      // luego menor ticket (#001 < #002…)
+});
+```
+
+No es FIFO estricto por tiempo de llegada: es **"completados primero, luego
+pendientes, orden ascendente por número de ticket"**. La urgencia no reordena:
+se expresa con el puntito rojo pulsante en la vista contraída y con el color
+del reloj de demora (`AgeBadge`). Luego se divide en `pendientes` y
+`completados` para los dos acordeones.
+
+**6.3 Cómo se actualiza en tiempo real**
+
+No hay WebSocket ni SSE ni SWR/react-query en el repo. El mecanismo es
+**polling con `router.refresh()` de Next.js** (re-ejecuta el Server Component,
+que vuelve a consultar Prisma):
+
+```ts
+function useQueueClock(orders: Order[]) {
+  const router = useRouter();
+  const [now, setNow] = useState(() => Date.now());
+  // Reloj para la antigüedad de cada pedido.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  // Refresco automático de la cola; se pausa con la pestaña oculta.
+  useEffect(() => {
+    if (document.hidden) return;
+    const timer = setInterval(() => router.refresh(), 15_000);
+    const onVisibility = () => { if (!document.hidden) router.refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisibility); };
+  }, [router]);
+  ...
+}
+```
+
+Ciclo completo:
+1. `app/page.tsx` ejecuta `getQueueData()` (llama a Prisma) y pasa `orders`.
+2. Cada 15 s (o al volver la pestaña al foco, o tras cada server action vía
+   `revalidatePath("/")`), `router.refresh()` re-ejecuta la página y baja
+   props nuevas → `QueueView` re-renderiza.
+3. El reloj local `now` (30 s) recalcula las demoras sin refetch.
+4. El efecto de `knownIds` detecta los ids nuevos → flash azul + auto-scroll +
+   auto-expand.
+
+Administración (`apps/admin/app/(dashboard)/orders`) NO tiene polling: los
+pedidos llegan por props del Server Component `orders/page.tsx` y las server
+actions hacen `revalidatePath("/orders")` para refrescar tras cada acción.
+(El único contador "live" del admin es `pendingOrders` de
+`/api/reports/dashboard-summary`, cacheado 10 s.)
+
+**6.4 Cómo se actualiza cada pedido (acciones → BD → refresh)**
+
+Toda acción de estado termina con `revalidatePath("/")` (cajero) o
+`revalidatePath("/orders")` + `revalidatePath("/")` (admin). Esto fuerza la
+re-ejecución de la página y la cola se entera por el polling o por el refresh
+post-acción.
+
+**6.5 El reloj unificado de producción y la demora**
+
+Un solo criterio: el reloj de un pedido arranca en `acceptedAt`, y si nunca se
+aceptó, en `createdAt` (`apps/cajero/lib/time.ts`):
+
+```ts
+export function getStartTime(order: Pick<Order, "acceptedAt" | "createdAt">): Date {
+  return new Date(order.acceptedAt ?? order.createdAt);
+}
+
+export function delayMinutes(order, nowMs): number {
+  const start = getStartTime(order).getTime();
+  const elapsed = Math.max(0, Math.floor((nowMs - start) / 60_000));
+  return elapsed - (order.tiempoEstimado ?? 10);   // + = ya se tardó
+}
+
+export function delayLevelOf(demora: number): DelayLevel {
+  if (demora <= 0) return "ok";        // a tiempo
+  if (demora < 5) return "warning";    // aviso
+  return "critical";                   // >= 5 min → prioridad
+}
+```
+
+El `AgeBadge` (`queue-view.tsx:268-316`) lo usa para pintar:
+- RECIBIDO → no muestra antigüedad (el reloj aún no corre).
+- ENTREGADO con `deliveredAt` → "Tardó X" (tiempo fijo desde el inicio hasta
+  la entrega).
+- En producción → "Ingresado hace X" con el color de la demora
+  (`orderDelayVariants`).
+
+**6.6 Alertas de pedidos atrasados (server-side, Telegram)**
+
+`packages/db/scripts/telegram-alert-worker.ts` corre un bucle cada 15 s que
+llama `checkDelayedOrders()` (`packages/db/src/telegram-alert.ts`). Reclama
+pedidos con SQL raw, solo `status IN ('ACEPTADO','ENTREGADO')`, `paidAt IS
+NULL`, `delayNotified = 0`:
+
+```sql
+SELECT id, seq, daySeq, customerName, status, createdAt, acceptedAt, tiempoEstimado
+FROM "Order"
+WHERE delayNotified = 0 AND paidAt IS NULL AND status IN ('ACEPTADO', 'ENTREGADO')
+```
+
+- `start = acceptedAt ?? createdAt`, `demora = minutos - tiempoEstimado`; solo
+  alerta si `demora > 0`.
+- Anti-spam: reclamo atómico con `updateMany({ where: { id, delayNotified:
+  false }, data: { delayNotified: true } })`; si el envío a Telegram falla se
+  libera el flag para reintentar. Al cobrar (paidAt) el flag se resetea a false.
+- Requiere `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+
+**6.7 Qué pasa cuando se completa o se cancela**
+
+- **Completado** (paidAt Y deliveredAt): `isComplete(ordered)` lo mueve al
+  grupo "Pedidos completados" (acordeón contraído). La tarjeta se auto-cierra
+  (`useEffect` de `prevFinished`) y su borde pierde el glow
+  (`ENTREGADO_COBRADO: ""`).
+- **Cancelado** (`ANULADO`): solo el admin; desaparece de `getQueueData` (el
+  `where` no lo incluye). En admin queda visible con badge `destructive`
+  (variante del `statusVariant()` inline) y su motivo/responsable en el
+  detalle.
+- **Cobrado**: `paidAt` no mueve el pedido solo; el cambio visual depende de
+  `visualStateOf` (cobrado sin entregar → naranja/verde pulsante; cobrado y
+  entregado → completado).
+
+**6.8 Pagos y métodos**
+
+- Métodos en BD: `EFECTIVO`, `QR`, `TARJETA`, `PENSION`. El cajero solo puede
+  registrar EFECTIVO o QR (`AcceptablePayment`), o PENSION vía cuenta, o
+  dividido (EFECTIVO+QR con `paymentMethod2`/`paymentAmount2`).
+- La tienda web no cobra en caja: deja el pedido RECIBIDO para que el cajero
+  cobre.
+- `SIN cobrar` y `SIN entregar` son condiciones normales: el cliente puede
+  pagar después, incluso tras la entrega.
+
+**6.9 Impresión de comandas**
+
+- Al CREAR el pedido (cualquier productor) se imprime la comanda
+  best-effort. Store lo hace con `after()`; POS lo hace al final de la server
+  action en un try/catch que no rompe la respuesta.
+- `lib/printing.ts` (`formatComanda`, `printText`) arma un texto plano de
+  ancho 34 columnas en fuente Consolas y lo manda por PowerShell a la
+  impresora configurada en `store/printing.json` (`getPrinterName`).
+- Reimpresión: `reprintOrder` en cajero (`app/actions/printing.ts`) y admin
+  (`app/actions/orders.ts`), válida solo para RECIBIDO/ACEPTADO. En el cajero
+  se llega desde el menú de la rueda dentada `SettingsMenu`.
+
+**6.10 Reconocimiento visual de entrada (UX clave)**
+
+- Primer render → solo inicializa `knownIds`.
+- Si un refresh trae ids nuevos → expande el más nuevo, parpadea azul 2 s y
+  hace scroll suave hasta él. Esto "atrae la mirada" del cajero a la tarjeta
+  nueva aunque llegue a mitad de lista.
+
+**6.11 Limitaciones/debilidades visibles en el código** (para que la otra IA
+pueda dar consejos honestos)
+
+- "Tiempo real" = polling de 15 s; no hay push. Que un cajero cree una orden
+  y aparezca en otra pantalla depende de `revalidatePath` + el próximo poll.
+- El admin NO se auto-refresca (sin polling); requiere recarga o acción.
+- El mesero no tiene vista de cola (aunque usa el mismo `createPosOrder`).
+- El orden de la cola no prioriza por urgencia (la demora solo se muestra).
+- El `statusVariant()` del admin sigue siendo un switch inline (no CVA), a
+  diferencia del cajero (tarea pendiente en AGENTS.md: migrarlo a CVA
+  reutilizando `statusVariants.ts`).
+- Dos copias casi idénticas de `createPosOrder` (cajero/mesero) y de las
+  acciones de admin; hay duplicación de lógica de números de orden y precios.
+- SQLite (una sola escritora); se asume un localhost / una instancia de cada
+  app. Workers (telegram/cierre) son procesos aparte que también tocan la BD.
+
+
+--------------------------------------------------------------------------------
+7. ARCHIVOS CLAVE
+--------------------------------------------------------------------------------
+
+1. **`apps/cajero/components/queue-view.tsx`** (1229 líneas) — EL corazón de la
+   cola. `useQueueClock` (polling 15 s + reloj 30 s + ejecución de acciones),
+   `OrderCard` (tarjeta contraída/expandida, botones por estado), sort de
+   "completados primero / pendientes después", búsqueda, acordeones
+   (pendientes/completados), flash azul + auto-scroll para pedidos nuevos,
+   diálogo de confirmación y manejadores de error.
+
+2. **`apps/cajero/components/orders/statusVariants.ts`** (91 líneas) — Define
+   `OrderVisualState` (5), `visualStateOf(order)`, `orderBadgeVariants`,
+   `orderCardVariants`, `orderDelayVariants`, `orderTypeBackgroundVariants`.
+   Es la paleta oficial de estados que el cajero consume vía `cva`.
+
+3. **`apps/cajero/app/page.tsx`** — Server Component de la pantalla del cajero.
+   `getQueueData()` consulta los pedidos del día (RECIBIDO/ACEPTADO/ENTREGADO)
+   con `include: { items: { include: { toppings: true } } }`, los mapea a
+   `Order` planos (`toPlainOrder`) y los pasa junto a los clientes pensionados
+   a `<PosTerminal>` → `<QueueView compact>`.
+
+4. **`apps/cajero/app/actions/orders.ts`** — Todas las transiciones de estado
+   del cajero: `acceptQueueOrder` (RECIBIDO→ACEPTADO), `acceptOrder`
+   (cobro efectivo/QR/dividido con validaciones), `acceptPensionOrder`
+   (cobro a cuenta en transacción) y `deliverOrder` (ACEPTADO→ENTREGADO).
+   Cada una termina con `revalidatePath("/")`.
+
+5. **`apps/cajero/actions/pos.ts`** — `createPosOrder`: crea el pedido POS en
+   ACEPTADO con precios recalculados desde la BD, `seq`/`daySeq` atómicos,
+   `tiempoEstimado = max(tiempoProduccion)` e impresión best-effort. Incluye
+   `getPosCatalog` para alimentar el terminal.
+
+6. **`apps/cajero/lib/time.ts`** — El reloj unificado de producción:
+   `getStartTime` (`acceptedAt ?? createdAt`), `delayMinutes`
+   (transcurrido − tiempoEstimado) y `delayLevelOf` (ok/warning/critical).
+   Compartido con `AgeBadge`, el puntito rojo y (conceptualmente) el worker
+   de Telegram.
+
+7. **`packages/db/prisma/schema.prisma`** — El modelo de datos: `Order`
+   (status, seq global, orderDate/daySeq con `@@unique`, paidAt/acceptedAt/
+   deliveredAt, tiempoEstimado, delayNotified, auditorías), `OrderItem`,
+   `OrderItemTopping`, `User`, `Customer`, `CustomerLedger`, catálogo y enums.
+
+8. **`packages/types/src/index.ts`** — Contratos y constantes compartidas:
+   `Order` (interface), `OrderStatus` + `OrderStatusLabel` +
+   `OrderStatusSequence`, `PaymentMethod`/`AcceptablePayment`/`PensionType`,
+   `formatOrderCode`, `formatPrice`, `formatDurationMinutes`, `BUSINESS_TIME_ZONE`.
+
+9. **`packages/db/src/telegram-alert.ts`** + **`packages/db/scripts/telegram-alert-worker.ts`**
+   — Alerta proactiva de pedidos atrasados: worker con bucle de 15 s, query raw
+   de candidatos, reclamo atómico con `delayNotified` y envío al bot de
+   Telegram. Es la única "cola" que funciona 100% fuera del navegador.
+
+10. **`apps/admin/app/(dashboard)/orders/orders-client.tsx`** (+ `orders/page.tsx`)
+    — La vista administrativa: recibe todos los pedidos por props, filtra por
+    estado/turno/fechas, ordena por columna, expande detalle, y dispara
+    aceptar/cobrar (EFECTIVO/QR/dividido)/entregar, descontar con motivo,
+    anular con motivo y reimprimir. Incluye el `statusVariant()` inline que
+    AGENTS.md pide migrar a CVA.
+
+Mención aparte (de apoyo):
+- `apps/cajero/components/pos/pos-terminal.tsx` — layout 20/20/60 y lógica de
+  carrito/venta que alimenta la cola.
+- `apps/cajero/lib/printing.ts` — `formatComanda`/`printText` (ticket térmico).
+- `apps/store/app/actions/order.ts` — productor externo que entra por la cola
+  como RECIBIDO.
+- `apps/cajero/components/split-payment-dialog.tsx` y
+  `apps/cajero/components/pension-payment-dialog.tsx` — cobros especiales.
+- `packages/ui/src/components/ui/button.tsx` y `badge.tsx` — variantes de
+  botones/badges y estados hover/active/disabled.
+- `packages/config/src/tailwind.ts` — preset de Tailwind (colores `boba`,
+  `primary/success/warning/destructive`, radius, fuentes).
+
+================================================================================
+Fin del documento. Listo para que otra IA formule consejos de mejora.
+================================================================================

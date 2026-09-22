@@ -64,6 +64,12 @@ La cola del cajero SHALL mostrar los pedidos del día: primero los pendientes �
 - **WHEN** el cajero ve una tarjeta contraída con un tipo de entrega
 - **THEN** el tipo de entrega se muestra a la derecha como icono (moto, cubiertos o bolsa) con color y tooltip
 
+#### Scenario: Icono de delivery parpadea hasta la entrega
+
+- **WHEN** un pedido es de tipo `DELIVERY` y aún no está `ENTREGADO` (ni `ANULADO`)
+- **THEN** el icono de la moto parpadea con un destello de brillo celeste (`animate-blink-bright`) sin desaparecer por completo, en la tarjeta contraída, en la cabecera expandida y junto al total
+- **AND** al marcar el pedido como entregado el icono queda fijo sin parpadeo
+
 #### Scenario: Icono de método de pago en la tarjeta expandida
 
 - **WHEN** el cajero expande una tarjeta de un pedido con método de pago

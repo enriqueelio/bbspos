@@ -19,6 +19,7 @@ model User {
   orders           Order[]
   cancelledOrders  Order[]     @relation("OrderCanceledBy")
   discountedOrders Order[]     @relation("OrderDiscountedBy")
+  redeemedRewards  CustomerReward[] @relation("CustomerRewardRedeemedBy")
   cashCloses       CashClose[]
 }
 
@@ -133,19 +134,63 @@ model AlitaSauce {
 // Cuenta corriente de un cliente/pensionado. El saldo es Int (Bs, igual que el
 // resto del sistema): positivo = saldo a favor (Prepago), negativo = deuda
 // (Postpago). creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
+// Los campos de lealtad (totalVisits/totalSpent/lastVisitAt/points) son una caché
+// de métricas para rankings rápidos; la fuente de verdad es Order con paidAt.
 model Customer {
   id          String           @id @default(cuid())
   name        String
   ci          String?
-  phone       String
+  phone       String?
   pensionType PensionType      @default(PREPAGO)
   balance     Int              @default(0)
   creditLimit Int              @default(0)
+  totalVisits Int              @default(0)
+  totalSpent  Int              @default(0)
+  lastVisitAt DateTime?
+  points      Int              @default(0)
   createdAt   DateTime         @default(now())
   orders      Order[]
   ledger      CustomerLedger[]
+  rewards     CustomerReward[]
 
   @@index([name])
+}
+
+// Regla de lealtad configurable: nivel basado en gasto del mes, visitas del mes
+// o puntos acumulados. Al cambiar umbrales no se recalcula el histórico.
+model CustomerBenefitRule {
+  id          String             @id @default(cuid())
+  name        String
+  description String
+  metric      BenefitMetric      @default(SPEND_MONTH)
+  threshold   Int
+  active      Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  rewards     CustomerReward[]
+
+  @@index([metric, active])
+}
+
+// Otorgos y canjes de puntos de lealtad (bitácora de auditoría, patrón análogo
+// a CustomerLedger). pointsUsed es siempre positivo; el tipo da el sentido.
+model CustomerReward {
+  id            String             @id @default(cuid())
+  customerId    String
+  customer      Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  ruleId        String?
+  rule          CustomerBenefitRule? @relation(fields: [ruleId], references: [id])
+  type          CustomerRewardType
+  pointsUsed    Int
+  description   String
+  redeemedById  String?
+  redeemedBy    User?              @relation("CustomerRewardRedeemedBy", fields: [redeemedById], references: [id])
+  orderId       String?
+  order         Order?             @relation(fields: [orderId], references: [id])
+  createdAt     DateTime           @default(now())
+
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([ruleId])
 }
 
 // Historial de movimientos de la cuenta. type es un String con los valores
@@ -202,6 +247,7 @@ model Order {
   customerId     String?
   customer       Customer?        @relation(fields: [customerId], references: [id])
   ledgerEntries  CustomerLedger[]
+  customerRewards CustomerReward[]
 
   @@unique([orderDate, daySeq])
   @@index([createdAt])
@@ -356,4 +402,18 @@ enum DeliveryType {
   MESA
   LLEVAR
   DELIVERY
+}
+
+// Métrica que dispara un nivel de lealtad: gasto del mes, visitas del mes o
+// puntos acumulados.
+enum BenefitMetric {
+  SPEND_MONTH
+  VISITS_MONTH
+  POINTS
+}
+
+// Tipo de registro de Reward en la bitácora de lealtad.
+enum CustomerRewardType {
+  OTORGADO
+  CANJE
 }

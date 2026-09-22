@@ -13,6 +13,7 @@ import {
   type PensionType as PensionTypeType,
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
+import { accumulateCustomerLoyalty } from "@/app/actions/customers";
 
 /** Acepta en la cola un pedido RECIBIDO proveniente de la tienda web: lo pasa
  *  a ACEPTADO (empieza a prepararse en cocina) y arranca el timer de
@@ -126,23 +127,32 @@ export async function acceptOrder(
     userId = dbUser ? dbUser.id : null;
   }
 
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      // Un pedido en RECIBIDO (web/store) se acepta al cobrarlo; los que ya
-      // están ACEPTADO o ENTREGADO conservan su estado (el cobro es aparte).
-      ...(order.status === OrderStatus.RECIBIDO
-        ? { status: OrderStatus.ACEPTADO }
-        : {}),
-      // Unifica el inicio del reloj: si el pedido aún no fue aceptado
-      // (RECIBIDO cobrado al instante), el timer arranca en este momento.
-      acceptedAt: order.acceptedAt ?? new Date(),
-      paymentMethod: method as PaymentMethodType,
-      paymentMethod2,
-      paymentAmount2,
-      paidAt: new Date(),
-      userId,
-    },
+  // Transacción: registra el pago y, si el pedido está ligado a un cliente,
+  // acumula lealtad (+1 visita, +gasto, +puntos) con la misma marca de tiempo.
+  const paidAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        // Un pedido en RECIBIDO (web/store) se acepta al cobrarlo; los que ya
+        // están ACEPTADO o ENTREGADO conservan su estado (el cobro es aparte).
+        ...(order.status === OrderStatus.RECIBIDO
+          ? { status: OrderStatus.ACEPTADO }
+          : {}),
+        // Unifica el inicio del reloj: si el pedido aún no fue aceptado
+        // (RECIBIDO cobrado al instante), el timer arranca en este momento.
+        acceptedAt: order.acceptedAt ?? new Date(),
+        paymentMethod: method as PaymentMethodType,
+        paymentMethod2,
+        paymentAmount2,
+        paidAt,
+        userId,
+      },
+    });
+
+    if (order.customerId) {
+      await accumulateCustomerLoyalty(tx, order.customerId, order.total, paidAt);
+    }
   });
 
   revalidatePath("/");
@@ -220,21 +230,24 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
     userId = dbUser ? dbUser.id : null;
   }
 
-  // Transacción: descuenta el saldo, registra el consumo y cobra la orden.
-  await prisma.$transaction([
-    prisma.customer.update({
+  // Transacción: descuenta el saldo, registra el consumo, cobra la orden y
+  // acumula lealtad del cliente (+1 visita, +gasto, +puntos) con la misma
+  // marca de tiempo.
+  const paidAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.customer.update({
       where: { id: customerId },
       data: { balance: nextBalance },
-    }),
-    prisma.customerLedger.create({
+    });
+    await tx.customerLedger.create({
       data: {
         customerId,
         type: "CONSUMO",
         amount: total,
         orderId: order.id,
       },
-    }),
-    prisma.order.update({
+    });
+    await tx.order.update({
       where: { id: orderId },
       data: {
         // Un pedido en RECIBIDO (web/store) se acepta al cobrarlo; los que ya
@@ -246,12 +259,13 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         // (RECIBIDO cobrado contra la cuenta al instante), arranca ahora.
         acceptedAt: order.acceptedAt ?? new Date(),
         paymentMethod: PaymentMethod.PENSION,
-        paidAt: new Date(),
+        paidAt,
         userId,
         customerId,
       },
-    }),
-  ]);
+    });
+    await accumulateCustomerLoyalty(tx, customerId, total, paidAt);
+  });
 
   revalidatePath("/");
 }

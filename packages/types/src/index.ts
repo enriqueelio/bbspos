@@ -850,6 +850,103 @@ export function parseDenominations(json: string): CashDenominationCount[] {
   }
 }
 
+/** Métrica que dispara un nivel de lealtad (gasto del mes, visitas del mes o
+ *  puntos acumulados). */
+export const BenefitMetric = {
+  SPEND_MONTH: "SPEND_MONTH",
+  VISITS_MONTH: "VISITS_MONTH",
+  POINTS: "POINTS",
+} as const;
+
+export type BenefitMetric = (typeof BenefitMetric)[keyof typeof BenefitMetric];
+
+export const BenefitMetricLabel: Record<BenefitMetric, string> = {
+  SPEND_MONTH: "Gasto del mes (Bs)",
+  VISITS_MONTH: "Visitas del mes",
+  POINTS: "Puntos acumulados",
+};
+
+export const BenefitMetricList: BenefitMetric[] = [
+  BenefitMetric.SPEND_MONTH,
+  BenefitMetric.VISITS_MONTH,
+  BenefitMetric.POINTS,
+];
+
+/** Tipo de registro de la bitácora de lealtad (CustomerReward). */
+export const CustomerRewardType = {
+  OTORGADO: "OTORGADO",
+  CANJE: "CANJE",
+} as const;
+
+export type CustomerRewardType =
+  (typeof CustomerRewardType)[keyof typeof CustomerRewardType];
+
+export const CustomerRewardTypeLabel: Record<CustomerRewardType, string> = {
+  OTORGADO: "Otorgado",
+  CANJE: "Canje",
+};
+
+/** Regla de lealtad vista en Admin (nivel por umbral). */
+export interface CustomerBenefitRuleView {
+  id: string;
+  name: string;
+  description: string;
+  metric: BenefitMetric;
+  threshold: number;
+  active: boolean;
+}
+
+/** Coincidencia de cliente para el autocompletado del terminal. */
+export interface CustomerSuggestion {
+  id: string;
+  name: string;
+  phone: string | null;
+  lastVisitAt: string | null;
+}
+
+/** Perfil de lealtad del cliente vinculado en el terminal (alerta de nivel). */
+export interface CustomerLoyaltyView {
+  id: string;
+  name: string;
+  phone: string | null;
+  totalVisits: number;
+  totalSpent: number;
+  lastVisitAt: string | null;
+  points: number;
+  /** Nombre del nivel vigente según las reglas activas, si lo alcanza. */
+  levelName: string | null;
+}
+
+/** Periodo del ranking de clientes frecuentes. */
+export const LoyaltyPeriod = {
+  MONTH: "month",
+  DAYS_30: "30d",
+  ALL: "all",
+} as const;
+
+export type LoyaltyPeriod = (typeof LoyaltyPeriod)[keyof typeof LoyaltyPeriod];
+
+export const LoyaltyPeriodLabel: Record<LoyaltyPeriod, string> = {
+  month: "Mes actual",
+  "30d": "Últimos 30 días",
+  all: "Histórico",
+};
+
+/** Fila del ranking de clientes (agregado sobre Order.paidAt + caché del cliente). */
+export interface CustomerRankingRow {
+  customerId: string;
+  customerName: string;
+  phone: string | null;
+  /** Visitas y gasto del periodo consultado. */
+  periodVisits: number;
+  periodSpent: number;
+  /** Acumulados históricos del cliente (caché en Customer). */
+  totalVisits: number;
+  totalSpent: number;
+  points: number;
+  lastVisitAt: string | null;
+}
+
 /** Serializa el desglose de denominaciones para la columna denominations. */
 export function stringifyDenominations(
   counts: CashDenominationCount[],

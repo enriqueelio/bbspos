@@ -1,0 +1,42 @@
+ANÁLISIS - IMPLEMENTACIÓN MÓDULO DE CLIENTES PARA SISTEMA POSBBS
+
+OBJETIVO:
+Agregar gestión de clientes para identificar quiénes compran más y otorgar beneficios para pollería / masaco.
+
+1. MODELO DE DATOS PROPUESTO
+
+CLIENTES: id_cliente PK, nombre, apellido, telefono UNIQUE, fecha_registro, puntos_acumulados
+VENTAS: id_venta PK, id_cliente FK -> CLIENTES (NULLABLE), fecha_venta, total, metodo_pago, estado
+DETALLE_VENTAS: id_detalle PK, id_venta FK, producto, cantidad, precio_unitario, subtotal
+BENEFICIOS: id_beneficio PK, id_cliente FK, tipo_beneficio DESCUENTO/PUNTOS/PROMO, descripcion, puntos_usados, fecha_otorgado, valido_hasta
+
+2. CONSULTAS CLAVE
+
+-- Top 10 que más gastan últimos 30 días
+SELECT c.nombre, c.telefono, COUNT(v.id_venta) as veces, SUM(v.total) as gastado
+FROM CLIENTES c JOIN VENTAS v ON v.id_cliente = c.id_cliente
+WHERE v.fecha_venta >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+GROUP BY c.id_cliente ORDER BY gastado DESC LIMIT 10;
+
+3. SISTEMA DE BENEFICIOS
+
+Nivel Pollo: 3 compras/mes -> papas gratis
+Nivel Familiar: >300 Bs/mes -> 10% descuento
+Nivel VIP: >8 compras/mes -> 1 pollo gratis
+Lógica: 1 Bs = 1 punto, 100 puntos = beneficio
+
+Flujo caja: Preguntar celular -> Buscar/Crear cliente -> Asociar venta -> Sumar puntos -> Alertar beneficio
+
+4. IMPLEMENTACIÓN EN POSBBS
+
+- Crear tablas CLIENTES y BENEFICIOS
+- Alterar VENTAS agregar id_cliente
+- Endpoints: /clientes/buscar?telefono=, /clientes/crear, /clientes/top
+- Frontend: input teléfono con autocompletado + modal de puntos/nivel + botón Canjear
+
+5. PREGUNTAS PARA DECISIÓN
+
+Stack de POSBBS? PHP, C#, Python?
+Base de datos? MySQL, SQL Server?
+Acceso al código?
+Integración WhatsApp?

@@ -23,10 +23,19 @@ import {
   type Topping,
 } from "@bbspos/types";
 import { createPosOrder } from "@/actions/pos";
+import {
+  getCustomerLoyalty,
+  getCustomerSuggestions,
+  upsertCustomerForOrder,
+} from "@/app/actions/customers";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 import { QueueView } from "@/components/queue-view";
 import type { Order } from "@bbspos/types";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
+import type {
+  CustomerLoyaltyView,
+  CustomerSuggestion,
+} from "@bbspos/types";
 
 const CATEGORIES = FlavorCategoryList;
 
@@ -209,6 +218,8 @@ export function PosTerminal({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
   const [variantSize, setVariantSize] = useState<
     MenuItemView["options"][number] | null
@@ -262,6 +273,54 @@ export function PosTerminal({
     // La limpieza es solo al montar: se ignora el resto de dependencias.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Autocompletado de clientes (lealtad): busca coincidencias por nombre o
+  // teléfono con debounce de 250 ms; si el cajero edita el texto, se quita el
+  // cliente vinculado para no enviar un id que no corresponde al campo.
+  useEffect(() => {
+    const q = cart.customerName.trim();
+    if (q === "") {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      getCustomerSuggestions(q)
+        .then((matches) => {
+          setSuggestions(matches);
+          setShowSuggestions(matches.length > 0);
+        })
+        .catch(() => {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [cart.customerName]);
+
+  // Alerta no bloqueante cuando el cliente vinculado alcanza un nivel de
+  // lealtad: se muestra como notice (desaparece con la próxima acción).
+  function notifyLoyalty(loyalty: CustomerLoyaltyView | null) {
+    if (loyalty?.levelName) {
+      setNotice(
+        `${loyalty.name} · Nivel ${loyalty.levelName} · ${loyalty.points} pts`,
+      );
+    } else if (loyalty) {
+      setNotice(`${loyalty.name} · ${loyalty.points} pts`);
+    }
+  }
+
+  async function selectCustomer(candidate: CustomerSuggestion) {
+    cart.setCustomerName(candidate.name.toUpperCase());
+    cart.setCustomerId(candidate.id);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    try {
+      notifyLoyalty(await getCustomerLoyalty(candidate.id));
+    } catch {
+      // La alerta de nivel no debe bloquear la selección del cliente.
+    }
+  }
 
   // Catálogo de salsas para las Alitas Mixtas, servido desde la BD.
   useEffect(() => {
@@ -421,13 +480,27 @@ export function PosTerminal({
           ? null
           : cart.deliveryType
         : "MESA";
+      // Resuelve el cliente (lealtad): si el cajero lo eligió en el
+      // autocompletado se reutiliza su id; si escribió texto libre, se vincula
+      // por teléfono/nombre o se crea, y se usa el id resultante.
+      let customerId = cart.customerId;
+      let loyalty: CustomerLoyaltyView | null = null;
+      if (customerId) {
+        loyalty = await getCustomerLoyalty(customerId);
+      } else {
+        loyalty = await upsertCustomerForOrder(trimmedName);
+        customerId = loyalty.id;
+      }
       const result = await createPosOrder(
         cart.items,
         trimmedName,
         deliveryType,
         cart.notes,
+        customerId,
       );
       cart.clear();
+      setShowSuggestions(false);
+      setSuggestions([]);
       // Devuelve los selectores a su estado por defecto para no arrastrar
       // las opciones del pedido anterior.
       setToppingIds([]);
@@ -437,8 +510,11 @@ export function PosTerminal({
       setBubaCategory(firstActiveCategory(catalog));
       setActivePane(defaultPane(catalog));
       setProductQty(1);
+      const loyaltyText = loyalty?.levelName
+        ? ` · Nivel ${loyalty.levelName} (${loyalty.points} pts)`
+        : "";
       setNotice(
-        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}`,
+        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}${loyaltyText}`,
       );
       // El pedido se registra y el cajero/mesero se mantiene en Nueva Venta.
       router.push("/?tab=venta");
@@ -790,17 +866,53 @@ export function PosTerminal({
 
         {/* Área de pago fija al fondo del panel izquierdo */}
         <div className="shrink-0 px-4 py-3 bg-slate-950 border-t border-slate-800 flex flex-col gap-2">
-          <input
-            type="text"
-            value={cart.customerName}
-            onChange={(e) => cart.setCustomerName(e.target.value.toUpperCase())}
-            placeholder="NOMBRE"
-            className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
-              needsName
-                ? "border-amber-400/70 animate-name-glow"
-                : "border-slate-700 focus:border-primary"
-            }`}
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={cart.customerName}
+              onChange={(e) => {
+                cart.setCustomerName(e.target.value.toUpperCase());
+                // El text cambió: el cliente vinculado ya no corresponde.
+                cart.setCustomerId(null);
+                setShowSuggestions(false);
+              }}
+              placeholder="NOMBRE"
+              className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
+                needsName
+                  ? "border-amber-400/70 animate-name-glow"
+                  : "border-slate-700 focus:border-primary"
+              }`}
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <>
+                {/* Clic fuera cierra el dropdown */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowSuggestions(false)}
+                />
+                <ul className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-xl border border-slate-600 bg-slate-800 py-1 shadow-xl">
+                  {suggestions.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectCustomer(s)}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs text-slate-200 transition-colors hover:bg-slate-700"
+                      >
+                        <span className="truncate font-semibold uppercase">
+                          {s.name}
+                        </span>
+                        {s.phone && (
+                          <span className="shrink-0 font-mono text-slate-400">
+                            {s.phone}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
 
           <div
             className={`grid grid-cols-3 gap-2 rounded-xl ${

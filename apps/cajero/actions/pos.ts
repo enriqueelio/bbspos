@@ -106,6 +106,7 @@ export async function createPosOrder(
   customerName?: string,
   deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
   notes?: string | null,
+  customerId?: string | null,
 ): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
 
@@ -119,6 +120,19 @@ export async function createPosOrder(
 
   if (!deliveryType) {
     throw new Error("Elige MESA, LLEVAR o DELIVERY.");
+  }
+
+  // El cliente vinculado (autocompletado) debe existir para no violar la
+  // llave foránea; el texto libre se resuelve con `upsertCustomerForOrder`
+  // antes de llamar a esta acción.
+  if (customerId) {
+    const linked = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true },
+    });
+    if (!linked) {
+      throw new Error("El cliente vinculado no existe.");
+    }
   }
 
   // Verifica que el usuario de la sesión exista para no violar la llave
@@ -256,6 +270,7 @@ export async function createPosOrder(
         data: {
           customerName: customerName?.trim() || null,
           deliveryType: deliveryType ?? null,
+          customerId: customerId?.trim() || null,
           notes: notes?.trim() || null,
           status: OrderStatus.ACEPTADO,
           seq,

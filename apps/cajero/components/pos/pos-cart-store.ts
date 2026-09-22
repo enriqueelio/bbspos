@@ -39,6 +39,8 @@ export interface AddPosMenuItemInput {
 export interface PosCartSnapshot {
   items: CartItem[];
   customerName: string;
+  /** Cliente vinculado elegido en el autocompletado; null si es texto libre. */
+  customerId: string | null;
   deliveryType: PosDeliveryType | "";
   notes: string;
 }
@@ -93,14 +95,25 @@ let items: CartItem[] = Array.isArray(stored.items)
   : [];
 let customerName =
   typeof stored.customerName === "string" ? stored.customerName : "";
+// Cliente vinculado (autocompletado): se persiste con el resto del carrito.
+let customerId =
+  typeof stored.customerId === "string" && stored.customerId
+    ? stored.customerId
+    : null;
 // El tipo de entrega arranca sin ninguno preseleccionado; el cliente/mesero
 // elige "Para mesa" o "Para llevar" (o se toma por defecto al enviar).
 let deliveryType: PosDeliveryType | "" = "";
 let notes = typeof stored.notes === "string" ? stored.notes : "";
-let snapshot: PosCartSnapshot = { items, customerName, deliveryType, notes };
+let snapshot: PosCartSnapshot = {
+  items,
+  customerName,
+  customerId,
+  deliveryType,
+  notes,
+};
 
 function emit() {
-  snapshot = { items, customerName, deliveryType, notes };
+  snapshot = { items, customerName, customerId, deliveryType, notes };
   for (const listener of listeners) listener();
 }
 
@@ -188,6 +201,13 @@ export function setPosCustomerName(name: string) {
   persistState();
 }
 
+/** Fija (o limpia con null) el cliente elegido en el autocompletado. */
+export function setPosCustomerId(id: string | null) {
+  customerId = id;
+  emit();
+  persistState();
+}
+
 export function setPosDeliveryType(type: PosDeliveryType) {
   deliveryType = type;
   emit();
@@ -203,6 +223,7 @@ export function setPosNotes(text: string) {
 export function clearPosCart() {
   items = [];
   customerName = "";
+  customerId = null;
   deliveryType = "";
   notes = "";
   emit();
@@ -229,6 +250,7 @@ function subscribe(listener: () => void) {
 const SERVER_SNAPSHOT: PosCartSnapshot = {
   items: [],
   customerName: "",
+  customerId: null,
   deliveryType: "",
   notes: "",
 };
@@ -246,6 +268,7 @@ export function usePosCart() {
     updateQuantity: updatePosQuantity,
     removeItem: removePosItem,
     setCustomerName: setPosCustomerName,
+    setCustomerId: setPosCustomerId,
     setDeliveryType: setPosDeliveryType,
     setNotes: setPosNotes,
     clear: clearPosCart,

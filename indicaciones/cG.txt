@@ -1,0 +1,43 @@
+============================================================
+PROPUESTA TÉCNICA: MÓDULO DE CLIENTES Y FIDELIZACIÓN (CRM)
+============================================================
+Objetivo: Implementar un sistema de gestión de clientes integrado en el POS de Bibosi 
+para identificar compradores frecuentes, rastrear su historial de consumo y otorgar beneficios.
+
+------------------------------------------------------------
+1) MODELO DE DATOS (PRISMA / BASE DE DATOS SQL)
+------------------------------------------------------------
+- Crear modelo `Customer`:
+  * id (String / Int, PK)
+  * name (String, indexado para búsquedas rápidas)
+  * phone (String, opcional)
+  * totalVisits (Int, default 0)
+  * totalSpent (Float, default 0.0)
+  * createdAt (DateTime, default now())
+  * updatedAt (DateTime, updated)
+
+- Relación con órdenes:
+  * Añadir `customerId` (String / Int, opcional) en el modelo `Order`.
+
+------------------------------------------------------------
+2) FLUJO EN EL POS (MÓDULO MESERO / CAJERO)
+------------------------------------------------------------
+- Autocompletado Inteligente:
+  * El input actual de "NOMBRE" en el ticket en curso debe transformarse en un campo de autocompletado en tiempo real.
+  * Al escribir, debe consultar los registros de la tabla `Customer` que coincidan parcialmente con el texto.
+  * Si el usuario selecciona un cliente existente, se vincula su `customerId` al pedido.
+  * Si es un nombre completamente nuevo, al presionar "Enviar a Caja", el sistema debe realizar un `upsert` o `create` automático del nuevo cliente.
+
+------------------------------------------------------------
+3) LÓGICA DE NEGOCIO Y MÉTRICAS AUTOMÁTICAS
+------------------------------------------------------------
+- Actualización de Estadísticas:
+  * Al cambiar el estado de la orden a "Completado" o al procesar el pago, el backend debe incrementar automáticamente en +1 el campo `totalVisits` del cliente vinculado y sumar el monto total de la venta a su `totalSpent`.
+
+------------------------------------------------------------
+4) VISTA DE REPORTES EN EL PANEL DE ADMINISTRACIÓN
+------------------------------------------------------------
+- Ranking de Clientes Frecuentes:
+  * Crear una nueva pestaña o sección en el Admin para visualizar la lista de clientes.
+  * Ordenarlos de mayor a menor según el volumen de dinero gastado (`totalSpent`) y la cantidad de visitas (`totalVisits`).
+  * Mostrar métricas clave para facilitar la asignación de cortesías o beneficios (ej. Top 10 clientes del mes).

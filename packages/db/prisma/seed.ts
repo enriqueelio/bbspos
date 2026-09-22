@@ -197,8 +197,48 @@ async function main() {
     },
   });
 
+  // Reglas de lealtad por defecto: se crean solo si no existen (nunca borran ni
+  // pisan los umbrales editados desde Admin).
+  const benefitRules = [
+    {
+      name: "Cliente Habitual",
+      description: "5 visitas al mes: cortesía de una explosiva extra en su bebida.",
+      metric: "VISITS_MONTH",
+      threshold: 5,
+    },
+    {
+      name: "Frecuente",
+      description: "150 Bs de gasto al mes: 10% de descuento en un producto.",
+      metric: "SPEND_MONTH",
+      threshold: 150,
+    },
+    {
+      name: "VIP",
+      description: "300 Bs de gasto al mes: bebida grande gratis de cortesía.",
+      metric: "SPEND_MONTH",
+      threshold: 300,
+    },
+    {
+      name: "Amante del Té",
+      description: "500 puntos acumulados: canje de bebida a elección.",
+      metric: "POINTS",
+      threshold: 500,
+    },
+  ] as const;
+
+  for (const rule of benefitRules) {
+    const existing = await prisma.customerBenefitRule.findFirst({
+      where: { name: rule.name },
+    });
+    if (!existing) {
+      await prisma.customerBenefitRule.create({
+        data: { ...rule, active: true },
+      });
+    }
+  }
+
   console.log(
-    "Catálogo, matriz de precios, super admin, admin, cajero y mesero sembrados correctamente.",
+    "Catálogo, matriz de precios, super admin, admin, cajero, mesero y reglas de lealtad sembrados correctamente.",
   );
 }
 

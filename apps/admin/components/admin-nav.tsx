@@ -33,6 +33,7 @@ const SETTINGS_ITEMS = [
   { href: "/payments", label: "Pagos" },
   { href: "/users", label: "Usuarios" },
   { href: "/customers", label: "Clientes / Pensionados" },
+  { href: "/customers-ranking", label: "Lealtad / Frecuentes" },
 ];
 
 function SettingsMenu() {

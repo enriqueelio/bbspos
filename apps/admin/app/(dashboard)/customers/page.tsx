@@ -22,7 +22,7 @@ export default async function CustomersPage() {
     id: c.id,
     name: c.name,
     ci: c.ci,
-    phone: c.phone,
+    phone: c.phone ?? "",
     pensionType: c.pensionType,
     balance: c.balance,
     creditLimit: c.creditLimit,

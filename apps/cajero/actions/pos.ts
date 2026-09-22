@@ -122,9 +122,9 @@ export async function createPosOrder(
     throw new Error("Elige MESA, LLEVAR o DELIVERY.");
   }
 
-  // El cliente vinculado (autocompletado) debe existir para no violar la
-  // llave foránea; el texto libre se resuelve con `upsertCustomerForOrder`
-  // antes de llamar a esta acción.
+  // El cliente vinculado (autocompletado/registro) debe existir para no violar
+  // la llave foránea; el texto libre sin coincidencia queda como invitado
+  // (customerId null) — nadie se crea al vender.
   if (customerId) {
     const linked = await prisma.customer.findUnique({
       where: { id: customerId },

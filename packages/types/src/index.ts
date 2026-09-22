@@ -917,6 +917,13 @@ export interface CustomerLoyaltyView {
   levelName: string | null;
 }
 
+/** Nombre corto del cliente para ticket/cola/comanda: primer nombre y apellido
+ *  paterno (p. ej. "MARIA FERNANDEZ" para "Maria Fernandez Lopez"). Si el
+ *  nombre tiene una sola palabra, se usa esa. */
+export function shortCustomerName(customer: { name: string }): string {
+  return customer.name.trim().split(/\s+/).slice(0, 2).join(" ");
+}
+
 /** Periodo del ranking de clientes frecuentes. */
 export const LoyaltyPeriod = {
   MONTH: "month",

@@ -598,9 +598,9 @@ function OrderCard({
             )}
             {order.customerName && (
               <span
-                className={`truncate font-black text-primary ${
-                  compact ? "text-sm" : "text-lg"
-                }`}
+                className={`truncate font-black ${
+                  order.customerId ? "text-amber-300" : "text-primary"
+                } ${compact ? "text-sm" : "text-lg"}`}
               >
                 {order.customerName}
               </span>
@@ -658,9 +658,9 @@ function OrderCard({
             </CardTitle>
             {order.customerName && (
               <span
-                className={`min-w-0 truncate font-black text-primary ${
-                  compact ? "text-sm" : "text-2xl"
-                }`}
+                className={`min-w-0 truncate font-black ${
+                  order.customerId ? "text-amber-300" : "text-primary"
+                } ${compact ? "text-sm" : "text-2xl"}`}
               >
                 {order.customerName}
               </span>

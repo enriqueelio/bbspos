@@ -13,6 +13,7 @@ import {
   formatOrderCode,
   formatPrice,
   Role,
+  shortCustomerName,
   type Catalog,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
@@ -26,7 +27,8 @@ import { createPosOrder } from "@/actions/pos";
 import {
   getCustomerLoyalty,
   getCustomerSuggestions,
-  upsertCustomerForOrder,
+  linkCustomerByText,
+  registerCustomerAtPos,
 } from "@/app/actions/customers";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 import { QueueView } from "@/components/queue-view";
@@ -220,6 +222,12 @@ export function PosTerminal({
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsLocked, setSuggestionsLocked] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regBusy, setRegBusy] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
   const [variantSize, setVariantSize] = useState<
     MenuItemView["options"][number] | null
@@ -276,14 +284,16 @@ export function PosTerminal({
 
   // Autocompletado de clientes (lealtad): busca coincidencias por nombre o
   // teléfono con debounce de 250 ms; si el cajero edita el texto, se quita el
-  // cliente vinculado para no enviar un id que no corresponde al campo.
+  // cliente vinculado para no enviar un id que no corresponde al campo. Al
+  // cambiar el texto NO se vuelve a buscar mientras haya un cliente vinculado
+  // (el nombre corto que se muestra ya corresponde); al editar se desvincula y la
+  // búsqueda se reactiva. `suggestionsLocked` congela la búsqueda: el cajero
+  // presionó Enter para aceptar ese nombre como invitado sin vincular a nadie.
   useEffect(() => {
+    setSuggestions([]);
+    setShowSuggestions(false);
     const q = cart.customerName.trim();
-    if (q === "") {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (q === "" || cart.customerId || suggestionsLocked) return;
     const timer = setTimeout(() => {
       getCustomerSuggestions(q)
         .then((matches) => {
@@ -296,7 +306,7 @@ export function PosTerminal({
         });
     }, 250);
     return () => clearTimeout(timer);
-  }, [cart.customerName]);
+  }, [cart.customerName, suggestionsLocked]);
 
   // Alerta no bloqueante cuando el cliente vinculado alcanza un nivel de
   // lealtad: se muestra como notice (desaparece con la próxima acción).
@@ -311,7 +321,7 @@ export function PosTerminal({
   }
 
   async function selectCustomer(candidate: CustomerSuggestion) {
-    cart.setCustomerName(candidate.name.toUpperCase());
+    cart.setCustomerName(shortCustomerName(candidate).toUpperCase());
     cart.setCustomerId(candidate.id);
     setSuggestions([]);
     setShowSuggestions(false);
@@ -319,6 +329,47 @@ export function PosTerminal({
       notifyLoyalty(await getCustomerLoyalty(candidate.id));
     } catch {
       // La alerta de nivel no debe bloquear la selección del cliente.
+    }
+  }
+
+  // Formulario "Registrar" junto al campo de nombre (solo roles que cobran):
+  // crea el cliente explícitamente, lo vincula al pedido y muestra su nombre
+  // corto.
+  function openRegister() {
+    setRegError(null);
+    setRegName(cart.customerId ? "" : cart.customerName);
+    setRegPhone("");
+    setShowRegister(true);
+  }
+
+  async function registerCustomer() {
+    const name = regName.trim().toUpperCase();
+    if (!name) {
+      setRegError("El nombre del cliente es obligatorio.");
+      return;
+    }
+    if (cart.items.length === 0) {
+      setRegError("Primero agrega productos al ticket.");
+      return;
+    }
+    setRegBusy(true);
+    setRegError(null);
+    try {
+      const loyalty = await registerCustomerAtPos({
+        name,
+        phone: regPhone.trim() ? regPhone : null,
+      });
+      cart.setCustomerName(shortCustomerName(loyalty).toUpperCase());
+      cart.setCustomerId(loyalty.id);
+      setShowRegister(false);
+      setRegName("");
+      setRegPhone("");
+      notifyLoyalty(loyalty);
+      setNotice(`Cliente ${loyalty.name} registrado y vinculado al pedido.`);
+    } catch (e) {
+      setRegError(e instanceof Error ? e.message : "No se pudo registrar.");
+    } finally {
+      setRegBusy(false);
     }
   }
 
@@ -480,20 +531,25 @@ export function PosTerminal({
           ? null
           : cart.deliveryType
         : "MESA";
-      // Resuelve el cliente (lealtad): si el cajero lo eligió en el
-      // autocompletado se reutiliza su id; si escribió texto libre, se vincula
-      // por teléfono/nombre o se crea, y se usa el id resultante.
+      // Resuelve el cliente: si el cajero lo eligió (autocompletado o
+      // registro) se reutiliza su id y el nombre corto ya está en el campo; si
+      // escribió texto libre, se intenta vincular por teléfono/nombre exacto y,
+      // si no coincide nada, la venta queda como invitado (sin crear cliente).
       let customerId = cart.customerId;
+      let customerName = trimmedName;
       let loyalty: CustomerLoyaltyView | null = null;
       if (customerId) {
         loyalty = await getCustomerLoyalty(customerId);
       } else {
-        loyalty = await upsertCustomerForOrder(trimmedName);
-        customerId = loyalty.id;
+        loyalty = await linkCustomerByText(customerName);
+        if (loyalty) {
+          customerId = loyalty.id;
+          customerName = shortCustomerName(loyalty).toUpperCase();
+        }
       }
       const result = await createPosOrder(
         cart.items,
-        trimmedName,
+        customerName,
         deliveryType,
         cart.notes,
         customerId,
@@ -867,22 +923,47 @@ export function PosTerminal({
         {/* Área de pago fija al fondo del panel izquierdo */}
         <div className="shrink-0 px-4 py-3 bg-slate-950 border-t border-slate-800 flex flex-col gap-2">
           <div className="relative">
-            <input
-              type="text"
-              value={cart.customerName}
-              onChange={(e) => {
-                cart.setCustomerName(e.target.value.toUpperCase());
-                // El text cambió: el cliente vinculado ya no corresponde.
-                cart.setCustomerId(null);
-                setShowSuggestions(false);
-              }}
-              placeholder="NOMBRE"
-              className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:outline-none transition-shadow ${
-                needsName
-                  ? "border-amber-400/70 animate-name-glow"
-                  : "border-slate-700 focus:border-primary"
-              }`}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={cart.customerName}
+                onChange={(e) => {
+                  cart.setCustomerName(e.target.value.toUpperCase());
+                  // El text cambió: el cliente vinculado ya no corresponde.
+                  cart.setCustomerId(null);
+                  setSuggestionsLocked(false);
+                  setShowSuggestions(false);
+                }}
+                onKeyDown={(e) => {
+                  // Enter acepta el nombre tal cual (invitado, sin vincular)
+                  // y cierra el dropdown para que no reaparezca.
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setSuggestionsLocked(true);
+                    setSuggestions([]);
+                    setShowSuggestions(false);
+                  }
+                }}
+                placeholder="NOMBRE"
+                className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase placeholder:text-slate-500 focus:outline-none transition-shadow ${
+                  needsName
+                    ? "border-amber-400/70 animate-name-glow text-white"
+                    : cart.customerId
+                      ? "border-amber-400/90 text-amber-300 font-bold"
+                      : "border-slate-700 text-white focus:border-primary"
+                }`}
+              />
+              {isBilling && (
+                <button
+                  type="button"
+                  onClick={openRegister}
+                  title="Registrar un cliente nuevo y vincularlo al pedido"
+                  className="h-10 shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-bold uppercase tracking-wide text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95"
+                >
+                  Registrar
+                </button>
+              )}
+            </div>
             {showSuggestions && suggestions.length > 0 && (
               <>
                 {/* Clic fuera cierra el dropdown */}
@@ -909,6 +990,20 @@ export function PosTerminal({
                       </button>
                     </li>
                   ))}
+                  {isBilling && (
+                    <li className="border-t border-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSuggestions(false);
+                          openRegister();
+                        }}
+                        className="block w-full px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-emerald-300 transition-colors hover:bg-emerald-500/10"
+                      >
+                        + Registrar nuevo cliente
+                      </button>
+                    </li>
+                  )}
                 </ul>
               </>
             )}
@@ -972,6 +1067,69 @@ export function PosTerminal({
             )}
           </button>
         </div>
+
+        {/* Diálogo "Registrar cliente" (básico: nombre obligatorio + teléfono
+            opcional). Se asume el rol de cajero/admin, que es el único que ve
+            el acceso. */}
+        {showRegister && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+            <div className="w-full max-w-sm rounded-2xl border border-slate-600 bg-slate-900 p-4 shadow-2xl">
+              <h3 className="text-base font-black uppercase tracking-wide text-white">
+                Registrar cliente
+              </h3>
+              <p className="mt-1 text-xs text-slate-400">
+                Se crea en la base de clientes, se vincula a este pedido y se
+                identifica con su primer nombre y apellido paterno.
+              </p>
+              <div className="mt-3 space-y-2">
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(e) => {
+                    setRegName(e.target.value.toUpperCase());
+                    setRegError(null);
+                  }}
+                  placeholder="NOMBRE (obligatorio)"
+                  autoFocus
+                  className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={regPhone}
+                  onChange={(e) => {
+                    setRegPhone(e.target.value);
+                    setRegError(null);
+                  }}
+                  placeholder="TELÉFONO (opcional)"
+                  className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
+                />
+                {regError && (
+                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                    ⚠ {regError}
+                  </p>
+                )}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRegister(false)}
+                  disabled={regBusy}
+                  className="h-11 rounded-xl border border-slate-700 bg-slate-800 text-sm font-bold uppercase tracking-wide text-slate-300 transition-all hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={registerCustomer}
+                  disabled={regBusy}
+                  className="h-11 rounded-xl border border-emerald-500 bg-emerald-600 text-sm font-bold uppercase tracking-wide text-white transition-all hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {regBusy ? "Registrando…" : "Registrar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}

@@ -1,6 +1,6 @@
 "use server";
 
-import { prisma, localDayKey, type Prisma } from "@bbspos/db";
+import { prisma, localDayKey, type Prisma, type Customer } from "@bbspos/db";
 import {
   BenefitMetric,
   type CustomerLoyaltyView,
@@ -93,7 +93,12 @@ export async function getCustomerSuggestions(
     },
     orderBy: { lastVisitAt: "desc" },
     take: 8,
-    select: { id: true, name: true, phone: true, lastVisitAt: true },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      lastVisitAt: true,
+    },
   });
   return customers.map((c) => ({
     id: c.id,
@@ -103,44 +108,79 @@ export async function getCustomerSuggestions(
   }));
 }
 
-/** Vincula o crea el cliente al enviar un pedido desde el terminal:
+/** Vincula un cliente registrado al pedido sin crearlo nunca:
  *  - si el texto parece teléfono y coincide con un `phone` exacto, lo vincula;
- *  - si el texto coincide con un nombre exacto, lo vincula;
- *  - si no existe, lo crea con nombre en mayúsculas (el terminal ya lo envía así)
- *    y teléfono opcional cuando el texto parece teléfono. */
-export async function upsertCustomerForOrder(
+ *  - de lo contrario, si coincide exactamente con el `name` de algún cliente
+ *    (ignorando mayúsculas), lo vincula;
+ *  - si no hay coincidencia, devuelve `null` (venta invitado). */
+export async function linkCustomerByText(
   text: string,
-): Promise<CustomerLoyaltyView> {
+): Promise<CustomerLoyaltyView | null> {
   await getRequiredSession();
   const raw = text.trim();
-  if (!raw) {
-    throw new Error("El nombre o mesa del cliente es obligatorio.");
-  }
+  if (!raw) return null;
   const looksLikePhone = PHONE_RE.test(raw);
   const phone = looksLikePhone ? normalizePhone(raw) : null;
 
-  let customer: {
-    id: string;
-    name: string;
-    phone: string | null;
-    points: number;
-    totalVisits: number;
-    totalSpent: number;
-    lastVisitAt: Date | null;
-  } | null = null;
-
+  let customer: Customer | null = null;
   if (phone) {
     customer = await prisma.customer.findFirst({ where: { phone } });
   } else {
-    customer = await prisma.customer.findFirst({ where: { name: raw } });
-  }
-
-  if (!customer) {
-    customer = await prisma.customer.create({
-      data: { name: raw, phone },
+    const candidates = await prisma.customer.findMany({
+      where: { name: { contains: raw } },
+      take: 20,
     });
+    customer =
+      candidates.find((c) => c.name.toUpperCase() === raw.toUpperCase()) ?? null;
   }
 
+  if (!customer) return null;
+
+  const levelName = await levelNameOf(customer.id, customer.points);
+  return {
+    id: customer.id,
+    name: customer.name,
+    phone: customer.phone,
+    totalVisits: customer.totalVisits,
+    totalSpent: customer.totalSpent,
+    lastVisitAt: customer.lastVisitAt
+      ? customer.lastVisitAt.toISOString()
+      : null,
+    points: customer.points,
+    levelName,
+  };
+}
+
+/** Registra un cliente explícitamente desde el terminal del cajero (básico:
+ *  nombre obligatorio y teléfono opcional). Crea el cliente y devuelve la
+ *  vista de lealtad para vincular. */
+export async function registerCustomerAtPos(input: {
+  name: string;
+  phone?: string | null;
+}): Promise<CustomerLoyaltyView> {
+  const session = await getRequiredSession();
+  if (session.user.role === "MESERO") {
+    throw new Error("El mesero no puede registrar clientes.");
+  }
+  const name = input.name.trim().toUpperCase();
+  if (!name) {
+    throw new Error("El nombre del cliente es obligatorio.");
+  }
+  const phoneRaw = input.phone?.trim() ?? "";
+  const phone = phoneRaw ? normalizePhone(phoneRaw) : null;
+
+  const existing = phone
+    ? await prisma.customer.findFirst({ where: { phone } })
+    : null;
+  if (existing) {
+    throw new Error(
+      `El teléfono ${phone} ya está registrado para ${existing.name}.`,
+    );
+  }
+
+  const customer = await prisma.customer.create({
+    data: { name, phone },
+  });
   const levelName = await levelNameOf(customer.id, customer.points);
   return {
     id: customer.id,

@@ -30,12 +30,12 @@ El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa de
 
 ### Requirement: Vinculación con cliente registrado
 
-El terminal SHALL sugerir clientes registrados mientras el cajero escribe (autocompletado por nombre o teléfono). Al elegir una coincidencia, el sistema SHALL completar el campo con el nombre corto del cliente (apodo o primer nombre) y vincular su `customerId` al pedido. Si el texto escrito es un teléfono y coincide exactamente con un cliente existente, el sistema SHALL vincularlo automáticamente. La vinculación SHALL habilitar la acumulación de lealtad al cobrar. Ninguna de estas rutas crea un cliente: si no hay coincidencia, la venta queda como invitado.
+El terminal SHALL sugerir clientes registrados mientras el cajero escribe (autocompletado por nombre o teléfono). Al elegir una coincidencia, el sistema SHALL completar el campo con el nombre corto del cliente (primer nombre + apellido paterno) y vincular su `customerId` al pedido. Si el texto escrito es un teléfono y coincide exactamente con un cliente existente, el sistema SHALL vincularlo automáticamente. La vinculación SHALL habilitar la acumulación de lealtad al cobrar. Ninguna de estas rutas crea un cliente: si no hay coincidencia, la venta queda como invitado.
 
 #### Scenario: Seleccionar cliente del autocompletado
 
 - **WHEN** el cajero escribe "MAR" y elige la coincidencia "MARIA FERNANDA LOPEZ" del dropdown
-- **THEN** el campo muestra "MARIA", el pedido queda vinculado a esa clienta y acumula lealtad al cobrarse
+- **THEN** el campo muestra "MARIA FERNANDA", el pedido queda vinculado a esa clienta y acumula lealtad al cobrarse
 
 #### Scenario: Teléfono de cliente existente
 
@@ -49,12 +49,12 @@ El terminal SHALL sugerir clientes registrados mientras el cajero escribe (autoc
 
 ### Requirement: Registro de cliente desde el terminal
 
-El terminal del cajero SHALL ofrecer un acceso "Registrar" junto al campo de nombre que abre un formulario básico (nombre y teléfono opcional). Al confirmar, el sistema SHALL crear el cliente en la base de clientes con el apodo autogenerado, vincularlo al pedido actual y mostrar su nombre corto. Si el teléfono ya pertenece a otro cliente, el sistema SHALL rechazar el registro con un error claro. El acceso "Registrar" SHALL estar disponible solo para roles que cobran (cajero/admin/superadmin).
+El terminal del cajero SHALL ofrecer un acceso "Registrar" junto al campo de nombre que abre un formulario básico (nombre y teléfono opcional). Al confirmar, el sistema SHALL crear el cliente en la base de clientes, vincularlo al pedido actual y mostrar su nombre corto. Si el teléfono ya pertenece a otro cliente, el sistema SHALL rechazar el registro con un error claro. El acceso "Registrar" SHALL estar disponible solo para roles que cobran (cajero/admin/superadmin).
 
 #### Scenario: Registrar cliente nuevo
 
 - **WHEN** el cajero abre "Registrar", escribe "MARIA FERNANDA LOPEZ" y teléfono "70012345" y confirma
-- **THEN** se crea el cliente (apodo "MARIA"), el pedido queda vinculado y el campo muestra "MARIA"
+- **THEN** se crea el cliente, el pedido queda vinculado y el campo muestra "MARIA FERNANDA"
 
 #### Scenario: Registrar sin teléfono
 
@@ -73,14 +73,23 @@ El terminal del cajero SHALL ofrecer un acceso "Registrar" junto al campo de nom
 
 ### Requirement: Nombre corto en pedidos y comandas
 
-En los pedidos vinculados a un cliente registrado, el nombre que identifica al pedido en la tarjeta del ticket en curso, en la cola y en la comanda impresa SHALL ser el nombre corto del cliente (apodo, o el primer nombre si el cliente no tiene apodo). El nombre completo sigue guardado en la ficha del cliente.
+En los pedidos vinculados a un cliente registrado, el nombre que identifica al pedido en la tarjeta del ticket en curso, en la cola y en la comanda impresa SHALL ser el nombre corto del cliente (primer nombre + apellido paterno). El nombre completo sigue guardado en la ficha del cliente.
 
 #### Scenario: Pedido vinculado con nombre corto
 
 - **WHEN** un pedido vinculado se muestra en la cola y se imprime la comanda
-- **THEN** ambas muestran solo el nombre corto del cliente (p. ej. "MARIA")
+- **THEN** ambas muestran solo el nombre corto del cliente (p. ej. "MARIA FERNANDA")
 
 #### Scenario: Pedido invitado con nombre corto
 
 - **WHEN** un pedido invitado se envía con el nombre "MARIA"
 - **THEN** la cola y la comanda muestran "MARIA", sin datos adicionales
+
+### Requirement: Persistencia sin campos adicionales
+
+El modelo de cliente SHALL conservar únicamente su nombre completo (sin campo de apodo ni nombre corto). El nombre corto usado en cola/comanda SHALL derivarse del nombre completo en el momento de la vinculación, sin agregar columnas a la base de datos.
+
+#### Scenario: Cliente sin cambios de esquema
+
+- **WHEN** se vincula o registra un cliente y se abre su ficha en Administración
+- **THEN** la ficha muestra el nombre completo tal como se registró y no existe ningún campo extra de apodo

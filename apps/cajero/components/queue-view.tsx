@@ -102,9 +102,11 @@ const DELIVERY_ICONS = {
 function DeliveryTypeIcon({
   orderType,
   className = "",
+  blink = false,
 }: {
   orderType?: OrderType;
   className?: string;
+  blink?: boolean;
 }) {
   const type = orderType ?? OrderType.LLEVAR;
   const delivery = DELIVERY_ICONS[type] ?? DELIVERY_ICONS.LLEVAR;
@@ -112,7 +114,10 @@ function DeliveryTypeIcon({
   const base = "flex-shrink-0";
   const size = className ? "" : "h-4 w-4";
   return (
-    <Icon className={cn(base, size, className, delivery.color)} aria-label={delivery.label}>
+    <Icon
+      className={cn(base, size, className, delivery.color, blink && "animate-blink-bright")}
+      aria-label={delivery.label}
+    >
       <title>{delivery.label}</title>
     </Icon>
   );
@@ -619,6 +624,11 @@ function OrderCard({
             <DeliveryTypeIcon
               orderType={order.orderType}
               className={compact ? "h-3.5 w-3.5" : "h-5 w-5"}
+              blink={
+                order.orderType === OrderType.DELIVERY &&
+                order.status !== OrderStatus.ENTREGADO &&
+                order.status !== OrderStatus.ANULADO
+              }
             />
           </div>
         </button>
@@ -669,6 +679,11 @@ function OrderCard({
           <DeliveryTypeIcon
             orderType={order.orderType}
             className="h-5 w-5 flex-shrink-0"
+            blink={
+              order.orderType === OrderType.DELIVERY &&
+              order.status !== OrderStatus.ENTREGADO &&
+              order.status !== OrderStatus.ANULADO
+            }
           />
         )}
         </div>
@@ -718,7 +733,15 @@ function OrderCard({
                 isDeliveredNotPaid ? "text-red-500" : "text-white"
               }`}
             >
-              <DeliveryTypeIcon orderType={order.orderType} className="h-6 w-6 flex-shrink-0" />
+              <DeliveryTypeIcon
+                orderType={order.orderType}
+                className="h-6 w-6 flex-shrink-0"
+                blink={
+                  order.orderType === OrderType.DELIVERY &&
+                  order.status !== OrderStatus.ENTREGADO &&
+                  order.status !== OrderStatus.ANULADO
+                }
+              />
               {showPaymentIcon && order.paymentMethod && (
                 <PaymentMethodIcon order={order} className="h-6 w-6" />
               )}

@@ -151,6 +151,24 @@
     glow-green 2s ease-in-out 200ms infinite;
 }
 
+/* Parpadeo con brillo para el icono de delivery (bike): destella con mucha
+   más intensidad que animate-pulse, pasando por un brillo fuerte. */
+@keyframes blink-bright {
+  0%,
+  100% {
+    opacity: 1;
+    filter: brightness(1.6) drop-shadow(0 0 4px rgba(56, 189, 248, 0.9));
+  }
+  50% {
+    opacity: 0.65;
+    filter: brightness(0.9);
+  }
+}
+
+.animate-blink-bright {
+  animation: blink-bright 2s ease-in-out infinite;
+}
+
 /* Parpadeo azul del botón/tarjeta de un pedido que acaba de entrar a la cola:
    tres destellos en 2s, al igual que el card-enter inicial de las demás. */
 @keyframes flash-blue {

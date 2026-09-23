@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   FlavorCategory,
   FlavorCategoryList,
-  FlavorCategoryLabel,
   MenuCategory,
   MenuCategoryLabel,
   MenuCategoryList,
@@ -20,24 +19,24 @@ import {
   type MenuCategory as MenuCategoryType,
   type MenuItemView,
   type Role as RoleType,
-  type Size,
   type Topping,
 } from "@bbspos/types";
 import { createPosOrder } from "@/actions/pos";
 import {
   getCustomerLoyalty,
-  getCustomerSuggestions,
   linkCustomerByText,
-  registerCustomerAtPos,
 } from "@/app/actions/customers";
-import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
+import { usePosCart } from "./pos-cart-store";
 import { QueueView } from "@/components/queue-view";
 import type { Order } from "@bbspos/types";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
-import type {
-  CustomerLoyaltyView,
-  CustomerSuggestion,
-} from "@bbspos/types";
+import type { CustomerLoyaltyView } from "@bbspos/types";
+import { PosCategoryBar } from "./pos-category-bar";
+import { PosTicketPanel } from "./pos-ticket-panel";
+import { PosBubasBuilder } from "./pos-bubas-builder";
+import { PosCartaGrid } from "./pos-carta-grid";
+import { usePosKeyboard } from "./use-pos-keyboard";
+import { getRequiredSauces, isMixtasItem } from "./pos-variant-selector";
 
 const CATEGORIES = FlavorCategoryList;
 
@@ -87,28 +86,6 @@ const PANE_TITLE: Partial<Record<CatalogPane, string>> = {
   [SANDWICHES_PANE]: "Sandwiches",
 };
 
-// ===== Alitas: sabores simples y salsas de las alitas mixtas =====
-// Las alitas simples vienen bañadas en su salsa; las Alitas Mixtas obligan a
-// elegir salsas. Todo sale de la BD: isMixtas/requiredSauces del plato y el
-// catálogo de salsas de /api/alita-sauces (nada hardcodeado).
-
-/** Salsas exigidas si ni el plato ni el tamaño definen cuántas elegir. */
-const FALLBACK_REQUIRED_SAUCES = 2;
-
-function isMixtasItem(item: MenuItemView): boolean {
-  return item.isMixtas === true;
-}
-
-/** Salsas a elegir: manda la del tamaño; si no, la del plato; si no, fallback. */
-function getRequiredSauces(
-  item: MenuItemView,
-  option: MenuItemView["options"][number],
-): number {
-  return (
-    option.requiredSauces ?? item.requiredSauces ?? FALLBACK_REQUIRED_SAUCES
-  );
-}
-
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
     CATEGORIES.find((c) =>
@@ -133,63 +110,6 @@ function defaultPane(catalog: Catalog): CatalogPane {
   if (catalog.menuItems.length > 0) return MenuCategory.ALMUERZO;
   return BUBAS_PANE;
 }
-
-function deliveryLabel(type: PosDeliveryType) {
-  return type === "MESA" ? "MESA" : type === "LLEVAR" ? "LLEVAR" : "DELIVERY";
-}
-
-// ===== Estilos compartidos de botones y contenedores =====
-const TOP_LABEL =
-  "text-sm font-bold uppercase tracking-widest text-slate-400";
-const CHIP_BASE =
-  "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-bold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30";
-const CHIP = {
-  selected:
-    "border border-primary bg-primary text-primary-foreground shadow-md shadow-primary/30",
-  idle: "border border-slate-700 bg-slate-900/60 text-slate-200 hover:border-primary/60 hover:bg-slate-800 hover:text-white",
-  amber:
-    "border border-amber-500/40 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:bg-amber-500/20 hover:shadow-md hover:shadow-amber-500/10",
-};
-
-/** Acento de color por categoría principal (identificación visual de un vistazo).
- *  Las categorías sin acento usan el CHIP neutral (azul). */
-const PANE_ACCENT: Partial<
-  Record<CatalogPane, { idle: string; selected: string }>
-> = {
-  [MenuCategory.MILANESA]: {
-    idle: "border-amber-500/50 bg-amber-500/10 text-amber-100 hover:border-amber-400 hover:bg-amber-500/20",
-    selected:
-      "border-amber-400 bg-amber-400/20 text-white shadow-md shadow-amber-400/25",
-  },
-  [MenuCategory.ALITA]: {
-    idle: "border-red-500/50 bg-red-500/10 text-red-100 hover:border-red-400 hover:bg-red-500/20",
-    selected:
-      "border-red-400 bg-red-400/20 text-white shadow-md shadow-red-400/25",
-  },
-  [MenuCategory.BEBIDA]: {
-    idle: "border-sky-500/50 bg-sky-500/10 text-sky-100 hover:border-sky-400 hover:bg-sky-500/20",
-    selected:
-      "border-sky-400 bg-sky-400/20 text-white shadow-md shadow-sky-400/25",
-  },
-  [MenuCategory.HAMBURGUESA]: {
-    idle: "border-orange-500/50 bg-orange-500/10 text-orange-100 hover:border-orange-400 hover:bg-orange-500/20",
-    selected:
-      "border-orange-400 bg-orange-400/20 text-white shadow-md shadow-orange-400/25",
-  },
-  [MenuCategory.POSTRE]: {
-    idle: "border-pink-500/50 bg-pink-500/10 text-pink-100 hover:border-pink-400 hover:bg-pink-500/20",
-    selected:
-      "border-pink-400 bg-pink-400/20 text-white shadow-md shadow-pink-400/25",
-  },
-};
-const PRODUCT_BASE =
-  "relative flex w-full items-center justify-center rounded-xl border px-2 py-2 text-sm font-semibold capitalize leading-tight tracking-wide whitespace-normal break-words transition-all duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-30";
-const PRODUCT = {
-  selected: "border-primary bg-primary/15 text-white shadow-md shadow-primary/20",
-  idle: "border-slate-700 bg-slate-900/50 text-slate-100 hover:border-primary/60 hover:bg-slate-800",
-};
-const PAY_BUTTON =
-  "inline-flex h-10 items-center justify-center rounded-xl border text-sm font-bold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40";
 
 export function PosTerminal({
   catalog,
@@ -220,14 +140,6 @@ export function PosTerminal({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionsLocked, setSuggestionsLocked] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
-  const [regName, setRegName] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regBusy, setRegBusy] = useState(false);
-  const [regError, setRegError] = useState<string | null>(null);
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
   const [variantSize, setVariantSize] = useState<
     MenuItemView["options"][number] | null
@@ -274,104 +186,9 @@ export function PosTerminal({
     return () => clearInterval(id);
   }, [catalog]);
 
-  // Al entrar se limpia el carrito persistido de una sesión anterior para que
-  // el mesero no herede ítems viejos guardados en localStorage.
-  useEffect(() => {
-    cart.clear();
-    // La limpieza es solo al montar: se ignora el resto de dependencias.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Autocompletado de clientes (lealtad): busca coincidencias por nombre o
-  // teléfono con debounce de 250 ms; si el cajero edita el texto, se quita el
-  // cliente vinculado para no enviar un id que no corresponde al campo. Al
-  // cambiar el texto NO se vuelve a buscar mientras haya un cliente vinculado
-  // (el nombre corto que se muestra ya corresponde); al editar se desvincula y la
-  // búsqueda se reactiva. `suggestionsLocked` congela la búsqueda: el cajero
-  // presionó Enter para aceptar ese nombre como invitado sin vincular a nadie.
-  useEffect(() => {
-    setSuggestions([]);
-    setShowSuggestions(false);
-    const q = cart.customerName.trim();
-    if (q === "" || cart.customerId || suggestionsLocked) return;
-    const timer = setTimeout(() => {
-      getCustomerSuggestions(q)
-        .then((matches) => {
-          setSuggestions(matches);
-          setShowSuggestions(matches.length > 0);
-        })
-        .catch(() => {
-          setSuggestions([]);
-          setShowSuggestions(false);
-        });
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [cart.customerName, suggestionsLocked]);
-
-  // Alerta no bloqueante cuando el cliente vinculado alcanza un nivel de
-  // lealtad: se muestra como notice (desaparece con la próxima acción).
-  function notifyLoyalty(loyalty: CustomerLoyaltyView | null) {
-    if (loyalty?.levelName) {
-      setNotice(
-        `${loyalty.name} · Nivel ${loyalty.levelName} · ${loyalty.points} pts`,
-      );
-    } else if (loyalty) {
-      setNotice(`${loyalty.name} · ${loyalty.points} pts`);
-    }
-  }
-
-  async function selectCustomer(candidate: CustomerSuggestion) {
-    cart.setCustomerName(shortCustomerName(candidate).toUpperCase());
-    cart.setCustomerId(candidate.id);
-    setSuggestions([]);
-    setShowSuggestions(false);
-    try {
-      notifyLoyalty(await getCustomerLoyalty(candidate.id));
-    } catch {
-      // La alerta de nivel no debe bloquear la selección del cliente.
-    }
-  }
-
-  // Formulario "Registrar" junto al campo de nombre (solo roles que cobran):
-  // crea el cliente explícitamente, lo vincula al pedido y muestra su nombre
-  // corto.
-  function openRegister() {
-    setRegError(null);
-    setRegName(cart.customerId ? "" : cart.customerName);
-    setRegPhone("");
-    setShowRegister(true);
-  }
-
-  async function registerCustomer() {
-    const name = regName.trim().toUpperCase();
-    if (!name) {
-      setRegError("El nombre del cliente es obligatorio.");
-      return;
-    }
-    if (cart.items.length === 0) {
-      setRegError("Primero agrega productos al ticket.");
-      return;
-    }
-    setRegBusy(true);
-    setRegError(null);
-    try {
-      const loyalty = await registerCustomerAtPos({
-        name,
-        phone: regPhone.trim() ? regPhone : null,
-      });
-      cart.setCustomerName(shortCustomerName(loyalty).toUpperCase());
-      cart.setCustomerId(loyalty.id);
-      setShowRegister(false);
-      setRegName("");
-      setRegPhone("");
-      notifyLoyalty(loyalty);
-      setNotice(`Cliente ${loyalty.name} registrado y vinculado al pedido.`);
-    } catch (e) {
-      setRegError(e instanceof Error ? e.message : "No se pudo registrar.");
-    } finally {
-      setRegBusy(false);
-    }
-  }
+  // El carrito del POS se persiste en localStorage (pos-cart-store): un refresh
+  // accidental o una caída del cajero no pierde el ticket en curso. Solo lo
+  // vacían La limpieza explícita (botón "Limpiar") o el envío exitoso del pedido.
 
   // Catálogo de salsas para las Alitas Mixtas, servido desde la BD.
   useEffect(() => {
@@ -484,13 +301,17 @@ export function PosTerminal({
     if (tapiocaBoba) setBobaTypeId(tapiocaBoba.id);
   }
 
+  const canConfirmProduct = Boolean(
+    size && bobaType && selectedFlavor && preticketSubtotal() !== null,
+  );
+
   function confirmProduct() {
     const unitPrice = priceOf();
-    if (unitPrice === null || !selectedSize || !bobaType || !selectedFlavor) return;
+    if (unitPrice === null || !size || !bobaType || !selectedFlavor) return;
     setNotice(null);
     cart.addItem(
       {
-        size: selectedSize,
+        size,
         flavor: selectedFlavor,
         category: bubaCategory,
         bobaType,
@@ -555,8 +376,6 @@ export function PosTerminal({
         customerId,
       );
       cart.clear();
-      setShowSuggestions(false);
-      setSuggestions([]);
       // Devuelve los selectores a su estado por defecto para no arrastrar
       // las opciones del pedido anterior.
       setToppingIds([]);
@@ -717,7 +536,6 @@ export function PosTerminal({
     );
   }
 
-  const selectedSize: Size | undefined = size;
   const cartTotal = cart.items.reduce(
     (acc, item) => acc + cartItemUnitTotal(item) * item.quantity,
     0,
@@ -732,57 +550,15 @@ export function PosTerminal({
   const formOk =
     cart.items.length > 0 && !needsName && !needsDelivery;
 
-  // ===== Atajos de teclado (flujo rápido tipo Square) =====
-  // Teclas 1-9 seleccionan la categoría de la barra por índice; Enter dispara el
-  // cobro cuando el ticket tiene productos. Se ignoran si el foco está en un
-  // campo de texto (buscar producto / nombre de cliente) para no chocar con la
-  // escritura. Las refs evitan re-enganchar el listener en cada render.
-  const panesRef = useRef(catalogPanes);
-  panesRef.current = catalogPanes;
-  const switchPaneRef = useRef(switchPane);
-  switchPaneRef.current = switchPane;
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
-  const hasItemsRef = useRef(false);
-  hasItemsRef.current = cart.items.length > 0;
-  const busyRef = useRef(false);
-  busyRef.current = busy;
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      const tag = target.tagName;
-      if (
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-
-      if (e.key >= "1" && e.key <= "9") {
-        const pane = panesRef.current[Number(e.key) - 1];
-        if (pane) {
-          e.preventDefault();
-          switchPaneRef.current(pane.key);
-        }
-        return;
-      }
-
-      if (e.key === "Enter" && hasItemsRef.current && !busyRef.current) {
-        e.preventDefault();
-        void submitRef.current();
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-    // El listener se registra una sola vez; las funciones se leen de refs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Atajos de teclado (flujo rápido tipo Square): teclas 1-9 seleccionan la
+  // categoría por índice y Enter dispara el cobro cuando hay productos.
+  usePosKeyboard({
+    panes: catalogPanes,
+    switchPane: (key) => switchPane(key as CatalogPane),
+    submit,
+    hasItems: cart.items.length > 0,
+    busy,
+  });
 
   return (
     <div className="flex h-full w-full bg-slate-950 overflow-hidden">
@@ -799,338 +575,21 @@ export function PosTerminal({
       </aside>
 
       {/* ===== Columna 2 (20%): Ticket en curso y cobro (fijo) ===== */}
-      <section className="flex w-1/5 min-w-[280px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
-        {/* Encabezado del ticket */}
-        <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
-          <h2 className="text-base font-black uppercase tracking-wide text-white">
-            Ticket en curso
-          </h2>
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={
-              busy ||
-              (cart.items.length === 0 &&
-                cart.customerName === "" &&
-                selectedFlavorId === null)
-            }
-            title="Vaciar el pedido si el cliente se arrepiente"
-            className="h-8 shrink-0 rounded-full border border-red-500/50 bg-red-500/10 px-3 text-xs font-semibold uppercase tracking-wide text-red-300 transition-all hover:border-red-500 hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Limpiar
-          </button>
-        </div>
-
-        {busy && (
-          <p className="shrink-0 mx-4 mt-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-300">
-            Enviando… por favor espera.
-          </p>
-        )}
-        {notice && (
-          <p className="shrink-0 mx-4 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
-            {notice}
-          </p>
-        )}
-        {error && (
-          <p className="shrink-0 mx-4 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            ⚠ {error}
-          </p>
-        )}
-
-        {/* Cuerpo del ticket: ítems scrolleables */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {cart.items.length === 0 && (
-            <p className="text-sm text-slate-500">
-              Agrega bebidas tocando un sabor o un plato del día en el
-              catálogo.
-            </p>
-          )}
-          {cart.items.map((item) => {
-            const unitWithExtras = cartItemUnitTotal(item);
-            return (
-              <div
-                key={item.id}
-                className="flex items-start justify-between gap-2 rounded-md bg-slate-800 px-3 py-2"
-              >
-                <div className="min-w-0 text-sm">
-                  <p className="font-semibold capitalize text-white">
-                    {item.quantity}×{" "}
-                    {item.kind === "DRINK" ? item.flavor.name : item.name}
-                  </p>
-                  <p className="text-slate-400">
-                    {item.kind === "DRINK" ? (
-                      `${item.size.name} · ${item.bobaType.name}`
-                    ) : (
-                      <>
-                        {MenuCategoryLabel[item.category]}
-                        {item.optionName && (
-                          <span className="ml-1 font-semibold text-white">
-                            · {item.optionName}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </p>
-                  {item.kind === "MENU_ITEM" && item.detail && (
-                    <p className="text-xs font-semibold text-emerald-300">
-                      {item.detail}
-                    </p>
-                  )}
-                  {item.kind === "DRINK" && item.toppings.length > 0 && (
-                    <p className="text-slate-400">
-                      + {item.toppings.map((t) => t.name).join(", ")}
-                    </p>
-                  )}
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity - 1)
-                      }
-                    >
-                      −
-                    </button>
-                    <span className="text-base font-bold w-6 text-center text-slate-200">
-                      {item.quantity}
-                    </span>
-                    <button
-                      type="button"
-                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                      onClick={() =>
-                        cart.updateQuantity(item.id, item.quantity + 1)
-                      }
-                    >
-                      +
-                    </button>
-                    <button
-                      type="button"
-                      className="h-8 px-3 rounded-lg bg-red-600/90 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-500"
-                      onClick={() => cart.removeItem(item.id)}
-                    >
-                      Quitar
-                    </button>
-                  </div>
-                </div>
-                <span className="font-mono text-sm font-bold text-white whitespace-nowrap">
-                  {formatPrice(unitWithExtras * item.quantity)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Área de pago fija al fondo del panel izquierdo */}
-        <div className="shrink-0 px-4 py-3 bg-slate-950 border-t border-slate-800 flex flex-col gap-2">
-          <div className="relative">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={cart.customerName}
-                onChange={(e) => {
-                  cart.setCustomerName(e.target.value.toUpperCase());
-                  // El text cambió: el cliente vinculado ya no corresponde.
-                  cart.setCustomerId(null);
-                  setSuggestionsLocked(false);
-                  setShowSuggestions(false);
-                }}
-                onKeyDown={(e) => {
-                  // Enter acepta el nombre tal cual (invitado, sin vincular)
-                  // y cierra el dropdown para que no reaparezca.
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    setSuggestionsLocked(true);
-                    setSuggestions([]);
-                    setShowSuggestions(false);
-                  }
-                }}
-                placeholder="NOMBRE"
-                className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase placeholder:text-slate-500 focus:outline-none transition-shadow ${
-                  needsName
-                    ? "border-amber-400/70 animate-name-glow text-white"
-                    : cart.customerId
-                      ? "border-amber-400/90 text-amber-300 font-bold"
-                      : "border-slate-700 text-white focus:border-primary"
-                }`}
-              />
-              {isBilling && (
-                <button
-                  type="button"
-                  onClick={openRegister}
-                  title="Registrar un cliente nuevo y vincularlo al pedido"
-                  className="h-10 shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-bold uppercase tracking-wide text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95"
-                >
-                  Registrar
-                </button>
-              )}
-            </div>
-            {showSuggestions && suggestions.length > 0 && (
-              <>
-                {/* Clic fuera cierra el dropdown */}
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowSuggestions(false)}
-                />
-                <ul className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-xl border border-slate-600 bg-slate-800 py-1 shadow-xl">
-                  {suggestions.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectCustomer(s)}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs text-slate-200 transition-colors hover:bg-slate-700"
-                      >
-                        <span className="truncate font-semibold uppercase">
-                          {s.name}
-                        </span>
-                        {s.phone && (
-                          <span className="shrink-0 font-mono text-slate-400">
-                            {s.phone}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                  {isBilling && (
-                    <li className="border-t border-slate-700">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowSuggestions(false);
-                          openRegister();
-                        }}
-                        className="block w-full px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-emerald-300 transition-colors hover:bg-emerald-500/10"
-                      >
-                        + Registrar nuevo cliente
-                      </button>
-                    </li>
-                  )}
-                </ul>
-              </>
-            )}
-          </div>
-
-          <div
-            className={`grid grid-cols-3 gap-2 rounded-xl ${
-              needsDelivery ? "animate-name-glow" : ""
-            }`}
-          >
-            {(["MESA", "LLEVAR", "DELIVERY"] as PosDeliveryType[]).map(
-              (type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => cart.setDeliveryType(type)}
-                  className={`${PAY_BUTTON} ${
-                    cart.deliveryType === type
-                      ? "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25"
-                      : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
-                  }`}
-                >
-                  {deliveryLabel(type)}
-                </button>
-              ),
-            )}
-          </div>
-
-          <input
-            type="text"
-            value={cart.notes}
-            onChange={(e) => cart.setNotes(e.target.value.toUpperCase())}
-            placeholder="INDICACIONES"
-            title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
-            className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
-          />
-
-          <button
-            type="button"
-            disabled={busy || !formOk}
-            onClick={submit}
-            className={`mt-2 w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
-              isBilling
-                ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/40 hover:from-blue-400 hover:to-blue-600"
-                : "bg-gradient-to-b from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700"
-            }`}
-          >
-            {busy ? (
-              "Enviando…"
-            ) : cartTotal === 0 ? (
-              "COMPLETAR PEDIDO"
-            ) : isBilling ? (
-              <>
-                <span className="text-base font-bold">ACEPTAR</span>
-                <span className="font-mono text-lg font-bold">
-                  {formatPrice(cartTotal)}
-                </span>
-              </>
-            ) : (
-              "Enviar a caja"
-            )}
-          </button>
-        </div>
-
-        {/* Diálogo "Registrar cliente" (básico: nombre obligatorio + teléfono
-            opcional). Se asume el rol de cajero/admin, que es el único que ve
-            el acceso. */}
-        {showRegister && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
-            <div className="w-full max-w-sm rounded-2xl border border-slate-600 bg-slate-900 p-4 shadow-2xl">
-              <h3 className="text-base font-black uppercase tracking-wide text-white">
-                Registrar cliente
-              </h3>
-              <p className="mt-1 text-xs text-slate-400">
-                Se crea en la base de clientes, se vincula a este pedido y se
-                identifica con su primer nombre y apellido paterno.
-              </p>
-              <div className="mt-3 space-y-2">
-                <input
-                  type="text"
-                  value={regName}
-                  onChange={(e) => {
-                    setRegName(e.target.value.toUpperCase());
-                    setRegError(null);
-                  }}
-                  placeholder="NOMBRE (obligatorio)"
-                  autoFocus
-                  className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={regPhone}
-                  onChange={(e) => {
-                    setRegPhone(e.target.value);
-                    setRegError(null);
-                  }}
-                  placeholder="TELÉFONO (opcional)"
-                  className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
-                />
-                {regError && (
-                  <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                    ⚠ {regError}
-                  </p>
-                )}
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRegister(false)}
-                  disabled={regBusy}
-                  className="h-11 rounded-xl border border-slate-700 bg-slate-800 text-sm font-bold uppercase tracking-wide text-slate-300 transition-all hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={registerCustomer}
-                  disabled={regBusy}
-                  className="h-11 rounded-xl border border-emerald-500 bg-emerald-600 text-sm font-bold uppercase tracking-wide text-white transition-all hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {regBusy ? "Registrando…" : "Registrar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
+      <PosTicketPanel
+        cart={cart}
+        isBilling={isBilling}
+        busy={busy}
+        notice={notice}
+        error={error}
+        needsName={needsName}
+        needsDelivery={needsDelivery}
+        formOk={formOk}
+        cartTotal={cartTotal}
+        hasBuildingProduct={selectedFlavorId !== null}
+        onClear={handleClear}
+        onSubmit={submit}
+        onNotice={setNotice}
+      />
 
       {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}
       <section className="flex w-3/5 flex-col bg-slate-950 overflow-hidden">
@@ -1145,16 +604,16 @@ export function PosTerminal({
                   type="button"
                   title={`Agregar ${menuItem.name}`}
                   onClick={() => {
-                      setNotice(null);
-                      cart.addMenuItem({
-                        menuItemId: menuItem.id,
-                        name: menuItem.name,
-                        category: menuItem.category,
-                        unitPrice: menuItem.price,
-                        optionId: null,
-                        optionName: null,
-                      });
-                    }}
+                    setNotice(null);
+                    cart.addMenuItem({
+                      menuItemId: menuItem.id,
+                      name: menuItem.name,
+                      category: menuItem.category,
+                      unitPrice: menuItem.price,
+                      optionId: null,
+                      optionName: null,
+                    });
+                  }}
                   className="flex h-[70px] flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
                 >
                   <span className="line-clamp-2 text-xs font-semibold leading-tight text-amber-100">
@@ -1168,361 +627,66 @@ export function PosTerminal({
             </div>
           )}
 
-          {/* Barra de categorías fija: pega arriba al scrollear y usa la misma
-              retícula de 5 columnas que los almuerzos para quedar alineada */}
-          <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
-            <div className="grid grid-cols-5 justify-items-stretch gap-2 px-4">
-              {catalogPanes.map((pane) => {
-                const selected = pane.key === activePane;
-                const accent = PANE_ACCENT[pane.key];
-                const cls = accent
-                  ? selected
-                    ? accent.selected
-                    : accent.idle
-                  : selected
-                    ? CHIP.selected
-                    : CHIP.idle;
-                return (
-                  <button
-                    key={pane.key}
-                    type="button"
-                    onClick={() => switchPane(pane.key)}
-                    className={`${CHIP_BASE} ${cls}`}
-                  >
-                    {pane.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Barra de categorías como tarjetas: pega arriba al scrollear y usa la
+              misma retícula de 5 columnas que los productos para quedar alineada */}
+          <PosCategoryBar
+            panes={catalogPanes}
+            activeKey={activePane}
+            onSwitch={(key) => switchPane(key as CatalogPane)}
+          />
 
           {/* Bloque inferior: productos de la categoría seleccionada */}
           <div className="px-4 py-4">
             <div className="max-w-4xl mx-auto flex flex-col gap-4">
-            {isBubas && (
-              <>
-                {/* Subcategorías de Bubble Drinks (Especiales / Con agua / Con leche) */}
-                <div className="flex flex-wrap gap-2">
-                  {CATEGORIES.map((category) => {
-                    const enabled = catalog.flavors.some(
-                      (f) => f.categories.includes(category) && f.available,
-                    );
-                    const selected = category === bubaCategory;
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        disabled={!enabled}
-                        onClick={() => switchBubaCategory(category)}
-                        className={`${CHIP_BASE} ${
-                          selected ? CHIP.selected : CHIP.idle
-                        }`}
-                      >
-                        {FlavorCategoryLabel[category]}
-                      </button>
-                    );
-                  })}
-                </div>
+              {isBubas && (
+                <PosBubasBuilder
+                  bubaCategory={bubaCategory}
+                  onSwitchCategory={switchBubaCategory}
+                  flavors={flavors}
+                  sizes={sizes}
+                  bobaTypes={sortedBobaTypes}
+                  toppings={toppings}
+                  selectedFlavorId={selectedFlavorId}
+                  selectedFlavor={selectedFlavor}
+                  selectedSize={size}
+                  selectedBobaType={bobaType}
+                  selectedToppings={selectedToppings}
+                  productQty={productQty}
+                  productBlockReason={productBlockReason}
+                  preticketSubtotal={preticketSubtotal()}
+                  canConfirm={canConfirmProduct}
+                  onSelectFlavor={selectFlavor}
+                  onSelectSize={setSizeId}
+                  onSelectBoba={setBobaTypeId}
+                  onToggleTopping={toggleTopping}
+                  onSetQty={(value) => setProductQty(Math.max(1, value))}
+                  onConfirmProduct={confirmProduct}
+                />
+              )}
 
-                {/* Grilla de sabores */}
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-                  {flavors.map((flavor) => {
-                    const selected = selectedFlavorId === flavor.id;
-                    return (
-                      <button
-                        key={flavor.id}
-                        type="button"
-                        onClick={() => selectFlavor(flavor)}
-                        className={`${PRODUCT_BASE} h-14 ${
-                          selected ? PRODUCT.selected : PRODUCT.idle
-                        }`}
-                      >
-                        {flavor.name}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Tamaño */}
-                <section className="mt-2 space-y-3">
-                  <h3 className={TOP_LABEL}>Tamaño</h3>
-                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                    {sizes.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() => setSizeId(s.id)}
-                        className={`${PRODUCT_BASE} h-14 ${
-                          s.id === sizeId ? PRODUCT.selected : PRODUCT.idle
-                        }`}
-                      >
-                        {s.name} · {s.oz} oz
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                {/* Tipo de boba (debajo de tamaño) */}
-                <section className="mt-2 space-y-3">
-                  <h3 className={TOP_LABEL}>Tipo de boba</h3>
-                  <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-                    {sortedBobaTypes.map((b) => (
-                      <button
-                        key={b.id}
-                        type="button"
-                        onClick={() => setBobaTypeId(b.id)}
-                        className={`${PRODUCT_BASE} h-14 ${
-                          b.id === bobaTypeId ? PRODUCT.selected : PRODUCT.idle
-                        }`}
-                      >
-                        {b.name}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-
-                {toppings.length > 0 && (
-                  <section className="mt-2 space-y-3">
-                    <h3 className={TOP_LABEL}>Extras</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {toppings.map((t) => {
-                        const selected = toppingIds.includes(t.id);
-                        return (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => toggleTopping(t.id)}
-                            className={`${CHIP_BASE} ${
-                              selected ? CHIP.selected : CHIP.idle
-                            }`}
-                          >
-                            + {t.name} · {formatPrice(t.price)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                {/* Preticket: producto en construcción */}
-                {selectedFlavor ? (
-                  <section className="rounded-xl border border-slate-700 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
-                    <h3 className="text-sm font-bold uppercase tracking-widest text-white">
-                      Producto en curso
-                    </h3>
-                    <div className="mt-2 space-y-1 text-sm text-white">
-                      <p className="font-semibold capitalize">
-                        {selectedFlavor.name}
-                      </p>
-                      <p className="text-slate-400">
-                        {size?.name
-                          ? `${size.name} · ${bobaType?.name ?? ""}`
-                          : "Elige un tamaño"}
-                      </p>
-                      {selectedToppings.length > 0 && (
-                        <p className="text-slate-400">
-                          + {selectedToppings.map((t) => t.name).join(", ")}
-                        </p>
-                      )}
-                      {productBlockReason && (
-                        <p className="text-xs font-semibold text-amber-300">
-                          ⚠ {productBlockReason}
-                        </p>
-                      )}
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-                        Cantidad
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          aria-label="Restar cantidad"
-                          disabled={productQty <= 1}
-                          onClick={() => setProductQty((q) => Math.max(1, q - 1))}
-                          className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
-                        >
-                          −
-                        </button>
-                        <span className="text-base font-bold w-6 text-center text-slate-200">
-                          {productQty}
-                        </span>
-                        <button
-                          type="button"
-                          aria-label="Sumar cantidad"
-                          onClick={() => setProductQty((q) => q + 1)}
-                          className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-                        Subtotal
-                      </span>
-                      <span className="font-mono text-xl font-bold text-white">
-                        {preticketSubtotal() !== null
-                          ? formatPrice(preticketSubtotal()! * productQty)
-                          : "—"}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={
-                        !selectedSize ||
-                        !selectedFlavor ||
-                        !bobaType ||
-                        preticketSubtotal() === null
-                      }
-                      onClick={confirmProduct}
-                      className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Confirmar producto{productQty > 1 ? ` × ${productQty}` : ""}
-                    </button>
-                  </section>
-                ) : (
-                  <p className="text-sm text-slate-500">
-                    Toca un sabor para empezar tu pedido.
-                  </p>
-                )}
-              </>
-            )}
-
-            {isCartaPane && (
-              <section className="space-y-2">
-                <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-white">
-                  {PANE_TITLE[activePane] ??
-                    MenuCategoryLabel[activePane as MenuCategoryType]}
-                </h3>
-
-                {/* Grilla de platos de la categoría seleccionada (CSS Grid táctil:
-                    tarjetas ~140px, altura fija 70px, precio en la esquina inferior) */}
-                <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
-                  {cartaItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      title={item.description ?? `Agregar ${item.name}`}
-                      onClick={() => tapCartaItem(item)}
-                      className="flex h-[70px] flex-col justify-between rounded-xl border border-slate-700/60 bg-slate-800 p-2.5 text-left transition-transform hover:bg-slate-700 active:scale-95"
-                    >
-                      <span className="line-clamp-2 text-xs font-semibold leading-tight text-white">
-                        {item.name}
-                      </span>
-                      {item.options.length > 0 ? (
-                        <span className="self-end text-[10px] font-semibold uppercase tracking-wide text-amber-300">
-                          Elegir variante
-                        </span>
-                      ) : (
-                        <span className="self-end font-mono text-sm font-bold text-emerald-400">
-                          {formatPrice(item.price)}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Selector de variante (Pollo/Res, Unidades de alitas): se abre
-                    al tocar un plato con opciones. Las Alitas Mixtas exigen
-                    elegir el tamaño y luego marcar las salsas correspondientes. */}
-                {variantItem && (
-                  <div className="rounded-xl border border-primary/40 bg-slate-900/80 p-4 space-y-3 shadow-lg shadow-black/20">
-                    <p className="text-sm font-bold text-white capitalize">
-                      {variantItem.name} — elige tamaño
-                    </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[...variantItem.options]
-                        .sort(
-                          (a, b) =>
-                            Number(a.name.match(/^(\d+)/)?.[1] ?? 0) -
-                            Number(b.name.match(/^(\d+)/)?.[1] ?? 0),
-                        )
-                        .map((option) => {
-                          const active = variantSize?.id === option.id;
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => tapVariantSize(option)}
-                              className={`h-12 rounded-xl border text-sm font-semibold text-white transition-all active:scale-95 ${
-                                active
-                                  ? "border-primary bg-primary"
-                                  : "border-slate-600 bg-slate-800 hover:border-primary hover:bg-slate-700"
-                              }`}
-                            >
-                              <span className="block capitalize">
-                                {option.name}
-                              </span>
-                              <span className="block text-xs font-semibold text-slate-300">
-                                {formatPrice(option.price)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-
-                    {isMixtasItem(variantItem) && variantSize && (
-                      <div className="rounded-lg bg-slate-950/60 p-3 space-y-2">
-                        <p className="text-xs font-bold uppercase tracking-widest text-white">
-                          Salsas a elección
-                        </p>
-                        <p className="text-xs text-slate-400">
-                          Marca{" "}
-                          <span className="font-bold text-amber-300">
-                            {getRequiredSauces(variantItem, variantSize)}
-                          </span>{" "}
-                          salsas ({variantSauces.length}/
-                          {getRequiredSauces(variantItem, variantSize)})
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {alitaSauces.map((sauce) => {
-                            const on = variantSauces.includes(sauce);
-                            return (
-                              <button
-                                key={sauce}
-                                type="button"
-                                onClick={() => toggleVariantSauce(sauce)}
-                                className={`h-9 rounded-full border px-3 text-xs font-semibold transition-all active:scale-95 ${
-                                  on
-                                    ? "border-amber-400 bg-amber-400/20 text-amber-100"
-                                    : "border-slate-600 bg-slate-800 text-slate-300 hover:border-amber-400/60"
-                                }`}
-                              >
-                                {sauce}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {variantSauces.length ===
-                          getRequiredSauces(variantItem, variantSize) && (
-                          <button
-                            type="button"
-                            onClick={confirmMixtas}
-                            className="mt-2 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600"
-                          >
-                            Confirmar · {formatPrice(variantSize.price)}
-                          </button>
-                        )}
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVariantItem(null);
-                        setVariantSize(null);
-                        setVariantSauces([]);
-                      }}
-                      className="w-full rounded-lg pt-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide transition-colors hover:text-white"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
+              {isCartaPane && (
+                <PosCartaGrid
+                  paneTitle={
+                    PANE_TITLE[activePane] ??
+                    MenuCategoryLabel[activePane as MenuCategoryType]
+                  }
+                  items={cartaItems}
+                  variantItem={variantItem}
+                  variantSize={variantSize}
+                  variantSauces={variantSauces}
+                  alitaSauces={alitaSauces}
+                  onTapItem={tapCartaItem}
+                  onSelectVariantSize={tapVariantSize}
+                  onToggleVariantSauce={toggleVariantSauce}
+                  onConfirmMixtas={confirmMixtas}
+                  onCancelVariant={() => {
+                    setVariantItem(null);
+                    setVariantSize(null);
+                    setVariantSauces([]);
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
       </section>

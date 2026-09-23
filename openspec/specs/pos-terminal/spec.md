@@ -232,3 +232,27 @@ El terminal SHALL mostrar una sección "Carta" además de la de Almuerzos, con u
 
 - **WHEN** el usuario revisa la sección de Almuerzos
 - **THEN** la sección de Almuerzos solo muestra los platos del Menú del Día vigente y la sección de Carta solo muestra los platos de la carta, sin mezclarse
+
+### Requirement: Menú de cambio de tipo de entrega en la cola
+
+La cola de pedidos del terminal SHALL mostrar el tipo de entrega de cada pedido mediante su icono (bike para Delivery, bolsa para Llevar, cubiertos para Mesa) en la tarjeta expandida, al lado del total. El icono SHALL reaccionar al pasar el mouse (fondo y escala) y al hacer clic SHALL desplegar un menú con las otras dos modalidades de entrega para cambiar el pedido en cola sin perder su estado; SHALL cerrarse al hacer clic fuera y SHALL deshabilitarse en pedidos finalizados.
+
+#### Scenario: Cambiar tipo de entrega desde la cola
+
+- **WHEN** el usuario pasa el mouse sobre el icono de entrega de un pedido activo y hace clic
+- **THEN** se despliega un menú con las otras dos modalidades (excluyendo la vigente) y el usuario puede cambiar el tipo de entrega del pedido
+
+#### Scenario: Icono reacciona al hover
+
+- **WHEN** el usuario posa el cursor sobre el icono de entrega
+- **THEN** el icono reacciona visualmente (fondo gris y aumento de escala) indicando que es interactivo
+
+#### Scenario: Cerrar el menú al hacer clic fuera
+
+- **WHEN** el menú de tipo de entrega está abierto y el usuario hace clic fuera de él
+- **THEN** el menú se cierra sin modificar el pedido
+
+#### Scenario: Menú deshabilitado en pedidos finalizados
+
+- **WHEN** el pedido está entregado o anulado
+- **THEN** el icono de tipo de entrega se muestra deshabilitado (sin permitir abrir el menú ni cambiar el tipo)

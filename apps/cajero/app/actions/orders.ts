@@ -5,6 +5,8 @@ import { prisma } from "@bbspos/db";
 import {
   AcceptablePayment,
   OrderStatus,
+  OrderType,
+  OrderTypeList,
   PensionType,
   PaymentMethod,
   Role,
@@ -265,6 +267,48 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
       },
     });
     await accumulateCustomerLoyalty(tx, customerId, total, paidAt);
+  });
+
+  revalidatePath("/");
+}
+
+/** Cambia el tipo de entrega de un pedido en cola (p. ej. de Para llevar a
+ *  Delivery cuando el cliente llama para pedir que se lo envíen). Solo se
+ *  permite mientras el pedido esté RECIBIDO o ACEPTADO, antes de la entrega;
+ *  una vez entregado o anulado el tipo queda fijo. */
+export async function updateOrderDeliveryType(
+  orderId: string,
+  newType: string,
+) {
+  await getRequiredSession();
+
+  if (!OrderTypeList.includes(newType as OrderType)) {
+    throw new Error("Tipo de entrega no válido.");
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("El pedido está anulado.");
+  }
+
+  if (order.status === OrderStatus.ENTREGADO) {
+    throw new Error(
+      "El pedido ya fue entregado; no se puede cambiar el tipo de entrega.",
+    );
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      deliveryType: newType as OrderType,
+    },
   });
 
   revalidatePath("/");

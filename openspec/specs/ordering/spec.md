@@ -223,3 +223,32 @@ El sistema SHALL permitir aplicar un descuento a un pedido registrando su monto 
 
 - **WHEN** el personal aplica un descuento indicando monto y motivo
 - **THEN** el total del pedido se ajusta y quedan registrados el descuento, su motivo y el usuario responsable
+
+### Requirement: Cambio de tipo de entrega de un pedido en cola
+
+El sistema SHALL permitir al personal cambiar el tipo de entrega (`MESA`, `LLEVAR` o `DELIVERY`) de un pedido en cola mientras el pedido esté en estado `RECIBIDO` o `ACEPTADO`, de modo que un pedido tomado como "Para llevar" pueda reencaminarse a "Delivery" cuando el cliente lo pide después por teléfono. El sistema SHALL rechazar el cambio cuando el pedido ya esté `ENTREGADO`, `ANULADO` o con un tipo de entrega no válido, y SHALL persistir el nuevo tipo en el campo `deliveryType`.
+
+#### Scenario: Cambio de llevar a delivery
+
+- **WHEN** el personal abre el menú de tipo de entrega de un pedido `LLEVAR` en estado `RECIBIDO` o `ACEPTADO` y selecciona `DELIVERY`
+- **THEN** el sistema actualiza el `deliveryType` del pedido a `DELIVERY` y la tarjeta de la cola refleja el nuevo tipo con su icono y animación
+
+#### Scenario: Las alternativas excluyen el tipo actual
+
+- **WHEN** el personal abre el menú de tipo de entrega de un pedido con tipo actual X
+- **THEN** el menú ofrece únicamente las otras dos modalidades (si X = `LLEVAR` ofrece `MESA` o `DELIVERY`; si X = `DELIVERY` ofrece `MESA` o `LLEVAR`; si X = `MESA` ofrece `LLEVAR` o `DELIVERY`) y nunca la opción ya vigente
+
+#### Scenario: Cambio bloqueado en pedido entregado o anulado
+
+- **WHEN** el personal intenta cambiar el tipo de entrega de un pedido en estado `ENTREGADO` o `ANULADO`
+- **THEN** el sistema rechaza la operación indicando que el pedido ya finalizó y el menú aparece deshabilitado
+
+#### Scenario: Tipo de entrega no válido
+
+- **WHEN** el sistema recibe un valor de tipo de entrega que no es `MESA`, `LLEVAR` ni `DELIVERY`
+- **THEN** el sistema rechaza la actualización sin modificar el pedido
+
+#### Scenario: El cambio se refleja tras el guardado
+
+- **WHEN** el personal confirma el cambio de tipo de entrega
+- **THEN** la cola se refresca y la tarjeta muestra el icono, el color y la animación correspondientes al nuevo tipo

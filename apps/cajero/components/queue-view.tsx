@@ -30,6 +30,7 @@ import {
   OrderStatus,
   OrderStatusLabel,
   OrderType,
+  OrderTypeList,
   Role,
   type Order,
   type Role as RoleType,
@@ -39,6 +40,7 @@ import {
   acceptPensionOrder,
   acceptQueueOrder,
   deliverOrder,
+  updateOrderDeliveryType,
 } from "@/app/actions/orders";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
 import {
@@ -98,6 +100,102 @@ const DELIVERY_ICONS = {
   MESA: { icon: Utensils, color: "text-amber-400", label: "Mesa" },
   LLEVAR: { icon: PaperBag, color: "text-emerald-400", label: "Llevar" },
 } as const;
+
+// Menú desplegable del tipo de entrega de un pedido en cola: el icono actual
+// (bike/bolsa/cubiertos) reacciona al pasar el mouse y al hacer clic muestra
+// las otras dos modalidades para cambiarlo (p. ej. de llevar a delivery cuando
+// el cliente llama). Solo disponible mientras el pedido no esté terminado.
+function DeliveryTypeMenu({
+  order,
+  clock,
+  compact,
+  iconClassName = "h-5 w-5",
+}: {
+  order: Order;
+  clock: ReturnType<typeof useQueueClock>;
+  compact: boolean;
+  iconClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const current = order.orderType ?? OrderType.LLEVAR;
+  const alternatives = OrderTypeList.filter((t) => t !== current);
+
+  // Cierra el menú al hacer clic fuera de él.
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  const dead =
+    order.status === OrderStatus.ENTREGADO ||
+    order.status === OrderStatus.ANULADO;
+
+  return (
+    <div ref={wrapRef} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        disabled={dead || clock.busyId === order.id}
+        title={
+          dead
+            ? "El pedido ya finalizó"
+            : `Cambiar tipo de entrega (ahora: ${DELIVERY_ICONS[current].label})`
+        }
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "group flex items-center rounded-md p-1 transition-colors",
+          open ? "bg-slate-800" : "hover:bg-slate-800",
+          dead && "cursor-default opacity-40",
+        )}
+      >
+        <DeliveryTypeIcon
+          orderType={current}
+          className={cn("transition-transform group-hover:scale-110", iconClassName)}
+          blink={
+            current === OrderType.DELIVERY &&
+            order.status !== OrderStatus.ENTREGADO &&
+            order.status !== OrderStatus.ANULADO
+          }
+        />
+      </button>
+      {open && (
+        <div
+          className={cn(
+            "absolute z-40 mt-1 flex flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl animate-in fade-in-0 zoom-in-95",
+            compact ? "right-0" : "left-0",
+          )}
+        >
+          {alternatives.map((type) => {
+            const { icon: Icon, label } = DELIVERY_ICONS[type];
+            return (
+              <button
+                key={type}
+                type="button"
+                disabled={clock.busyId === order.id}
+                onClick={() => {
+                  setOpen(false);
+                  clock.run(order.id, () =>
+                    updateOrderDeliveryType(order.id, type),
+                  );
+                }}
+                className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Icon className="h-4 w-4" aria-label={label} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DeliveryTypeIcon({
   orderType,
@@ -676,15 +774,7 @@ function OrderCard({
           </p>
         </div>
         {compact && (
-          <DeliveryTypeIcon
-            orderType={order.orderType}
-            className="h-5 w-5 flex-shrink-0"
-            blink={
-              order.orderType === OrderType.DELIVERY &&
-              order.status !== OrderStatus.ENTREGADO &&
-              order.status !== OrderStatus.ANULADO
-            }
-          />
+          <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
         )}
         </div>
       </CardHeader>
@@ -733,15 +823,7 @@ function OrderCard({
                 isDeliveredNotPaid ? "text-red-500" : "text-white"
               }`}
             >
-              <DeliveryTypeIcon
-                orderType={order.orderType}
-                className="h-6 w-6 flex-shrink-0"
-                blink={
-                  order.orderType === OrderType.DELIVERY &&
-                  order.status !== OrderStatus.ENTREGADO &&
-                  order.status !== OrderStatus.ANULADO
-                }
-              />
+              <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
               {showPaymentIcon && order.paymentMethod && (
                 <PaymentMethodIcon order={order} className="h-6 w-6" />
               )}

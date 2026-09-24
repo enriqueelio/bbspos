@@ -43,6 +43,11 @@ export interface PosCartSnapshot {
   customerId: string | null;
   deliveryType: PosDeliveryType | "";
   notes: string;
+  /** Hora pactada de una reserva en ISO 8601; "" = pedido normal sin reserva. */
+  scheduledFor: string;
+  /** Minutos antes de la hora pactada en que hay que avisar/iluminar la
+   *  reserva en la cola (se configura por reserva al crearla; default 30). */
+  reserveLeadMin: number;
 }
 
 const listeners = new Set<() => void>();
@@ -104,16 +109,31 @@ let customerId =
 // elige "Para mesa" o "Para llevar" (o se toma por defecto al enviar).
 let deliveryType: PosDeliveryType | "" = "";
 let notes = typeof stored.notes === "string" ? stored.notes : "";
+let scheduledFor = typeof stored.scheduledFor === "string" ? stored.scheduledFor : "";
+let reserveLeadMin =
+  typeof stored.reserveLeadMin === "number" && stored.reserveLeadMin > 0
+    ? stored.reserveLeadMin
+    : 30;
 let snapshot: PosCartSnapshot = {
   items,
   customerName,
   customerId,
   deliveryType,
   notes,
+  scheduledFor,
+  reserveLeadMin,
 };
 
 function emit() {
-  snapshot = { items, customerName, customerId, deliveryType, notes };
+  snapshot = {
+    items,
+    customerName,
+    customerId,
+    deliveryType,
+    notes,
+    scheduledFor,
+    reserveLeadMin,
+  };
   for (const listener of listeners) listener();
 }
 
@@ -220,12 +240,28 @@ export function setPosNotes(text: string) {
   persistState();
 }
 
+/** Fija (ISO string) o limpia (con "" ) la hora pactada de una reserva. */
+export function setPosScheduledFor(iso: string) {
+  scheduledFor = iso;
+  emit();
+  persistState();
+}
+
+/** Minutos antes de la hora pactada para avisar de la reserva (>= 1). */
+export function setPosReserveLeadMin(min: number) {
+  reserveLeadMin = Math.max(1, Math.trunc(min));
+  emit();
+  persistState();
+}
+
 export function clearPosCart() {
   items = [];
   customerName = "";
   customerId = null;
   deliveryType = "";
   notes = "";
+  scheduledFor = "";
+  reserveLeadMin = 30;
   emit();
   if (typeof window !== "undefined") {
     try {
@@ -253,6 +289,8 @@ const SERVER_SNAPSHOT: PosCartSnapshot = {
   customerId: null,
   deliveryType: "",
   notes: "",
+  scheduledFor: "",
+  reserveLeadMin: 30,
 };
 
 export function usePosCart() {
@@ -271,6 +309,8 @@ export function usePosCart() {
     setCustomerId: setPosCustomerId,
     setDeliveryType: setPosDeliveryType,
     setNotes: setPosNotes,
+    setScheduledFor: setPosScheduledFor,
+    setReserveLeadMin: setPosReserveLeadMin,
     clear: clearPosCart,
   };
 }

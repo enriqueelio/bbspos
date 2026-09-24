@@ -441,6 +441,12 @@ export interface Order {
   notes?: string | null;
   customerId?: string | null;
   orderType?: OrderType;
+  /** Hora pactada de entrega de una reserva (null = pedido inmediato). */
+  scheduledFor?: string | null;
+  /** true = la reserva fue confirmada y ya preparada/pagada. */
+  reservationConfirmed?: boolean;
+  /** Minutos antes de scheduledFor en que se empieza a avisar/confirmar. */
+  reserveLeadMin?: number;
   total: number;
   createdAt: string;
   acceptedAt?: string | null;

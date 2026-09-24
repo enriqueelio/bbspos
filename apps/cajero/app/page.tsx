@@ -38,6 +38,9 @@ function toPlainOrder(order: {
   paymentMethod: string | null;
   paymentMethod2: string | null;
   paymentAmount2: number | null;
+  scheduledFor: Date | null;
+  reservationConfirmed: boolean;
+  reserveLeadMin: number;
   items: {
     id: string;
     sizeName: string | null;
@@ -76,6 +79,9 @@ function toPlainOrder(order: {
     paymentMethod2:
       (order.paymentMethod2 as Order["paymentMethod2"]) ?? null,
     paymentAmount2: order.paymentAmount2,
+    scheduledFor: order.scheduledFor?.toISOString() ?? null,
+    reservationConfirmed: order.reservationConfirmed,
+    reserveLeadMin: order.reserveLeadMin,
     items: order.items.map((item) => ({
       id: item.id,
       sizeName: item.sizeName,
@@ -95,14 +101,21 @@ function toPlainOrder(order: {
   };
 }
 
-/** Pedidos activos (cola) y clientes pensionados para todo el día de hoy. */
+/** Pedidos del día (cola) y clientes pensionados. La cola incluye también los
+ *  anulados para la pestaña ENTREGADOS/ANULADO; las reservas sin confirmar se
+ *  distinguen por scheduledFor. */
 async function getQueueData() {
   const bounds = dayBounds(todayKey());
   const [rows, dbCustomers] = await Promise.all([
     prisma.order.findMany({
       where: {
         status: {
-          in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO, OrderStatus.ENTREGADO],
+          in: [
+            OrderStatus.RECIBIDO,
+            OrderStatus.ACEPTADO,
+            OrderStatus.ENTREGADO,
+            OrderStatus.ANULADO,
+          ],
         },
         createdAt: { gte: bounds.gte, lt: bounds.lt },
       },
@@ -140,7 +153,8 @@ async function getQueueData() {
 }
 
 /** Pedidos reimprimibles del día (Recibido o Aceptado), los más recientes
- *  primero, para el submenú de Reimpresión de la rueda dentada. */
+ *  primero, para el submenú de Reimpresión de la rueda dentada. Las reservas
+ *  sin confirmar se excluyen: su comanda se imprime al confirmarlas. */
 async function getPrintableOrders(): Promise<ReprintOrderOption[]> {
   const bounds = dayBounds(todayKey());
   const rows = await prisma.order.findMany({
@@ -148,6 +162,7 @@ async function getPrintableOrders(): Promise<ReprintOrderOption[]> {
       status: {
         in: [OrderStatus.RECIBIDO, OrderStatus.ACEPTADO],
       },
+      OR: [{ scheduledFor: null }, { reservationConfirmed: true }],
       createdAt: { gte: bounds.gte, lt: bounds.lt },
     },
     orderBy: { createdAt: "desc" },

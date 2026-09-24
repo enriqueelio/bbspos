@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Search,
-  ChevronDown,
   Utensils,
   Bike,
   Banknote,
@@ -39,6 +38,7 @@ import {
   acceptOrder,
   acceptPensionOrder,
   acceptQueueOrder,
+  cancelReservation,
   deliverOrder,
   updateOrderDeliveryType,
 } from "@/app/actions/orders";
@@ -270,6 +270,41 @@ function horaCreacion(order: Order): string {
   ).padStart(2, "0")}`;
 }
 
+// ¿Es una reserva aún sin confirmar (esperando su franja horaria)?
+function isReservation(order: Order): boolean {
+  return (
+    Boolean(order.scheduledFor) &&
+    !order.reservationConfirmed &&
+    order.status !== OrderStatus.ANULADO &&
+    order.status !== OrderStatus.ENTREGADO
+  );
+}
+
+// Hora pactada de la reserva en formato HH:MM.
+function horaReserva(order: Order): string {
+  if (!order.scheduledFor) return "";
+  const d = new Date(order.scheduledFor);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
+// Minutos que faltan para la hora pactada (negativo = ya pasó).
+function minsToScheduled(order: Order, nowMs: number): number {
+  if (!order.scheduledFor) return 0;
+  return Math.floor((new Date(order.scheduledFor).getTime() - nowMs) / 60_000);
+}
+
+// La card de la reserva se ilumina (aviso) cuando ya está dentro de su ventana:
+// now >= scheduledFor - reserveLeadMin (el "cuántos minutos antes" por reserva).
+function inReservationWindow(order: Order, nowMs: number): boolean {
+  if (!order.scheduledFor) return false;
+  const warningAt =
+    new Date(order.scheduledFor).getTime() -
+    (order.reserveLeadMin ?? 30) * 60_000;
+  return nowMs >= warningAt;
+}
+
 function useQueueClock(orders: Order[]) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -463,19 +498,25 @@ function ItemsList({
 
 /** Botón único de cobro con menú emergente de métodos de pago.
  *  El menú se renderiza en un portal flotante (fixed) para que nunca quede
- *  recortado por el overflow del scroll de la columna ni de las tarjetas. */
+ *  recortado por el overflow del scroll de la columna ni de las tarjetas.
+ *  En una reserva actúa como el CONFIRMAR: cobra, confirma la reserva y
+ *  manda la comanda a impresión (ver acceptOrder/acceptPensionOrder). */
 function ChargeButton({
   order,
   clock,
   onSplit,
   onPension,
   compact = false,
+  label = "Cobrar",
+  accent = "red",
 }: {
   order: Order;
   clock: ReturnType<typeof useQueueClock>;
   onSplit: () => void;
   onPension: () => void;
   compact?: boolean;
+  label?: string;
+  accent?: "red" | "blue";
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{
@@ -590,7 +631,11 @@ function ChargeButton({
     <div ref={ref} className="relative">
       <Button
         size={compact ? "default" : "lg"}
-        className={`animate-pulse bg-gradient-to-b from-red-500 to-red-600 font-black text-white shadow-lg shadow-red-950/50 transition-all hover:from-red-400 hover:to-red-500 hover:animate-none active:scale-[0.98] ${
+        className={`animate-pulse font-black text-white shadow-lg transition-all hover:animate-none active:scale-[0.98] ${
+          accent === "blue"
+            ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/50 hover:from-blue-400 hover:to-blue-500"
+            : "bg-gradient-to-b from-red-500 to-red-600 shadow-red-950/50 hover:from-red-400 hover:to-red-500"
+        } ${
           compact
             ? "h-10 px-4 text-sm"
             : "h-14 text-xl"
@@ -602,7 +647,7 @@ function ChargeButton({
           setOpen((v) => !v);
         }}
       >
-        {clock.busyId === order.id ? "Cobrando…" : "Cobrar"}
+        {clock.busyId === order.id ? "Confirmando…" : label}
       </Button>
 
       {menu}
@@ -632,6 +677,9 @@ function OrderCard({
   const [showSplit, setShowSplit] = useState(false);
   const [showPension, setShowPension] = useState(false);
   const visual = visualStateOf(order);
+  const reservation = isReservation(order);
+  const devoAvisar = inReservationWindow(order, clock.now);
+  const minsFaltan = minsToScheduled(order, clock.now);
   const isDeliveredNotPaid =
     order.deliveredAt !== null && order.paidAt === null;
   const isPending = clock.busyId === order.id;
@@ -667,12 +715,18 @@ function OrderCard({
       <Card
         className={cn(
           "animate-in fade-in slide-in-from-bottom-4 duration-200",
-          orderCardVariants({ visual }),
-          isFinished
-            ? ""
-            : orderTypeBackgroundVariants({
-                orderType: order.orderType ?? OrderType.LLEVAR,
-              }),
+          reservation
+            ? devoAvisar
+              ? "border-red-500 animate-glow-red ring-1 ring-red-500/60"
+              : "border-slate-600 bg-slate-900/80 ring-1 ring-slate-600/40"
+            : cn(
+                orderCardVariants({ visual }),
+                isFinished
+                  ? ""
+                  : orderTypeBackgroundVariants({
+                      orderType: order.orderType ?? OrderType.LLEVAR,
+                    }),
+              ),
         )}
       >
       {collapsed ? (
@@ -691,8 +745,20 @@ function OrderCard({
             >
               #{formatOrderCode(ticketOf(order))}
             </span>
-            {demora > 0 && (
-              <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
+            {reservation ? (
+              <span
+                className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  devoAvisar
+                    ? "border-red-500 bg-red-500/20 text-red-300 animate-pulse"
+                    : "border-purple-500/50 bg-purple-500/10 text-purple-300"
+                }`}
+              >
+                Reserva {horaReserva(order)}
+              </span>
+            ) : (
+              demora > 0 && (
+                <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
+              )
             )}
             {order.customerName && (
               <span
@@ -717,7 +783,7 @@ function OrderCard({
                 compact ? "text-xs" : "text-sm"
               }`}
             >
-              {horaCreacion(order)}
+              {reservation ? horaReserva(order) : horaCreacion(order)}
             </span>
             <DeliveryTypeIcon
               orderType={order.orderType}
@@ -769,8 +835,32 @@ function OrderCard({
               compact ? "text-xs" : "text-base"
             }`}
           >
-            {horaCreacion(order)}
-            <AgeBadge order={order} now={clock.now} />
+            {reservation
+              ? (
+                  <>
+                    Reserva {horaReserva(order)}
+                    <span
+                      className={cn(
+                        "font-bold",
+                        devoAvisar
+                          ? "text-red-500 animate-pulse"
+                          : "text-purple-300",
+                      )}
+                    >
+                      {minsFaltan >= 0
+                        ? `Falta ${formatDurationMinutes(minsFaltan)}`
+                        : "Ya es la hora"}
+                      {(order.reserveLeadMin ?? 30) > 0 &&
+                        ` · Avisar ${order.reserveLeadMin ?? 30} min antes`}
+                    </span>
+                  </>
+                )
+              : (
+                  <>
+                    {horaCreacion(order)}
+                    <AgeBadge order={order} now={clock.now} />
+                  </>
+                )}
           </p>
         </div>
         {compact && (
@@ -854,8 +944,45 @@ function OrderCard({
               </Button>
             )}
 
+            {/* RESERVACIÓN sin confirmar: CONFIRMAR abre el cobro (= pago al
+                confirmar), se marca la reserva y se imprime la comanda. La
+                anulación reusa el flujo ANULADO existente (motivo opcional). */}
+            {reservation && billing && (
+              <div className="flex w-full items-center gap-2">
+                <ChargeButton
+                  order={order}
+                  clock={clock}
+                  onSplit={() => setShowSplit(true)}
+                  onPension={() => setShowPension(true)}
+                  compact={compact}
+                  label="Confirmar"
+                  accent="blue"
+                />
+                <Button
+                  size={compact ? "default" : "lg"}
+                  variant="secondary"
+                  className={`bg-red-600/90 hover:bg-red-500 text-white ${
+                    compact ? "h-10 w-auto px-3 text-sm" : "h-14 px-4"
+                  }`}
+                  disabled={clock.busyId === order.id}
+                  onClick={() =>
+                    clock.askConfirm(
+                      order.id,
+                      "¿Anulas esta reserva? El pedido desaparece de la cola.",
+                      async () => {
+                        await cancelReservation(order.id);
+                      },
+                    )
+                  }
+                >
+                  Anular
+                </Button>
+              </div>
+            )}
+
             {/* ACEPTADO sin cobrar: el cajero puede registrar el pago después */}
-            {order.status === OrderStatus.ACEPTADO &&
+            {!reservation &&
+              order.status === OrderStatus.ACEPTADO &&
               !order.paidAt &&
               (billing ? (
                 <ChargeButton
@@ -892,7 +1019,7 @@ function OrderCard({
 
 {/* Pedido ACEPTADO: siempre se puede marcar como entregado,
                 pague el cliente antes o después de la entrega */}
-            {order.status === OrderStatus.ACEPTADO && (
+            {!reservation && order.status === OrderStatus.ACEPTADO && (
 <Button
                   size={compact ? "default" : "lg"}
                   className={`bg-emerald-500 hover:bg-emerald-600 text-white ${
@@ -917,10 +1044,12 @@ function OrderCard({
             <Badge
               className={cn(
                 "shrink-0 text-base",
-                orderBadgeVariants({ visual }),
+                reservation
+                  ? "border-purple-500 bg-purple-600 text-white"
+                  : orderBadgeVariants({ visual }),
               )}
             >
-              {OrderStatusLabel[order.status]}
+              {reservation ? "Reserva" : OrderStatusLabel[order.status]}
             </Badge>
           )}
         </div>
@@ -1050,54 +1179,6 @@ function ConfirmDialog({
 // Acordeón de grupo: cabecera con chevrón y contenido desplegable. Si no es
 // colapsable (siempre visible) el clic no hace nada y el contenido se muestra
 // abierto en todo momento.
-function QueueGroupAccordion({
-  title,
-  count,
-  open,
-  collapsible = false,
-  onToggle,
-  children,
-}: {
-  title: string;
-  count: number;
-  open: boolean;
-  collapsible?: boolean;
-  onToggle?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={collapsible ? onToggle : undefined}
-        disabled={!collapsible}
-        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors ${
-          collapsible
-            ? "cursor-pointer hover:bg-slate-900/60"
-            : "cursor-default"
-        }`}
-      >
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${
-            open ? "" : "-rotate-90"
-          }`}
-        />
-        <span className="truncate text-sm font-black uppercase tracking-wide text-white">
-          {title}
-        </span>
-        {count > 0 && (
-          <Badge variant="outline" className="ml-auto shrink-0">
-            {count}
-          </Badge>
-        )}
-      </button>
-      {open && (
-        <div className="space-y-3 border-t border-slate-800 p-3">{children}</div>
-      )}
-    </Card>
-  );
-}
-
 export function QueueView({
   orders,
   role,
@@ -1114,12 +1195,13 @@ export function QueueView({
     role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
   const [query, setQuery] = useState("");
+  // Pestañas: Reservas / En producción / Entregados. Por defecto muestro
+  // Reservas si hay alguna, si no, Producción (la vista activa de la cocina).
+  const [tab, setTab] = useState<"reservas" | "produccion" | "entregados">(
+    () => (orders.some(isReservation) ? "reservas" : "produccion"),
+  );
   // Acordeón único: solo una tarjeta expandida a la vez en toda la cola.
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Grupo "Pedidos completados": contraído por defecto; el de pendientes
-  // siempre está visible (no colapsa).
-  const [completedOpen, setCompletedOpen] = useState(false);
-  // Pedidos recién llegados a la cola, en parpadeo azul durante 2 segundos.
   const [flashingIds, setFlashingIds] = useState<Set<string>>(new Set());
   // Ref de las tarjetas para auto-scroll cuando entra un pedido nuevo.
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
@@ -1136,6 +1218,9 @@ export function QueueView({
     const fresh = orders.filter((o) => !knownIds.current!.has(o.id));
     if (fresh.length === 0) return;
     knownIds.current = new Set(orders.map((o) => o.id));
+    // Si llega una reserva nueva saltamos a la pestaña de reservas para que se
+    // registre (no se pierde en la vista de producción).
+    if (fresh.some(isReservation)) setTab("reservas");
     const newest = fresh.reduce((a, b) => (ticketOf(a) >= ticketOf(b) ? a : b));
     // El pedido nuevo aterriza desplegado (para ver sus ítems y botones). Al
     // ser acordeón único, esto cierra cualquier otra tarjeta abierta.
@@ -1172,27 +1257,9 @@ export function QueueView({
     );
   }
 
-  const pendingCount = orders.filter(
-    (o) =>
-      o.status === OrderStatus.RECIBIDO ||
-      o.status === OrderStatus.ACEPTADO ||
-      (o.status === OrderStatus.ENTREGADO && !o.paidAt),
-  ).length;
-
-  // Agrupa completados (entregados Y cobrados) en el grupo superior y
-  // pendientes (no cobrados o no entregados) en el inferior; dentro de cada
-  // grupo ordena ascendente por número de ticket (seq). El array `ordered` ya
-  // lleva ambos criterios aplicados y los dos acordeones lo dividen en bloques.
-  const isComplete = (o: Order) =>
-    o.status === OrderStatus.ENTREGADO && Boolean(o.paidAt);
-
-  const ordered = [...orders].sort((a, b) => {
-    const aDone = isComplete(a) ? 0 : 1;
-    const bDone = isComplete(b) ? 0 : 1;
-    const diff = aDone - bDone;
-    if (diff !== 0) return diff;
-    return ticketOf(a) - ticketOf(b);
-  });
+  // Orden base de la cola: ascendente por número de ticket (seq). Cada
+  // pestaña consume el subconjunto que le corresponde de este array.
+  const ordered = [...orders].sort((a, b) => ticketOf(a) - ticketOf(b));
 
   // Búsqueda libre sobre la cola: número de pedido, nombre/mesa y hora.
   const q = query.trim().toLowerCase();
@@ -1200,15 +1267,39 @@ export function QueueView({
     ? ordered.filter((order) => {
         const code = formatOrderCode(ticketOf(order)).toLowerCase();
         const name = order.customerName?.toLowerCase() ?? "";
-        const hour = horaCreacion(order).toLowerCase();
+        const hour = (order.scheduledFor ? horaReserva(order) : horaCreacion(order)).toLowerCase();
         return code.includes(q) || name.includes(q) || hour.includes(q);
       })
     : ordered;
 
-  // Dos grupos con el sort ascendente por seq ya aplicado: los completados
-  // (entregados Y cobrados) y los pendientes (el resto de la cola).
-  const completados = filtered.filter((o) => isComplete(o));
-  const pendientes = filtered.filter((o) => !isComplete(o));
+  // Grupos por pestaña (el sort ascendente por seq ya está aplicado en
+  // `ordered`):
+  // - Reservas: hora pactada aún sin confirmar (su comanda se imprime al
+  //   confirmarlas desde el cajero).
+  // - En producción: Recibidos/Aceptados reales (incluye reservas ya
+  //   confirmadas, cuyo timer arrancó al cobrarse).
+  // - Entregados: historial del día (Entregados y Anulados).
+  const reservas = filtered
+    .filter(
+      (o) =>
+        isReservation(o) &&
+        o.status !== OrderStatus.ENTREGADO &&
+        o.status !== OrderStatus.ANULADO,
+    )
+    .sort((a, b) => ticketOf(a) - ticketOf(b));
+  const produccion = filtered.filter(
+    (o) =>
+      !isReservation(o) &&
+      (o.status === OrderStatus.RECIBIDO ||
+        o.status === OrderStatus.ACEPTADO),
+  );
+  const entregados = filtered.filter(
+    (o) =>
+      o.status === OrderStatus.ENTREGADO || o.status === OrderStatus.ANULADO,
+  );
+
+  const pendientes = reservas;
+  const pendingCount = pendientes.length + produccion.length;
 
   return (
     <div className="space-y-6">
@@ -1262,60 +1353,125 @@ export function QueueView({
           </p>
         ) : (
           <>
-            <QueueGroupAccordion
-              title="Pedidos pendientes"
-              count={pendientes.length}
-              open
-            >
-              {pendientes.map((order) => (
-                <div
-                  key={order.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(order.id, el);
-                    else cardRefs.current.delete(order.id);
-                  }}
+            {/* Pestañas de la cola */}
+            <div className="flex gap-1 rounded-lg border border-slate-800 bg-slate-950/60 p-1">
+              {(
+                [
+                  { key: "reservas", label: "Reservas", count: reservas.length, hint: "Actualizar a producción con el botón \"Confirmar\" (cobro + comanda)" },
+                  { key: "produccion", label: "En producción", count: produccion.length, hint: "Pedidos cobrados (con reserva o sin ella) en preparación" },
+                  { key: "entregados", label: "Entregados", count: entregados.length, hint: "Historial del día (entregados y anulados)" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`flex flex-1 items-baseline justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-black uppercase tracking-wide transition-colors ${
+                    tab === t.key
+                      ? "bg-white/10 text-white"
+                      : "text-slate-400 hover:bg-white/5 hover:text-white"
+                  }`}
+                  title={t.hint}
                 >
-                  <OrderCard
-                    order={order}
-                    clock={clock}
-                    billing={billing}
-                    customers={customers}
-                    compact={compact}
-                    expandedId={expandedId}
-                    setExpandedId={setExpandedId}
-                    flashing={flashingIds.has(order.id)}
-                  />
+                  {t.label}
+                  {t.count > 0 && (
+                    <span className="text-xs font-bold tabular-nums text-slate-400">
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Contenido de la pestaña activa */}
+            {tab === "reservas" &&
+              (reservas.length === 0 ? (
+                <p className="rounded-md border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
+                  No hay reservas pendientes. Crea una en el POS activando la
+                  opción Es reserva y su hora pactada.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {reservas.map((order) => (
+                    <div
+                      key={order.id}
+                      ref={(el) => {
+                        if (el) cardRefs.current.set(order.id, el);
+                        else cardRefs.current.delete(order.id);
+                      }}
+                    >
+                      <OrderCard
+                        order={order}
+                        clock={clock}
+                        billing={billing}
+                        customers={customers}
+                        compact={compact}
+                        expandedId={expandedId}
+                        setExpandedId={setExpandedId}
+                        flashing={flashingIds.has(order.id)}
+                      />
+                    </div>
+                  ))}
                 </div>
               ))}
-            </QueueGroupAccordion>
-            <QueueGroupAccordion
-              title="Pedidos completados"
-              count={completados.length}
-              open={completedOpen}
-              collapsible
-              onToggle={() => setCompletedOpen((v) => !v)}
-            >
-              {completados.map((order) => (
-                <div
-                  key={order.id}
-                  ref={(el) => {
-                    if (el) cardRefs.current.set(order.id, el);
-                    else cardRefs.current.delete(order.id);
-                  }}
-                >
-                  <OrderCard
-                    order={order}
-                    clock={clock}
-                    billing={billing}
-                    customers={customers}
-                    compact={compact}
-                    expandedId={expandedId}
-                    setExpandedId={setExpandedId}
-                    flashing={flashingIds.has(order.id)}
-                  />
+            {tab === "produccion" &&
+              (produccion.length === 0 ? (
+                <p className="rounded-md border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
+                  No hay pedidos en producción ahora mismo.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {produccion.map((order) => (
+                    <div
+                      key={order.id}
+                      ref={(el) => {
+                        if (el) cardRefs.current.set(order.id, el);
+                        else cardRefs.current.delete(order.id);
+                      }}
+                    >
+                      <OrderCard
+                        order={order}
+                        clock={clock}
+                        billing={billing}
+                        customers={customers}
+                        compact={compact}
+                        expandedId={expandedId}
+                        setExpandedId={setExpandedId}
+                        flashing={flashingIds.has(order.id)}
+                      />
+                    </div>
+                  ))}
                 </div>
               ))}
-            </QueueGroupAccordion>
+            {tab === "entregados" &&
+              (entregados.length === 0 ? (
+                <p className="rounded-md border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
+                  Aún no hay pedidos entregados ni anulados hoy.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {entregados.map((order) => (
+                    <div
+                      key={order.id}
+                      ref={(el) => {
+                        if (el) cardRefs.current.set(order.id, el);
+                        else cardRefs.current.delete(order.id);
+                      }}
+                    >
+                      <OrderCard
+                        order={order}
+                        clock={clock}
+                        billing={billing}
+                        customers={customers}
+                        compact={compact}
+                        expandedId={expandedId}
+                        setExpandedId={setExpandedId}
+                        flashing={flashingIds.has(order.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ))}
           </>
         )}
       </section>

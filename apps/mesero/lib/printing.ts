@@ -157,6 +157,10 @@ interface ComandaOrder {
   createdAt: Date;
   total: number;
   items: ComandaItem[];
+  /** Hora pactada de una reserva (se imprime "Reserva: HH:MM" bajo el tipo). */
+  scheduledFor?: Date | null;
+  /** Minutos antes de la hora pactada para avisar de la reserva. */
+  reserveLeadMin?: number | null;
 }
 
 // Ancho de la comanda en columnas de texto.
@@ -257,6 +261,16 @@ export function formatComanda(order: ComandaOrder): string {
 
   if (order.deliveryType) {
     lines.push(row("Tipo:", order.deliveryType));
+  }
+  if (order.scheduledFor) {
+    const d = new Date(order.scheduledFor);
+    const hh = `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes(),
+    ).padStart(2, "0")}`;
+    lines.push(row("Reserva:", hh));
+    if ((order.reserveLeadMin ?? 0) > 0) {
+      lines.push(row("Avisar:", `${order.reserveLeadMin} min antes`));
+    }
   }
   lines.push(repeat("-", WIDTH));
 

@@ -16,6 +16,60 @@ import {
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { accumulateCustomerLoyalty } from "@/app/actions/customers";
+import {
+  formatComanda,
+  getPrinterConfig,
+  printText,
+} from "@/lib/printing";
+
+/** Imprime la comanda de un pedido, best-effort: un fallo de impresora nunca
+ *  debe romper la acción de cobro. Se usa al confirmar una reserva. */
+async function tryPrintComanda(orderId: string) {
+  try {
+    const settings = await getPrinterConfig();
+    if (!settings) return;
+    const full = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { toppings: true } } },
+    });
+    if (!full) return;
+    await printText(
+      settings,
+      formatComanda({
+        seq: full.seq,
+        daySeq: full.daySeq,
+        customerName: full.customerName,
+        notes: full.notes,
+        deliveryType: full.deliveryType,
+        scheduledFor: full.scheduledFor,
+        reserveLeadMin: full.reserveLeadMin,
+        createdAt: full.createdAt,
+        total: full.total,
+        items: full.items.map((item) => ({
+          sizeName: item.sizeName,
+          flavorName: item.flavorName,
+          bobaTypeName: item.bobaTypeName,
+          menuItemName: item.menuItemName,
+          menuItemOptionName: item.menuItemOptionName,
+          menuItemDetail: item.menuItemDetail,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          toppings: item.toppings.map((t) => ({
+            toppingName: t.toppingName,
+            unitPrice: t.unitPrice,
+          })),
+        })),
+      }),
+      {
+        title: "ticket",
+        number: full.daySeq ?? full.seq,
+        date: full.createdAt,
+      },
+    );
+  } catch (e) {
+    console.error("No se pudo imprimir la comanda:", e);
+  }
+}
 
 /** Acepta en la cola un pedido RECIBIDO proveniente de la tienda web: lo pasa
  *  a ACEPTADO (empieza a prepararse en cocina) y arranca el timer de
@@ -144,6 +198,11 @@ export async function acceptOrder(
         // Unifica el inicio del reloj: si el pedido aún no fue aceptado
         // (RECIBIDO cobrado al instante), el timer arranca en este momento.
         acceptedAt: order.acceptedAt ?? new Date(),
+        // Al confirmar (cobrar) una reserva, la marca como confirmada: entra
+        // a producción y su comanda (diferida) se imprime aquí.
+        ...(order.scheduledFor && !order.reservationConfirmed
+          ? { reservationConfirmed: true }
+          : {}),
         paymentMethod: method as PaymentMethodType,
         paymentMethod2,
         paymentAmount2,
@@ -156,6 +215,12 @@ export async function acceptOrder(
       await accumulateCustomerLoyalty(tx, order.customerId, order.total, paidAt);
     }
   });
+
+  // Las reservas no imprimen al crearse: su comanda sale recién ahora, al
+  // confirmarlas en caja (best-effort; un fallo de impresora no rompe el cobro).
+  if (order.scheduledFor && !order.reservationConfirmed) {
+    await tryPrintComanda(orderId);
+  }
 
   revalidatePath("/");
 }
@@ -260,6 +325,11 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         // Unifica el inicio del reloj: si el pedido aún no fue aceptado
         // (RECIBIDO cobrado contra la cuenta al instante), arranca ahora.
         acceptedAt: order.acceptedAt ?? new Date(),
+        // Al confirmar (cobrar) una reserva, la marca como confirmada: entra
+        // a producción y su comanda (diferida) se imprime aquí.
+        ...(order.scheduledFor && !order.reservationConfirmed
+          ? { reservationConfirmed: true }
+          : {}),
         paymentMethod: PaymentMethod.PENSION,
         paidAt,
         userId,
@@ -268,6 +338,12 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
     });
     await accumulateCustomerLoyalty(tx, customerId, total, paidAt);
   });
+
+  // Las reservas no imprimen al crearse: su comanda sale recién ahora, al
+  // confirmarlas en caja (best-effort; un fallo de impresora no rompe el cobro).
+  if (order.scheduledFor && !order.reservationConfirmed) {
+    await tryPrintComanda(orderId);
+  }
 
   revalidatePath("/");
 }
@@ -353,6 +429,50 @@ export async function deliverOrder(orderId: string) {
       // El momento de entrega se registra una sola vez.
       deliveredAt: order.deliveredAt ?? new Date(),
       userId,
+    },
+  });
+
+  revalidatePath("/");
+}
+
+/** Anula una reserva desde la cola (botón "Anular"): la elimina de las
+ *  pendientes y queda en el historial como ANULADO. El motivo es opcional; el
+ *  pedido debe estar aún sin cobrar para poder anularse. */
+export async function cancelReservation(
+  orderId: string,
+  reason?: string,
+) {
+  const session = await getRequiredSession();
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("El pedido ya está anulado.");
+  }
+
+  if (order.status === OrderStatus.ENTREGADO) {
+    throw new Error("El pedido ya fue entregado.");
+  }
+
+  if (order.paidAt) {
+    throw new Error(
+      "El pedido ya fue cobrado; anúlalo desde Administración si es necesario.",
+    );
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: OrderStatus.ANULADO,
+      cancelledAt: new Date(),
+      canceledById: session.user.id,
+      cancelReason: reason?.trim() || null,
     },
   });
 

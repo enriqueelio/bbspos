@@ -103,6 +103,8 @@ export async function createOrder(
           customerName: full.customerName,
           notes: full.notes,
           deliveryType: full.deliveryType,
+          scheduledFor: full.scheduledFor,
+          reserveLeadMin: full.reserveLeadMin,
           createdAt: full.createdAt,
           total: full.total,
           items: full.items.map((item) => ({

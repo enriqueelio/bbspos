@@ -100,13 +100,17 @@ export async function getPosCatalog(): Promise<Catalog> {
 /** Crea un pedido de venta manual (POS): carrito, cliente y tipo de entrega.
  *  Asigna el seq (número de pedido), lo deja en ACEPTADO (pendiente de cobro)
  *  y calcula el total. El pago se registra después por el cajero, incluso tras
- *  la entrega. La comanda se imprime una sola vez, al crear el pedido. */
+ *  la entrega. La comanda se imprime una sola vez, al crear el pedido — salvo
+ *  reservas (`scheduledFor`): ahí se imprime al CONFIRMAR (cobro) desde la
+ *  cola, y hasta entonces la reserva espera su franja sin tickear producción. */
 export async function createPosOrder(
   items: CartItem[],
   customerName?: string,
   deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
   notes?: string | null,
   customerId?: string | null,
+  scheduledFor?: string | null,
+  reserveLeadMin?: number | null,
 ): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
 
@@ -121,6 +125,21 @@ export async function createPosOrder(
   if (!deliveryType) {
     throw new Error("Elige MESA, LLEVAR o DELIVERY.");
   }
+
+  // La reserva exige una hora pactada válida; el minuto de aviso se normaliza
+  // (>= 1, default 30) y la validación de "hora en el futuro" la hace el
+  // cliente (server strict por si acaso: se permite, igual se puede anular).
+  let scheduled: Date | null = null;
+  if (scheduledFor) {
+    const parsed = new Date(scheduledFor);
+    scheduled = Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const lead =
+    typeof reserveLeadMin === "number" &&
+    reserveLeadMin > 0 &&
+    Number.isFinite(reserveLeadMin)
+      ? Math.trunc(reserveLeadMin)
+      : 30;
 
   // El cliente vinculado (autocompletado/registro) debe existir para no violar
   // la llave foránea; el texto libre sin coincidencia queda como invitado
@@ -278,6 +297,9 @@ export async function createPosOrder(
           daySeq,
           total,
           tiempoEstimado,
+          scheduledFor: scheduled,
+          reservationConfirmed: scheduled ? false : undefined,
+          reserveLeadMin: lead,
           userId: dbUser ? dbUser.id : null,
           items: {
             create: orderItems,
@@ -296,49 +318,55 @@ export async function createPosOrder(
 
   // Impresión automática de la comanda al crear el pedido.
   // No bloquea la respuesta de la UI: si la impresora falla, solo se loguea.
-  try {
-    const settings = await getPrinterConfig();
-    if (settings) {
-      const printed = await prisma.order.findUnique({
-        where: { id: order.id },
-        include: { items: { include: { toppings: true } } },
-      });
-      if (printed) {
-        await printText(
-          settings,
-          formatComanda({
-            seq: printed.seq,
-            daySeq: printed.daySeq,
-            customerName: printed.customerName,
-            notes: printed.notes,
-            deliveryType: printed.deliveryType,
-            createdAt: printed.createdAt,
-            total: printed.total,
-            items: printed.items.map((item) => ({
-              sizeName: item.sizeName,
-              flavorName: item.flavorName,
-              bobaTypeName: item.bobaTypeName,
-              menuItemName: item.menuItemName,
-              menuItemOptionName: item.menuItemOptionName,
-              menuItemDetail: item.menuItemDetail,
-              unitPrice: item.unitPrice,
-              quantity: item.quantity,
-              toppings: item.toppings.map((t) => ({
-                toppingName: t.toppingName,
-                unitPrice: t.unitPrice,
+  // Las reservas NO imprimen aquí: su comanda se imprime al CONFIRMAR (cobro)
+  // cuando ya entran a producción.
+  if (!scheduled) {
+    try {
+      const settings = await getPrinterConfig();
+      if (settings) {
+        const printed = await prisma.order.findUnique({
+          where: { id: order.id },
+          include: { items: { include: { toppings: true } } },
+        });
+        if (printed) {
+          await printText(
+            settings,
+            formatComanda({
+              seq: printed.seq,
+              daySeq: printed.daySeq,
+              customerName: printed.customerName,
+              notes: printed.notes,
+              deliveryType: printed.deliveryType,
+              scheduledFor: printed.scheduledFor,
+              reserveLeadMin: printed.reserveLeadMin,
+              createdAt: printed.createdAt,
+              total: printed.total,
+              items: printed.items.map((item) => ({
+                sizeName: item.sizeName,
+                flavorName: item.flavorName,
+                bobaTypeName: item.bobaTypeName,
+                menuItemName: item.menuItemName,
+                menuItemOptionName: item.menuItemOptionName,
+                menuItemDetail: item.menuItemDetail,
+                unitPrice: item.unitPrice,
+                quantity: item.quantity,
+                toppings: item.toppings.map((t) => ({
+                  toppingName: t.toppingName,
+                  unitPrice: t.unitPrice,
+                })),
               })),
-            })),
-          }),
-          {
-            title: "ticket",
-            number: printed.daySeq ?? printed.seq,
-            date: printed.createdAt,
-          },
-        );
+            }),
+            {
+              title: "ticket",
+              number: printed.daySeq ?? printed.seq,
+              date: printed.createdAt,
+            },
+          );
+        }
       }
+    } catch (e) {
+      console.error("No se pudo imprimir la comanda al crear el pedido:", e);
     }
-  } catch (e) {
-    console.error("No se pudo imprimir la comanda al crear el pedido:", e);
   }
 
   return { orderId: order.id, seq: order.seq ?? 0, daySeq: order.daySeq ?? 0, total };

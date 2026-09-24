@@ -374,7 +374,10 @@ export function PosTerminal({
         deliveryType,
         cart.notes,
         customerId,
+        cart.scheduledFor || null,
+        cart.reserveLeadMin,
       );
+      const isReservation = cart.scheduledFor !== "";
       cart.clear();
       // Devuelve los selectores a su estado por defecto para no arrastrar
       // las opciones del pedido anterior.
@@ -389,7 +392,7 @@ export function PosTerminal({
         ? ` · Nivel ${loyalty.levelName} (${loyalty.points} pts)`
         : "";
       setNotice(
-        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}${loyaltyText}`,
+        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}${loyaltyText}${isReservation ? " · Reserva, confirmar desde la cola" : ""}`,
       );
       // El pedido se registra y el cajero/mesero se mantiene en Nueva Venta.
       router.push("/?tab=venta");

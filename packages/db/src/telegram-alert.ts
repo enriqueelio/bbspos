@@ -84,7 +84,9 @@ export async function checkDelayedOrders(): Promise<number> {
   });
 
   // Pedidos activos sin notificar. El reloj arranca en el inicio unificado:
-  // COALESCE(acceptedAt, createdAt) — igual que el badge del cajero.
+  // COALESCE(acceptedAt, createdAt) — igual que el badge del cajero —, salvo
+  // para reservas confirmadas, donde arranca en scheduledFor - tiempoEstimado
+  // (misma ventana efectiva). Las reservas SIN confirmar no se evalúan todavía.
   const rows = (await prisma.$queryRaw<
     {
       id: string;
@@ -94,19 +96,27 @@ export async function checkDelayedOrders(): Promise<number> {
       status: string;
       createdAt: Date;
       acceptedAt: Date | null;
+      scheduledFor: Date | null;
       tiempoEstimado: number;
     }[]
   >`
-    SELECT id, seq, daySeq, customerName, status, createdAt, acceptedAt, tiempoEstimado
+    SELECT id, seq, daySeq, customerName, status, createdAt, acceptedAt, scheduledFor, tiempoEstimado
     FROM "Order"
     WHERE delayNotified = 0
       AND paidAt IS NULL
       AND status IN ('ACEPTADO', 'ENTREGADO')
+      AND (scheduledFor IS NULL OR reservationConfirmed = 1)
   `) ?? [];
 
   let sent = 0;
   for (const order of rows) {
-    const start = order.acceptedAt ?? order.createdAt;
+    let start = order.acceptedAt ?? order.createdAt;
+    if (order.scheduledFor) {
+      const productionStart =
+        new Date(order.scheduledFor).getTime() -
+        order.tiempoEstimado * 60_000;
+      start = new Date(Math.max(start.getTime(), productionStart));
+    }
     const minutes = minutesSince(new Date(start));
     const demora = minutes - order.tiempoEstimado;
     // Solo se alerta cuando el pedido ya superó su tiempo estimado.

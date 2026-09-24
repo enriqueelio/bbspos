@@ -274,6 +274,8 @@ export async function createPosOrder(
             customerName: printed.customerName,
             notes: printed.notes,
             deliveryType: printed.deliveryType,
+            scheduledFor: printed.scheduledFor,
+            reserveLeadMin: printed.reserveLeadMin,
             createdAt: printed.createdAt,
             total: printed.total,
             items: printed.items.map((item) => ({

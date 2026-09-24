@@ -49,6 +49,8 @@ export async function reprintOrder(orderId: string): Promise<string> {
       customerName: order.customerName,
       notes: order.notes,
       deliveryType: order.deliveryType,
+      scheduledFor: order.scheduledFor,
+      reserveLeadMin: order.reserveLeadMin,
       createdAt: order.createdAt,
       total: order.total,
       items: order.items.map((item) => ({

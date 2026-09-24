@@ -222,6 +222,13 @@ model Order {
   customerName   String?
   deliveryType   DeliveryType?
   notes          String?
+  // Reserva: hora pactada de entrega. Mientras scheduledFor esté seteado y
+  // reservationConfirmed=false el pedido vive en la pestaña RESERVAS sin
+  // activar el reloj de producción; reserveLeadMin es cuántos minutos antes
+  // de scheduledFor debe iluminarse la card para avisar/confirmar.
+  scheduledFor         DateTime?
+  reservationConfirmed Boolean          @default(false)
+  reserveLeadMin       Int              @default(30)
   total          Int
   createdAt      DateTime         @default(now())
   acceptedAt     DateTime?

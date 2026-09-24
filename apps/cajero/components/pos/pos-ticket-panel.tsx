@@ -21,6 +21,15 @@ function deliveryLabel(type: PosDeliveryType) {
   return type === "MESA" ? "MESA" : type === "LLEVAR" ? "LLEVAR" : "DELIVERY";
 }
 
+// ISO → valor local para <input type="datetime-local"> (YYYY-MM-DDTHH:mm).
+function toLocalDateTime(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function PosTicketPanel({
   cart,
   isBilling,
@@ -384,6 +393,64 @@ export function PosTicketPanel({
           title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
           className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
         />
+
+        {/* Reserva: hora pactada + minutos antes para avisar (solo cajero/
+            admin). La reserva NO imprime comanda al crearse; entra en la cola
+            como reserva y se confirma (cobro + comanda) en su momento. */}
+        {isBilling && (
+          <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-2">
+            <label className="flex cursor-pointer select-none items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-purple-300">
+                Es reserva
+              </span>
+              <input
+                type="checkbox"
+                checked={cart.scheduledFor !== ""}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    // Por defecto fija la hora pactada a +30 min.
+                    const d = new Date(Date.now() + 30 * 60_000);
+                    cart.setScheduledFor(d.toISOString());
+                  } else {
+                    cart.setScheduledFor("");
+                  }
+                }}
+                className="h-5 w-5 accent-purple-500"
+              />
+            </label>
+            {cart.scheduledFor !== "" && (
+              <>
+                <input
+                  type="datetime-local"
+                  value={toLocalDateTime(cart.scheduledFor)}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      cart.setScheduledFor(new Date(e.target.value).toISOString());
+                    }
+                  }}
+                  className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:border-purple-400/70 focus:outline-none transition-shadow"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    Avisar
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={cart.reserveLeadMin}
+                    onChange={(e) =>
+                      cart.setReserveLeadMin(Number(e.target.value))
+                    }
+                    className="h-8 w-16 rounded-lg border border-slate-700 bg-slate-800 px-2 text-center text-sm font-bold text-slate-200 focus:border-purple-400/70 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500">
+                    min antes (en la cola)
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         <button
           type="button"

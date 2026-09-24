@@ -3,7 +3,7 @@
 import { after } from "next/server";
 import { prisma, todayKey } from "@bbspos/db";
 import { cartItemUnitTotal, type CartItem } from "@bbspos/types";
-import { formatComanda, getPrinterName, printText } from "@/lib/printing";
+import { formatComanda, getPrinterConfig, printText } from "@/lib/printing";
 import productosTiempoData from "../../../../data/productos-tiempo.json";
 
 const productosTiempo = productosTiempoData as Record<string, number>;
@@ -87,8 +87,8 @@ export async function createOrder(
   // un fallo de impresora nunca debe impedir crear el pedido.
   after(async () => {
     try {
-      const printerName = getPrinterName();
-      if (!printerName) return;
+      const settings = await getPrinterConfig();
+      if (!settings) return;
 
       const full = await prisma.order.findUniqueOrThrow({
         where: { id: order.id },
@@ -96,11 +96,13 @@ export async function createOrder(
       });
 
       await printText(
-        printerName,
+        settings,
         formatComanda({
           seq: full.seq,
           daySeq: full.daySeq,
           customerName: full.customerName,
+          notes: full.notes,
+          deliveryType: full.deliveryType,
           createdAt: full.createdAt,
           total: full.total,
           items: full.items.map((item) => ({
@@ -117,6 +119,11 @@ export async function createOrder(
             })),
           })),
         }),
+        {
+          title: "ticket",
+          number: full.daySeq ?? full.seq,
+          date: full.createdAt,
+        },
       );
     } catch {
       // Sin impresora o con fallo de impresión: el pedido sigue válido.

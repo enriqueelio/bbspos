@@ -16,12 +16,6 @@ Monorepo pnpm `bbspos`: POS de té (Bubble Tea). Apps Next.js: `apps/admin` (300
 
 - `pnpm -r typecheck` · `pnpm -r lint` · `pnpm --filter @bbspos/cajero dev` (puerto 3002)
 
-## Tarea pendiente (mañana)
+## Nota
 
-Refactorizar `apps/admin/app/(dashboard)/orders/orders-client.tsx` para usar CVA, igual que la cola del cajero.
-
-- Centralizar los colores en un archivo de variantes (p. ej. reutilizar/adaptar `apps/cajero/components/orders/statusVariants.ts`: `orderBadgeVariants`, `orderCardVariants`, `visualStateOf`).
-- Reemplazar la función `statusVariant()` inline (mueve los colores al CVA).
-- Paleta de 5 estados: RECIBIDO = badge gris / borde azul · ACEPTADO = badge azul / borde amarillo · ENTREGADO sin cobrar = badge verde / borde rojo pulsante · ENTREGADO cobrado = badge verde / borde verde fijo · PAGADO sin entregar = badge naranja / borde verde.
-- No borrar lógica (filtros, sorting, acciones de anular/descontar/cobrar/entregar/reimprimir). Solo estilos con CVA.
-- Verificar `pnpm -r typecheck` y `pnpm -r lint` al terminar.
+- La tabla de pedidos del admin usa CVA (`apps/admin/components/orders/statusVariants.ts`, adaptado del cajero, incluye `ANULADO` como estado visual). El pulso rojo del borde usa `animate-border-pulse`, definido en `apps/admin/app/globals.css`.

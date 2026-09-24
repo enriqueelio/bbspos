@@ -13,7 +13,7 @@ import {
   type Catalog,
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
-import { printText, formatComanda, getPrinterName } from "@/lib/printing";
+import { printText, formatComanda, getPrinterConfig } from "@/lib/printing";
 import productosTiempoData from "../../../data/productos-tiempo.json";
 
 const productosTiempo = productosTiempoData as Record<string, number>;
@@ -297,19 +297,21 @@ export async function createPosOrder(
   // Impresión automática de la comanda al crear el pedido.
   // No bloquea la respuesta de la UI: si la impresora falla, solo se loguea.
   try {
-    const printerName = getPrinterName();
-    if (printerName) {
+    const settings = await getPrinterConfig();
+    if (settings) {
       const printed = await prisma.order.findUnique({
         where: { id: order.id },
         include: { items: { include: { toppings: true } } },
       });
       if (printed) {
         await printText(
-          printerName,
+          settings,
           formatComanda({
             seq: printed.seq,
             daySeq: printed.daySeq,
             customerName: printed.customerName,
+            notes: printed.notes,
+            deliveryType: printed.deliveryType,
             createdAt: printed.createdAt,
             total: printed.total,
             items: printed.items.map((item) => ({
@@ -327,6 +329,11 @@ export async function createPosOrder(
               })),
             })),
           }),
+          {
+            title: "ticket",
+            number: printed.daySeq ?? printed.seq,
+            date: printed.createdAt,
+          },
         );
       }
     }

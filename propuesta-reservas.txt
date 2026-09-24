@@ -1,0 +1,126 @@
+PROPUESTA FINAL ADOPTADA: RESERVAS EN EL CAJERO (BBSPOS V4)
+==========================================================
+
+Contexto: pedido hecho a las 14:00 para estar listo a las 20:00. Entra a la
+cola como RESERVA sin encender el timer ni imprimir comanda hasta que el
+operador la confirme (cocina no tiene impresora: la comanda la imprime el
+cajero y la lleva).
+
+DECISIONES TOMADAS
+------------------
+- Cola con 3 pestañas: RESERVAS / EN PRODUCCIÓN / ENTREGADOS.
+- La reserva pide "cuántos minutos antes avisar" (buffer POR reserva).
+- Cobro al CONFIRMAR en el cajero (no adelantado).
+- Captura SOLO en el cajero (la store no tiene reservas: es para clientes
+  presentes; el mesero queda fuera).
+
+1. MODELO DE DATOS (Prisma/SQLite) - migración manual + migrate deploy
+-----------------------------------------------------------------------
+Nuevas columnas en Order (ÚNICAS necesarias; el resto ya existe):
+   scheduledFor         DateTime?          -- hora pactada de entrega
+   reservationConfirmed Boolean @default(false)
+   reserveLeadMin       Int     @default(30) -- min antes de scheduledFor
+                                            -- para ILUMINAR la card + aviso
+
+Se REUSA lo existente (NO se crea enum nuevo ni campos de cancelación):
+   status  ANULADO  (ya existe; excluido de caja/reportes)
+   cancelledAt, cancelReason, canceledById/canceledBy (ya existen)
+
+NO stock: el sistema no tiene inventario (MenuItem sin stock). stockReserved
+y el DELETE mensual de rM quedan FUERA DE ALCANCE.
+
+migration.sql:
+   ALTER TABLE "Order" ADD COLUMN "scheduledFor"      TIMESTAMP(3);
+   ALTER TABLE "Order" ADD COLUMN "reservationConfirmed" BOOLEAN NOT NULL DEFAULT false;
+   ALTER TABLE "Order" ADD COLUMN "reserveLeadMin"    INTEGER NOT NULL DEFAULT 30;
+(migrate deploy; prisma generate requiere matar procesos node.)
+
+2. RELOJ DE DEMORA - FUENTE ÚNICA
+---------------------------------
+apps/cajero/lib/time.ts -> getStartTime():
+   startEfectivo = max( acceptedAt ?? createdAt,
+                        scheduledFor - tiempoEstimado )   // si scheduledFor
+
+Antes de la franja de producción: elapsed = 0 -> demora < 0 -> verde, sin
+alerta. El timer arranca cuando la producción debería comenzar.
+
+Misma fórmula en packages/db/src/telegram-alert.ts (agregar scheduledFor al
+SELECT y calcular la demora con la ventana efectiva) para no alertar antes.
+
+3. VENTANA DE AVISO / CONFIRMACIÓN (por reserva)
+-------------------------------------------------
+La card se ilumina cuando:  now >= scheduledFor - reserveLeadMin
+  - amarillo -> rojo parpadeante (opcional sonido reserva.mp3).
+  - botón grande [CONFIRMAR Y PASAR A COCINA].
+
+Nota: la demora (punto 2) va ligada a scheduledFor - tiempoEstimado; la
+ventana de aviso va ligada a scheduledFor - reserveLeadMin. Son conceptos
+separados a propósito (evita el bug de rM de demora +30min a la hora fija).
+
+4. FLUJO EN EL CAJERO
+---------------------
+A) CREAR RESERVA (solo en el panel de ticket / terminal del cajero):
+   - Checkbox "Es reserva?" -> DateTime "Para cuándo?" + "¿Cuántos minutos
+     antes avisar?" (default 30).
+   - Al guardar: scheduledFor set, reservationConfirmed=false, reserveLeadMin
+     = lo pedido, NO imprime comanda, NO descuenta nada, paidAt=null.
+   - Cae en la pestaña RESERVAS.
+
+B) PESTAÑAS:
+   1. RESERVAS  (scheduledFor != null AND reservationConfirmed = false AND
+                 status != ANULADO) - card gris "Reserva 20:00 · Juan ·
+                 Falta 5h 12m".
+   2. EN PRODUCCIÓN - pedidos inmediatos + reservas confirmadas.
+   3. ENTREGADOS - ENTREGADO y ANULADO (histórico del día).
+
+C) CONFIRMAR:
+   Botón CONFIRMAR -> abre el cobro (flujo de pago actual, markOrderPaid):
+     reservationConfirmed=true, acceptedAt=now(), paidAt/método, userId
+     -> mueve a EN PRODUCCIÓN
+     -> imprime la comanda EN CAJA (driver actual: windows o virtual-png)
+        con la línea "Reserva: HH:MM".
+   El botón se habilita desde la ventana de aviso (o siempre, a criterio del
+   operador).
+
+5. COMANDA
+----------
+formatComanda (las 4 copias siguen alineadas): cuando scheduledFor existe,
+bajo "Tipo:" imprimir:
+   Reserva: 20:00
+   Avisar: 30 min antes   (solo si aplica)
+En la estampación inicial de una reserva NO se imprime; al CONFIRMAR sí
+(reprint ya existe por si se necesita otra copia).
+
+6. CANCELACIÓN
+--------------
+Botón en la card de RESERVAS -> diálogo con motivo (opcional) ->
+   UPDATE status=ANULADO, cancelReason=..., cancelledAt=now(),
+          canceledById=usuario
+Desaparece de RESERVAS (filtro status != ANULADO) y queda en ENTREGADOS/
+ANULADO. Sin devolución de stock (no existe inventario). Es el flujo de
+anulación que ya tiene el sistema.
+
+7. IMPLEMENTACIÓN (archivos)
+----------------------------
+  1) packages/db/prisma/schema.prisma        -> 3 columnas en Order
+     packages/db/prisma/migrations/<fecha>_add_order_reservation/migration.sql
+  2) packages/types/src/index.ts             -> Order.scheduledFor?,
+     reservationConfirmed?, reserveLeadMin?
+  3) apps/cajero/lib/time.ts                 -> getStartTime (ventana efectiva)
+  4) packages/db/src/telegram-alert.ts       -> misma ventana en worker
+  5) apps/cajero/app/page.tsx                -> toPlainOrder + queries nuevas
+     (3 juegos según pestaña)
+  6) apps/cajero/components/queue-view.tsx   -> 3 pestañas, card reserva,
+     ventana de aviso, botón CONFIRMAR (abre cobro) + imprimir
+  7) apps/cajero/actions/pos.ts              -> input creación reserva
+     (checkbox + datetime + lead min), skip impresión al crear con scheduledFor
+  8) formatComanda (admin/cajero/mesero/store) -> "Reserva: HH:MM"
+     + pasar scheduledFor en los callers existentes (reprint incluye línea)
+
+8. FUERA DE ALCANCE (consciente)
+--------------------------------
+- Stock/descuento de inventario (no existe módulo).
+- Resumen de capacidad por franja horaria.
+- Reservas desde store/mesero (decisión: solo cajero).
+- Reservas que cruzan de día: hoy la cola filtra por createdAt del día;
+  documentar que el daySeq/ticket es del día de creación.

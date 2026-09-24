@@ -1,0 +1,46 @@
+PROPUESTA ACTUALIZADA: GESTIÓN DE PEDIDOS CON HORA DE RESERVA
+
+================================================================
+
+PROBLEMA Y OBJETIVO
+
+Actualmente, cualquier pedido creado entra inmediatamente a la cola de producción con el temporizador de demora corriendo al instante.
+Si un cliente realiza un pedido para ser entregado a las 20:00 (hecho a las 14:00), el sistema lo marca erróneamente como crítico o retrasado a los pocos minutos.
+Se requiere un sistema de reservas que permita registrar pedidos programados, mantenerlos en una pestaña exclusiva de "Reservas", activar su temporizador y comanda de forma inteligente antes de la hora acordada, y permitir cancelaciones limpias con auditoría.
+
+DISEÑO Y ARQUITECTURA PROPUESTA
+
+a) MODELO DE DATOS (Prisma / SQLite)
+
+Order.scheduledFor DateTime? -- Hora pactada de entrega/preparación.
+
+Soporte para estado CANCELLED en el esquema de órdenes para manejar anulaciones limpias sin borrado físico (preservando el registro histórico para auditoría).
+
+b) FUENTE ÚNICA DEL RELOJ INTELIGENTE (apps/cajero/lib/time.ts)
+
+El temporizador efectivo se calcula mediante:
+startTime = max( acceptedAt ?? createdAt, scheduledFor - tiempoEstimado )
+
+Antes de la franja horaria correspondiente, el temporizador permanece inactivo (demora < 0, sin alertas rojas).
+
+c) PESTAÑA EXCLUSIVA DE "RESERVAS" EN LA COLA
+
+En la interfaz del cajero/administración, se añade una sección o pestaña independiente llamada "Reservas" (separada de pedidos en curso y entregados).
+
+Las tarjetas muestran un distintivo claro (ej. "RESERVA 20:00") en lugar de un contador de antigüedad tradicional.
+
+d) FLUJO DE ACTIVACIÓN Y COMANDA
+
+Al aproximarse la franja horaria (o al confirmarse manualmente por el operador), la reserva pasa a la cola activa de producción.
+
+Se genera la orden de impresión automática de la comanda con la línea descriptiva Reserva: HH:MM para que cocina comience a trabajar a tiempo.
+
+e) GESTIÓN DE CANCELACIÓN (Opción 1 - Auditoría Limpia)
+
+Botón de anulación en la pestaña de reservas.
+
+Al anular, el pedido cambia su estado a CANCELLED, excluyéndolo de la caja, inventario y reportes activos, pero conservando el registro histórico en la base de datos.
+
+f) CAPTURA DE LA HORA
+
+Selector opcional de hora ("¿A qué hora deseas tu pedido?") integrado en el flujo de creación tanto en la tienda web como en el panel del cajero.

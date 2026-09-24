@@ -40,3 +40,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Borde izquierdo rojo pulsante para pedidos ENTREGADO sin cobrar en la
+   tabla de pedidos (el pulso varía la intensidad del color, no la opacidad
+   de toda la fila como haría animate-pulse). */
+@keyframes border-pulse {
+  0%,
+  100% {
+    border-left-color: rgb(239 68 68 / 1);
+  }
+  50% {
+    border-left-color: rgb(239 68 68 / 0.35);
+  }
+}
+
+.animate-border-pulse {
+  animation: border-pulse 2s ease-in-out infinite;
+}

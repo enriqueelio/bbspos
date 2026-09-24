@@ -1,0 +1,77 @@
+PROPUESTA FINAL ACTUALIZADA - SISTEMA DE RESERVAS - POSBB V3
+
+Fecha: 24/09/2026 - Con manejo de cancelaciones
+
+1. OBJETIVO
+
+Pedido hecho a las 14:00 para las 20:00 no debe activar timer hasta 30min antes.
+En cocina NO hay impresora, es el cajero quien lleva la comanda fisica.
+
+2. MODELO DE DATOS - CAMBIOS PRISMA
+
+packages/db/prisma/schema.prisma
+
+model Order {
+  scheduledFor          DateTime? // Hora que el cliente quiere
+  reservationConfirmed  Boolean  @default(false)
+  stockReserved         Boolean  @default(false)
+  cancellationReason    String?
+  cancelledAt           DateTime?
+  cancelledBy           String?
+  status                OrderStatus // agregar CANCELADO
+}
+
+OrderItem con onDelete: Cascade -> para no dejar productos huerfanos al borrar
+
+Migración:
+ALTER TABLE "Order" ADD COLUMN "scheduledFor" TIMESTAMP(3);
+ALTER TABLE "Order" ADD COLUMN "reservationConfirmed" BOOLEAN DEFAULT false;
+ALTER TABLE "Order" ADD COLUMN "stockReserved" BOOLEAN DEFAULT false;
+ALTER TABLE "Order" ADD COLUMN "cancellationReason" TEXT;
+ALTER TABLE "Order" ADD COLUMN "cancelledAt" TIMESTAMP(3);
+ALTER TABLE "Order" ADD COLUMN "cancelledBy" TEXT;
+
+3. FORMULA TIMER - FUENTE UNICA (DE OPENCODE)
+
+apps/cajero/lib/time.ts -> getStartTime()
+
+startEfectivo = max(acceptedAt ?? createdAt, scheduledFor - estimado - buffer30min)
+
+Si now < startEfectivo => delay = -1 (verde, no rojo)
+Si now >= startEfectivo => delay empieza a contar
+
+Misma formula en telegram-alert.ts para no alertar antes.
+
+4. FLUJO UI COMPLETO
+
+A) CREAR RESERVA:
+Checkbox [ ] Es Reserva? -> DateTime picker "Para cuando?"
+Al guardar: scheduledFor=20:00, reservationConfirmed=false, stockReserved=false, NO descuenta stock, NO imprime.
+
+B) 3 PESTAÑAS:
+1. RESERVAS (arriba, azul) - Card gris "Reserva 20:00 - Juan - Falta 5h 12m"
+2. EN PRODUCCION - Solo inmediatos + reservas confirmadas
+3. ENTREGADOS / CANCELADOS
+
+C) VENTANA 30min ANTES:
+- Card amarilla -> roja parpadeante + sonido reserva.mp3
+- Boton grande: [CONFIRMAR Y PASAR A COCINA]
+  Al confirmar: reservationConfirmed=true, acceptedAt=now(), stockReserved=true (descuenta stock), mueve a EN_PRODUCCION, imprime en CAJA (o genera PNG virtual), cajero lleva papel a cocina.
+
+5. CANCELACION - PARA QUE NO QUEDEN PRODUCTOS EN DB
+
+Caso 1 - ANTES de confirmar (14:00 cancela reserva 20:00):
+  stockReserved=false, no devuelve nada.
+  UPDATE status=CANCELADO, cancelledAt=now(), motivo, cancelledBy
+  Desaparece de RESERVAS por filtro where status != CANCELADO
+
+Caso 2 - DESPUES de confirmar (ya en EN_PRODUCCION):
+  releaseStock(order) -> devuelve stock
+  UPDATE status=CANCELADO
+
+Caso 3 - Limpieza fisica:
+  Job mensual DELETE de CANCELADOS >30 dias. Gracias a onDelete:Cascade se borran Order + OrderItems juntos, sin huerfanos.
+
+6. PROMPT PARA OPENCODE
+
+Implementa reservas V3: schema scheduledFor + reservationConfirmed + stockReserved + CANCELADO + Cascade, time.ts con max(acceptedAt, scheduledFor - estimado - 30min), queue-view con pestana RESERVAS arriba + alerta + boton confirmar que imprime en caja + cancelar con motivo, telegram-alert misma formula, captura hora en cajero/store. Importante: sin impresora en cocina, todo imprime en caja al confirmar.

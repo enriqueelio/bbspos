@@ -42,8 +42,8 @@ function deltaPct(current: number, previous: number): number | null {
 export async function printSummaryReport(): Promise<string> {
   await requireSession();
 
-  const printerName = (await getPrinterConfig())?.printerName;
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "Configura primero la impresora de comandas en la pestaña Impresora.",
     );
@@ -93,16 +93,20 @@ export async function printSummaryReport(): Promise<string> {
     pendingOrders,
   });
 
-  await printText(printerName, text);
-  return `Resumen enviado a "${printerName}".`;
+  await printText(settings, text, { title: "resumen", date: new Date() });
+  return `Resumen enviado${
+    settings.driver === "virtual-png"
+      ? " a la impresora virtual"
+      : ` a "${settings.printerName}"`
+  }.`;
 }
 
 /** Imprime en la impresora térmica el Cierre diario de una fecha (YYYY-MM-DD). */
 export async function printDailyReport(date?: string): Promise<string> {
   await requireSession();
 
-  const printerName = (await getPrinterConfig())?.printerName;
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "Configura primero la impresora de comandas en la pestaña Impresora.",
     );
@@ -209,8 +213,15 @@ export async function printDailyReport(date?: string): Promise<string> {
     cancellationsCount: cancelledAgg,
   });
 
-  await printText(printerName, text);
-  return `Cierre enviado a "${printerName}".`;
+  await printText(settings, text, {
+    title: "cierre",
+    date: date ?? isoLocal(todayLocal()),
+  });
+  return `Cierre enviado${
+    settings.driver === "virtual-png"
+      ? " a la impresora virtual"
+      : ` a "${settings.printerName}"`
+  }.`;
 }
 
 function isoLocal(d: { year: number; month: number; day: number }): string {

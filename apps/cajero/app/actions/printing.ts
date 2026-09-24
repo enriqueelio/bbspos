@@ -6,7 +6,7 @@ import { getCashierDailyData } from "@/lib/report";
 import {
   formatComanda,
   formatReportText,
-  getPrinterName,
+  getPrinterConfig,
   printText,
 } from "@/lib/printing";
 
@@ -14,8 +14,8 @@ import {
 export async function reprintOrder(orderId: string): Promise<string> {
   await getRequiredSession();
 
-  const printerName = getPrinterName();
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "No hay impresora configurada. Pide al administrador que la configure.",
     );
@@ -42,11 +42,13 @@ export async function reprintOrder(orderId: string): Promise<string> {
   }
 
   await printText(
-    printerName,
+    settings,
     formatComanda({
       seq: order.seq,
       daySeq: order.daySeq,
       customerName: order.customerName,
+      notes: order.notes,
+      deliveryType: order.deliveryType,
       createdAt: order.createdAt,
       total: order.total,
       items: order.items.map((item) => ({
@@ -64,6 +66,11 @@ export async function reprintOrder(orderId: string): Promise<string> {
         })),
       })),
     }),
+    {
+      title: "ticket",
+      number: order.daySeq ?? order.seq,
+      date: order.createdAt,
+    },
   );
 
   return `Comanda #${String(order.daySeq ?? order.seq ?? 0).padStart(3, "0")} enviada a la impresora.`;
@@ -73,18 +80,18 @@ export async function reprintOrder(orderId: string): Promise<string> {
 export async function printDailyReport(): Promise<string> {
   const session = await getRequiredSession();
 
-  const printerName = getPrinterName();
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "No hay impresora configurada. Pide al administrador que la configure.",
     );
   }
 
   const data = await getCashierDailyData(session.user.id);
-  await printText(
-    printerName,
-    formatReportText(data, session.user.name ?? ""),
-  );
+  await printText(settings, formatReportText(data, session.user.name ?? ""), {
+    title: "reporte",
+    date: data.date,
+  });
 
   return `Reporte del d�a (${data.date}) enviado a la impresora.`;
 }

@@ -294,6 +294,19 @@ model PaymentConfig {
   updatedAt DateTime @updatedAt
 }
 
+// Configuración de la impresora de comandas (registro único, id = "default").
+// driver "windows"     -> imprimir en una impresora instalada en Windows.
+// driver "virtual-png" -> guardar el ticket como imagen PNG (desarrollo/auditoría).
+// outputPath es relativo a la raíz del monorepo (ej. "./tickets-output").
+model PrinterConfig {
+  id           String   @id @default("default")
+  driver       String   @default("windows")
+  printerName  String?
+  outputPath   String   @default("./tickets-output")
+  paperWidthMm Int      @default(80)
+  updatedAt    DateTime @updatedAt
+}
+
 model DailyReportLog {
   // Día (YYYY-MM-DD) cuyo cierre de caja ya se envió a Telegram.
   date   String   @id

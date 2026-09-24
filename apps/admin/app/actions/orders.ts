@@ -225,8 +225,8 @@ export async function applyDiscount(
 export async function reprintOrder(orderId: string): Promise<string> {
   await getRequiredSession();
 
-  const printerName = (await getPrinterConfig())?.printerName;
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "Configura primero la impresora de comandas en la pesta�a Impresora.",
     );
@@ -242,11 +242,13 @@ export async function reprintOrder(orderId: string): Promise<string> {
   }
 
   await printText(
-    printerName,
+    settings,
     formatComanda({
       seq: order.seq,
       daySeq: order.daySeq,
       customerName: order.customerName,
+      notes: order.notes,
+      deliveryType: order.deliveryType,
       createdAt: order.createdAt,
       total: order.total,
       items: order.items.map((item) => ({
@@ -263,7 +265,14 @@ export async function reprintOrder(orderId: string): Promise<string> {
         })),
       })),
     }),
+    {
+      title: "ticket",
+      number: order.daySeq ?? order.seq,
+      date: order.createdAt,
+    },
   );
 
-  return `Comanda #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")} enviada a "${printerName}".`;
+  return `Comanda #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")} enviada${
+    settings.driver === "virtual-png" ? " a la impresora virtual" : ` a "${settings.printerName}"`
+  }.`;
 }

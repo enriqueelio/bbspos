@@ -20,6 +20,9 @@ build/
 # config local de impresora
 apps/store/printing.json
 
+# salida de la impresora térmica virtual PNG
+tickets-output/
+
 # artefactos PWA generados por next-pwa en cada build (no versionar)
 apps/store/public/sw.js
 apps/store/public/workbox-*.js

@@ -14,6 +14,7 @@
     "@bbspos/types": "workspace:*",
     "@bbspos/ui": "workspace:*",
     "bcryptjs": "^2.4.3",
+    "class-variance-authority": "^0.7.1",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",

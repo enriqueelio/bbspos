@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -33,6 +34,11 @@ import {
   reprintOrder,
 } from "@/app/actions/orders";
 import { SplitPaymentDialog } from "@/components/split-payment-dialog";
+import {
+  orderBadgeVariants,
+  orderCardVariants,
+  visualStateOf,
+} from "@/components/orders/statusVariants";
 
 // El ticket visible es el daySeq diario (#001...), no el seq global.
 function ticketOf(o: Pick<Order, "seq" | "daySeq">): number {
@@ -46,21 +52,6 @@ const FILTERS: { value: "ALL" | OrderStatus; label: string }[] = [
   { value: "ENTREGADO", label: "Entregados" },
   { value: "ANULADO", label: "Anulados" },
 ];
-
-function statusVariant(status: OrderStatus) {
-  switch (status) {
-    case "RECIBIDO":
-      return "warning" as const;
-    case "ACEPTADO":
-      return "default" as const;
-    case "ENTREGADO":
-      return "success" as const;
-    case "ANULADO":
-      return "destructive" as const;
-    default:
-      return "secondary" as const;
-  }
-}
 
 function runAction(
   fn: () => Promise<void>,
@@ -94,18 +85,21 @@ function AccordionRow({
   children: React.ReactNode;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const visual = visualStateOf(order);
 
   return (
     <>
       {/* Header row (clickable) */}
       <tr
-        className={`cursor-pointer select-none transition-colors hover:bg-slate-800/60 ${
+        className={cn(
+          "cursor-pointer select-none transition-colors hover:bg-slate-800/60 border-l-2",
+          orderCardVariants({ visual }),
           expanded
-            ? "bg-primary/10 border-l-2 border-l-primary"
+            ? "bg-primary/10"
             : index % 2 === 0
               ? "bg-slate-900/40"
-              : "bg-slate-900/20"
-        }`}
+              : "bg-slate-900/20",
+        )}
         onClick={onToggle}
       >
         <td className="whitespace-nowrap px-4 py-3 text-sm font-mono font-bold text-white">
@@ -141,7 +135,7 @@ function AccordionRow({
                 : PaymentMethodLabel[order.paymentMethod]}
             </Badge>
           )}
-          <Badge variant={statusVariant(order.status)}>
+          <Badge className={orderBadgeVariants({ visual: visualStateOf(order) })}>
             {order.status}
           </Badge>
         </td>
@@ -160,13 +154,15 @@ function AccordionRow({
             className="overflow-hidden transition-[max-height] duration-300 ease-in-out"
             style={{ maxHeight: expanded ? (contentRef.current?.scrollHeight ?? 1000) + "px" : "0px" }}
           >
-            <div className={`border-t border-slate-800 px-6 py-4 ${
+            <div className={cn(
+              "border-t border-slate-800 px-6 py-4 border-l-2",
+              orderCardVariants({ visual }),
               expanded
-                ? "bg-primary/5 border-l-2 border-l-primary"
+                ? "bg-primary/5"
                 : index % 2 === 0
                   ? "bg-slate-900/40"
-                  : "bg-slate-900/20"
-            }`}>
+                  : "bg-slate-900/20",
+            )}>
               {children}
             </div>
           </div>

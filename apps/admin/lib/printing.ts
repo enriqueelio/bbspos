@@ -1,9 +1,14 @@
 ﻿import { spawn } from "child_process";
-import { readFile, writeFile } from "fs/promises";
-import { join } from "path";
+import {
+  getPrinterSettings,
+  printVirtualPng,
+  savePrinterSettings,
+  type PrintJobMeta,
+  type PrinterSettings,
+} from "@bbspos/db";
 import { FlavorCategoryLabel, MenuCategoryLabel } from "@bbspos/types";
 
-const CONFIG_PATH = join(process.cwd(), "..", "store", "printing.json");
+export type { PrintJobMeta, PrinterSettings };
 
 export interface PrinterInfo {
   name: string;
@@ -11,8 +16,16 @@ export interface PrinterInfo {
   workOffline: boolean;
 }
 
-export interface PrinterConfig {
-  printerName: string;
+/** Configuración activa de la impresora (BD, con respaldo printing.json). */
+export function getPrinterConfig(): Promise<PrinterSettings | null> {
+  return getPrinterSettings();
+}
+
+/** Guarda la configuración de la impresora en la base de datos. */
+export function setPrinterConfig(
+  settings: PrinterSettings,
+): Promise<PrinterSettings> {
+  return savePrinterSettings(settings);
 }
 
 function runPowerShell(script: string, input?: string): Promise<string> {
@@ -94,32 +107,25 @@ export async function listPrinters(): Promise<PrinterInfo[]> {
     );
 }
 
-export async function getPrinterConfig(): Promise<PrinterConfig | null> {
-  try {
-    const raw = await readFile(CONFIG_PATH, "utf-8");
-    const parsed = JSON.parse(raw) as PrinterConfig;
-    return parsed.printerName ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setPrinterConfig(printerName: string): Promise<void> {
-  await writeFile(
-    CONFIG_PATH,
-    JSON.stringify({ printerName }, null, 2) + "\n",
-    "utf-8",
-  );
-}
-
 const TICKET_FONT_PT = 12;
 
-/** Envía texto plano a la impresora con letra grande y negritas, ajustada
- * para que la línea más larga quepa en el ancho del rollo térmico de 80mm. */
+/** Despacha un ticket: si el driver activo es "virtual-png" se renderiza el
+ *  texto como imagen PNG en la carpeta configurada; si es una impresora de
+ *  Windows se envía por ese medio con letra grande y negritas, ajustada
+ *  para que la línea más larga quepa en el ancho del rollo térmico de 80mm. */
 export async function printText(
-  printerName: string,
+  settings: PrinterSettings,
   text: string,
+  job?: PrintJobMeta,
 ): Promise<void> {
+  if (settings.driver === "virtual-png") {
+    await printVirtualPng(settings, text, job);
+    return;
+  }
+  const printerName = settings.printerName;
+  if (!printerName) {
+    throw new Error("Falta el nombre de la impresora de Windows.");
+  }
   const safeName = printerName.replace(/'/g, "''");
   const b64 = Buffer.from(text, "utf8").toString("base64");
   const script = [
@@ -194,10 +200,14 @@ interface ComandaItem {
   toppings: { toppingName: string; unitPrice: number }[];
 }
 
+type ComandaDeliveryType = "MESA" | "LLEVAR" | "DELIVERY";
+
 interface ComandaOrder {
   seq: number | null;
   daySeq: number | null;
   customerName: string | null;
+  notes: string | null;
+  deliveryType: ComandaDeliveryType | null;
   createdAt: Date;
   total: number;
   items: ComandaItem[];
@@ -282,7 +292,7 @@ export function formatComanda(order: ComandaOrder): string {
   const lines: string[] = [];
 
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("BIBOSI"));
   lines.push(centered(`COMANDA #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")}`));
   lines.push(repeat("=", WIDTH));
 
@@ -298,6 +308,10 @@ export function formatComanda(order: ComandaOrder): string {
       }),
     ),
   );
+
+  if (order.deliveryType) {
+    lines.push(row("Tipo:", order.deliveryType));
+  }
   lines.push(repeat("-", WIDTH));
 
   for (const item of order.items) {
@@ -325,11 +339,13 @@ export function formatComanda(order: ComandaOrder): string {
     }
   }
 
+  if (order.notes) {
+    lines.push(...wrap(`Indicaciones: ${order.notes}`, WIDTH));
+  }
+
   lines.push(repeat("-", WIDTH));
   lines.push(pricedRow("TOTAL", order.total));
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("Presente esta comanda"));
-  lines.push(centered("en mostrador"));
 
   return `${lines.join("\n")}\n`;
 }
@@ -338,7 +354,7 @@ export function formatComanda(order: ComandaOrder): string {
 export function formatTestPage(printerName: string): string {
   return [
     repeat("=", WIDTH),
-    centered("BUBBLE DRINK"),
+    centered("BIBOSI"),
     centered("Prueba de impresion"),
     repeat("=", WIDTH),
     "",
@@ -361,7 +377,7 @@ export function formatSummaryReport(data: {
 }): string {
   const lines: string[] = [];
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("BIBOSI"));
   lines.push(centered("RESUMEN DEL DIA"));
   lines.push(repeat("=", WIDTH));
   lines.push("");
@@ -422,7 +438,7 @@ export function formatDailyReport(data: {
 }): string {
   const lines: string[] = [];
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("BIBOSI"));
   lines.push(centered("CIERRE DIARIO"));
   lines.push(repeat("=", WIDTH));
   lines.push("");

@@ -14,7 +14,7 @@ import { todayKey } from "@/lib/day";
 import { getCashCloseStats } from "@/lib/cash-close";
 import {
   formatCashCloseText,
-  getPrinterName,
+  getPrinterConfig,
   printText,
 } from "@/lib/printing";
 
@@ -110,8 +110,8 @@ export async function printCashClose(closeId: string): Promise<string> {
     throw new Error("No autorizado. Los meseros no pueden imprimir el cierre.");
   }
 
-  const printerName = getPrinterName();
-  if (!printerName) {
+  const settings = await getPrinterConfig();
+  if (!settings) {
     throw new Error(
       "No hay impresora configurada. Pide al administrador que la configure.",
     );
@@ -127,7 +127,7 @@ export async function printCashClose(closeId: string): Promise<string> {
   }
 
   await printText(
-    printerName,
+    settings,
     formatCashCloseText({
       id: row.id,
       date: row.date,
@@ -145,6 +145,11 @@ export async function printCashClose(closeId: string): Promise<string> {
       diffCash: row.diffCash,
       notes: row.notes,
     }),
+    {
+      title: "cierre",
+      number: null,
+      date: row.closedAt,
+    },
   );
 
   return `Ticket del cierre de caja (${row.date}, ${row.closedAt.toLocaleString(

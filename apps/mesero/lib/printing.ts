@@ -1,18 +1,16 @@
 import { spawn } from "child_process";
-import { readFileSync } from "fs";
-import { join } from "path";
+import {
+  getPrinterSettings,
+  printVirtualPng,
+  type PrintJobMeta,
+  type PrinterSettings,
+} from "@bbspos/db";
 
-const CONFIG_PATH = join(process.cwd(), "..", "store", "printing.json");
+export type { PrintJobMeta, PrinterSettings };
 
-export function getPrinterName(): string | null {
-  try {
-    const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) as {
-      printerName?: string;
-    };
-    return raw.printerName || null;
-  } catch {
-    return null;
-  }
+/** Configuración activa de la impresora (BD, con respaldo printing.json). */
+export function getPrinterConfig(): Promise<PrinterSettings | null> {
+  return getPrinterSettings();
 }
 
 function runPowerShell(script: string, input?: string): Promise<string> {
@@ -58,10 +56,23 @@ function runPowerShell(script: string, input?: string): Promise<string> {
 
 const TICKET_FONT_PT = 12;
 
+/** Despacha un ticket: si el driver activo es "virtual-png" se renderiza la
+ *  comanda como imagen PNG en la carpeta configurada; si es una impresora de
+ *  Windows se envía por ese medio con letra grande y negritas, ajustada
+ *  para que la línea más larga quepa en el ancho del rollo térmico de 80mm. */
 export async function printText(
-  printerName: string,
+  settings: PrinterSettings,
   text: string,
+  job?: PrintJobMeta,
 ): Promise<void> {
+  if (settings.driver === "virtual-png") {
+    await printVirtualPng(settings, text, job);
+    return;
+  }
+  const printerName = settings.printerName;
+  if (!printerName) {
+    throw new Error("Falta el nombre de la impresora de Windows.");
+  }
   const safeName = printerName.replace(/'/g, "''");
   const b64 = Buffer.from(text, "utf8").toString("base64");
   const script = [
@@ -135,10 +146,14 @@ interface ComandaItem {
   toppings: { toppingName: string; unitPrice: number }[];
 }
 
+type ComandaDeliveryType = "MESA" | "LLEVAR" | "DELIVERY";
+
 interface ComandaOrder {
   seq: number | null;
   daySeq: number | null;
   customerName: string | null;
+  notes: string | null;
+  deliveryType: ComandaDeliveryType | null;
   createdAt: Date;
   total: number;
   items: ComandaItem[];
@@ -223,7 +238,7 @@ export function formatComanda(order: ComandaOrder): string {
   const lines: string[] = [];
 
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("BUBBLE DRINK"));
+  lines.push(centered("BIBOSI"));
   lines.push(centered(`COMANDA #${String(order.daySeq ?? order.seq ?? 0).padStart(5, "0")}`));
   lines.push(repeat("=", WIDTH));
 
@@ -239,6 +254,10 @@ export function formatComanda(order: ComandaOrder): string {
       }),
     ),
   );
+
+  if (order.deliveryType) {
+    lines.push(row("Tipo:", order.deliveryType));
+  }
   lines.push(repeat("-", WIDTH));
 
   for (const item of order.items) {
@@ -266,11 +285,13 @@ export function formatComanda(order: ComandaOrder): string {
     }
   }
 
+  if (order.notes) {
+    lines.push(...wrap(`Indicaciones: ${order.notes}`, WIDTH));
+  }
+
   lines.push(repeat("-", WIDTH));
   lines.push(pricedRow("TOTAL", order.total));
   lines.push(repeat("=", WIDTH));
-  lines.push(centered("Presente esta comanda"));
-  lines.push(centered("en mostrador"));
 
   return `${lines.join("\n")}\n`;
 }

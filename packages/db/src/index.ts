@@ -13,3 +13,4 @@ export * from "./daily-report";
 export * from "./menu-day";
 export * from "./telegram-alert";
 export * from "./day";
+export * from "./printer";

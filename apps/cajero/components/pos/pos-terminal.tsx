@@ -16,6 +16,7 @@ import {
   type Catalog,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
+  type LunchStockState,
   type MenuCategory as MenuCategoryType,
   type MenuItemView,
   type Role as RoleType,
@@ -29,7 +30,7 @@ import {
   getCustomerLoyalty,
   linkCustomerByText,
 } from "@/app/actions/customers";
-import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
+import { getPosState, usePosCart, type PosDeliveryType } from "./pos-cart-store";
 import { QueueView } from "@/components/queue-view";
 import type {
   CartItem,
@@ -42,10 +43,23 @@ import { PosCategoryBar } from "./pos-category-bar";
 import { PosTicketPanel } from "./pos-ticket-panel";
 import { PosBubasBuilder } from "./pos-bubas-builder";
 import { PosCartaGrid } from "./pos-carta-grid";
+import { LunchStockBadge } from "./lunch-stock-badge";
 import { usePosKeyboard } from "./use-pos-keyboard";
 import { getRequiredSauces, isMixtasItem } from "./pos-variant-selector";
+import { holdLunchUnits, syncLunchHolds } from "@/actions/lunch-stock";
 
 const CATEGORIES = FlavorCategoryList;
+
+/** Estado de cantidad de un plato al que no se le controla stock (catálogo viejo
+ *  o terminal sin el cálculo): guion neutro y tarjeta normal. */
+const NO_STOCK: LunchStockState = {
+  planned: null,
+  sold: 0,
+  held: 0,
+  heldByMe: 0,
+  remaining: null,
+  lowThreshold: 5,
+};
 
 /** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
 const BUBAS_PANE = "BUBAS";
@@ -246,7 +260,17 @@ export function PosTerminal({
   const [variantSauces, setVariantSauces] = useState<string[]>([]);
   const [isAfter16, setIsAfter16] = useState(false);
   const [alitaSauces, setAlitaSauces] = useState<string[]>([]);
+  // Cantidad de la jornada corregida desde el propio POS: las server actions
+  // devuelven el estado ya recalculado y se aplica sobre la tarjeta en el acto,
+  // sin esperar el próximo refresco del catálogo (que llega hasta 15 s después).
+  // La sobreescritura se descarta en cuanto el catálogo trae ese plato.
+  const [stockOverrides, setStockOverrides] = useState<
+    Record<string, LunchStockState>
+  >({});
   const didMount = useRef(false);
+  // El popover del contador se recorta con esta columna (overflow-hidden), así
+  // que la necesita para abrirse hacia el lado correcto.
+  const catalogRef = useRef<HTMLElement>(null);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
   // arranque un pedido nuevo sin arrastrar selecciones. Corre una sola vez (ref
@@ -265,6 +289,14 @@ export function PosTerminal({
     setVariantSauces([]);
     setBubaCategory(firstActiveCategory(catalog));
     setActivePane(defaultPane(catalog));
+  }, [catalog]);
+
+  // El catálogo cambia de identidad en cada `router.refresh()` (el polling de
+  // 15 s de la cola). Es el momento de soltar las sobreescrituras de cantidad:
+  // la acción ya las guardó y el servidor ya las trae, así que el catálogo pasa
+  // a ser la fuente y converge con lo que hagan las otras cajas.
+  useEffect(() => {
+    setStockOverrides({});
   }, [catalog]);
 
   // Regla horaria del Menú del Día: desde las 16:00 la disponibilidad de los
@@ -287,7 +319,49 @@ export function PosTerminal({
 
   // El carrito del POS se persiste en localStorage (pos-cart-store): un refresh
   // accidental o una caída del cajero no pierde el ticket en curso. Solo lo
-  // vacían La limpieza explícita (botón "Limpiar") o el envío exitoso del pedido.
+  // vacían la limpieza explícita (botón "Limpiar") o el envío exitoso del pedido.
+
+  /** Deja los apartados de la caja iguales a las líneas de almuerzo del ticket y
+   *  avisa si otra caja se llevó alguna mientras tanto. Es idempotente: suelta lo
+   *  que sobra y pide de a uno lo que falta. */
+  function syncTicketHolds() {
+    if (!cart.cartId) return;
+    // Del módulo, no de `cart`: este efecto corre al montar y `usePosCart` sigue
+    // devolviendo el carrito vacío del servidor hasta que hidrata. Con `cart`
+    // la recarga mandaba una lista vacía y liberaba el apartado de la caja.
+    const live = getPosState();
+    syncLunchHolds(
+      cart.cartId,
+      live.items
+        .filter((i) => i.kind === "MENU_ITEM")
+        .map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
+      live.scheduledFor || null,
+    )
+      .then(({ lost }) => {
+        if (lost.length === 0) return;
+        setNotice(
+          `Otra caja tomó ${lost.join(", ")}: quitá esa línea del ticket para cobrar.`,
+        );
+        router.refresh();
+      })
+      .catch(() => {
+        // Sin red o sesión caída: el TTL libera lo que quede.
+      });
+  }
+
+  // Al (re)abrir el POS hay que reconciliar el apartado de cupo con las líneas
+  // que quedaron en el ticket: el carrito se restaura del navegador, pero sus
+  // apartados pueden haber vencido (caja cerrada mucho rato) o haberse quedado
+  // atrás. Un carrito vacío también llama, para soltar lo que quedara apartado.
+  const didSyncHolds = useRef(false);
+  useEffect(() => {
+    if (didSyncHolds.current) return;
+    didSyncHolds.current = true;
+    syncTicketHolds();
+    // Solo al abrir el POS: después cada movimiento de línea va con su propia
+    // acción de apartado o liberación.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.cartId]);
 
   // Catálogo de salsas para las Alitas Mixtas, servido desde la BD.
   useEffect(() => {
@@ -477,6 +551,7 @@ export function PosTerminal({
             customerId,
             cart.scheduledFor || null,
             cart.reserveLeadMin,
+            cart.cartId,
           )
         : await createPosOrder(
             cart.items,
@@ -486,6 +561,7 @@ export function PosTerminal({
             customerId,
             cart.scheduledFor || null,
             cart.reserveLeadMin,
+            cart.cartId,
           );
       const isReservation = cart.scheduledFor !== "";
       const wasEditing = cart.editingOrderId !== null;
@@ -519,8 +595,12 @@ export function PosTerminal({
   }
 
   // Limpia el pedido actual (carrito y producto en construcción) por si el
-  // cliente se arrepiente.
+  // cliente se arrepiente. Suelta además el cupo de los almuerzos apartados: si
+  // no, las otras cajas los verían tomado hasta que venciera el TTL.
   function handleClear() {
+    // Sin await a propósito: limpiar el ticket no puede quedar esperando al
+    // servidor. Con líneas vacías, esto suelta todos los apartados de la caja.
+    void syncLunchHolds(cart.cartId, [], cart.scheduledFor || null).catch(() => {});
     cart.clear();
     setNotice(null);
     setToppingIds([]);
@@ -549,6 +629,10 @@ export function PosTerminal({
     cart.setReserveLeadMin(order.reserveLeadMin || 30);
     cart.setEditingOrder(order.id);
     setError(null);
+    // Las líneas de la reserva entran al carrito sin pasar por el popover ni por
+    // la tarjeta: hay que apartar su cupo igual, o este ticket vendería unidades
+    // que otra caja ya tiene separadas.
+    syncTicketHolds();
     setNotice(
       skipped.length > 0
         ? `Editando #${formatOrderCode(order.daySeq ?? order.seq ?? 0)}. No se incluyeron (ya no disponibles): ${skipped.join(", ")}.`
@@ -574,6 +658,35 @@ export function PosTerminal({
   const menuDayItems = [...catalog.menuItems].sort(
     (a, b) => b.price - a.price,
   );
+  // Cantidad vigente de cada almuerzo: la del catálogo, o la corregida desde el
+  // propio cajero si la ajustó hace menos de un ciclo de refresco.
+  const lunchStockOf = (item: MenuItemView): LunchStockState | null =>
+    stockOverrides[item.id] ?? item.lunchStock;
+  /** Razón por la que un almuerzo del día no se puede agregar al ticket, o null
+   *  si se puede vender. Son tres casos distintos y se muestran distinto:
+   *  - `sin-cantidad`: todavía no se le asignó una cantidad para hoy. No se
+   *    vende nada hasta que alguien le asigne una.
+   *  - `agotado`: tenía unidades y ya no queda ninguna. Se repone desde el número.
+   *  - `todo-apartado`: las unidades que quedan ya están en el ticket de ESTA
+   *    caja (`heldByMe`), así que no hay nada más que agregar. Al quitar líneas
+   *    se liberan y vuelve a habilitarse.
+   *  Un plato sin control de cantidad (`lunchStock` null, una terminal que no
+   *  lo lleva) no se bloquea: no hay dato para saber si tiene. */
+  function lunchBlock(
+    item: MenuItemView,
+  ): "sin-cantidad" | "agotado" | "todo-apartado" | null {
+    const stock = lunchStockOf(item);
+    if (!stock) return null;
+    if (stock.planned == null || stock.remaining == null) return "sin-cantidad";
+    if (stock.remaining <= 0) return "agotado";
+    return stock.remaining - stock.heldByMe <= 0 ? "todo-apartado" : null;
+  }
+  function applyStockOverride(
+    menuItemId: string,
+    next: LunchStockState,
+  ) {
+    setStockOverrides((current) => ({ ...current, [menuItemId]: next }));
+  }
   // Menú del Día con retícula fija de 5 columnas, misma que la barra de
   // categorías, para que ambas grillas queden alineadas.
   const menuDayGridClass = "grid grid-cols-5 gap-2";
@@ -603,6 +716,36 @@ export function PosTerminal({
     panes.push({ key: BUBAS_PANE, label: "Bubbas" });
     return panes;
   }, [catalog]);
+
+  // Tocar un almuerzo del día: primero se aparta la unidad para esta caja y solo
+  // después se agrega la línea. Si otra caja se llevó lo último entre el número
+  // que se veía y el clic, el servidor lo rechaza, la línea no se agrega y se
+  // avisa: es el momento exacto en que "el primero que agarró gana".
+  async function tapMenuDayItem(menuItem: MenuItemView) {
+    setNotice(null);
+    try {
+      await holdLunchUnits(cart.cartId, menuItem.id, 1, cart.scheduledFor || null);
+    } catch (e) {
+      setNotice(
+        e instanceof Error
+          ? e.message
+          : "Otra caja ya tomó ese almuerzo. Actualizando…",
+      );
+      router.refresh();
+      return;
+    }
+    cart.addMenuItem({
+      menuItemId: menuItem.id,
+      name: menuItem.name,
+      category: menuItem.category,
+      unitPrice: menuItem.price,
+      optionId: null,
+      optionName: null,
+    });
+    // El número de la tarjeta no cambia (era nuestro cupo), pero el de las otras
+    // cajas sí: refrescás para que el resto del catálogo se actualice.
+    router.refresh();
+  }
 
   // Tocar un plato de la carta: si tiene variantes (Pollo/Res, Unidades de
   // alitas) se abre el selector; si no, se agrega directo con su precio fijo.
@@ -733,38 +876,79 @@ export function PosTerminal({
       />
 
       {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}
-      <section className="flex w-3/5 flex-col bg-slate-950 overflow-hidden">
+      <section
+        ref={catalogRef}
+        className="flex w-3/5 flex-col bg-slate-950 overflow-hidden"
+      >
         <div className="flex-1 overflow-y-auto">
           {/* Almuerzos del día (acceso rápido): tarjetas doradas con el mismo bloque
             uniforme que la grilla de la carta para una retícula simétrica */}
           {!isAfter16 && catalog.menuItems.length > 0 && (
             <div className={`${menuDayGridClass} px-4 pt-3`}>
-              {menuDayItems.map((menuItem) => (
-                <button
-                  key={menuItem.id}
-                  type="button"
-                  title={`Agregar ${menuItem.name}`}
-                  onClick={() => {
-                    setNotice(null);
-                    cart.addMenuItem({
-                      menuItemId: menuItem.id,
-                      name: menuItem.name,
-                      category: menuItem.category,
-                      unitPrice: menuItem.price,
-                      optionId: null,
-                      optionName: null,
-                    });
-                  }}
-                  className="flex h-[70px] flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
-                >
-                  <span className="line-clamp-2 text-xs font-semibold leading-tight text-amber-100">
-                    {menuItem.name}
-                  </span>
-                  <span className="self-end font-mono text-sm font-bold text-amber-300">
-                    {formatPrice(menuItem.price)}
-                  </span>
-                </button>
-              ))}
+              {menuDayItems.map((menuItem) => {
+                const block = lunchBlock(menuItem);
+                const blocked = block !== null;
+                return (
+                  // El contador va como hermano de la tarjeta (no dentro del
+                  // botón) para que siga siendo clicable con la tarjeta
+                  // bloqueada: es la única forma de asignar o reponer unidades.
+                  <div key={menuItem.id} className="relative">
+                    <button
+                      type="button"
+                      disabled={blocked}
+                      title={
+                        block === "sin-cantidad"
+                          ? `${menuItem.name} — sin cantidad. Clic en el número para asignarle unidades.`
+                          : block === "agotado"
+                            ? `${menuItem.name} — agotado. Clic en el número para reponer.`
+                            : block === "todo-apartado"
+                              ? `${menuItem.name} — lo que queda ya está en tu ticket. Quita líneas para liberarlo.`
+                              : `Agregar ${menuItem.name}`
+                      }
+                      onClick={() => tapMenuDayItem(menuItem)}
+                      className={
+                        blocked
+                          ? "flex h-[70px] w-full cursor-not-allowed flex-col justify-between rounded-xl border border-slate-700 bg-slate-800/40 p-2.5 text-left opacity-60"
+                          : "flex h-[70px] w-full flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
+                      }
+                    >
+                      <span
+                        className={`line-clamp-2 pr-7 text-xs font-semibold leading-tight ${
+                          blocked ? "text-slate-400" : "text-amber-100"
+                        }`}
+                      >
+                        {menuItem.name}
+                      </span>
+                      <span className="flex items-end justify-between gap-1">
+                        {blocked && (
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">
+                            {block === "sin-cantidad"
+                              ? "Sin cantidad"
+                              : block === "todo-apartado"
+                                ? "En tu ticket"
+                                : "Agotado"}
+                          </span>
+                        )}
+                        <span
+                          className={`self-end font-mono text-sm font-bold ${
+                            blocked ? "text-slate-500" : "text-amber-300"
+                          }`}
+                        >
+                          {formatPrice(menuItem.price)}
+                        </span>
+                      </span>
+                    </button>
+                    <div className="absolute right-1.5 top-1.5">
+                      <LunchStockBadge
+                        menuItemId={menuItem.id}
+                        state={lunchStockOf(menuItem) ?? NO_STOCK}
+                        boundaryRef={catalogRef}
+                        onApplied={(next) => applyStockOverride(menuItem.id, next)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -776,9 +960,11 @@ export function PosTerminal({
             onSwitch={(key) => switchPane(key as CatalogPane)}
           />
 
-          {/* Bloque inferior: productos de la categoría seleccionada */}
+          {/* Bloque inferior: productos de la categoría seleccionada. Sin tope de
+              ancho ni centrado, para que sus columnas caigan exactamente sobre las
+              de las categorías y las de los almuerzos del día. */}
           <div className="px-4 py-4">
-            <div className="max-w-4xl mx-auto flex flex-col gap-4">
+            <div className="flex flex-col gap-4">
               {isBubas && (
                 <PosBubasBuilder
                   bubaCategory={bubaCategory}

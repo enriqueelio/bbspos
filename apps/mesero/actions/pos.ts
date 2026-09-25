@@ -6,6 +6,8 @@ import {
   todayMenuItems,
   cartaMenuItems,
   todayKey,
+  assertLunchCapacity,
+  LunchCapacityError,
 } from "@bbspos/db";
 import {
   OrderStatus,
@@ -26,6 +28,26 @@ function productionMinutesFor(item: CartItem): number {
   return (
     productosTiempo[item.name] ?? productosTiempo[item.optionName ?? ""] ?? 10
   );
+}
+
+/** Unidades de almuerzo que el pedido quiere vender, agrupadas por plato, para
+ *  comprobar el cupo de la jornada al guardar. */
+function lunchDemand(items: CartItem[]) {
+  const demand = new Map<
+    string,
+    { menuItemId: string; name: string; quantity: number }
+  >();
+  for (const item of items) {
+    if (item.kind !== "MENU_ITEM") continue;
+    const row = demand.get(item.menuItemId) ?? {
+      menuItemId: item.menuItemId,
+      name: item.name,
+      quantity: 0,
+    };
+    row.quantity += item.quantity;
+    demand.set(item.menuItemId, row);
+  }
+  return [...demand.values()];
 }
 
 export async function getPosCatalog(): Promise<Catalog> {
@@ -75,6 +97,9 @@ export async function getPosCatalog(): Promise<Catalog> {
     isMixtas: mi.isMixtas,
     requiredSauces: mi.requiredSauces,
     options: mi.options ?? [],
+    // El control de cantidad diaria es solo del POS del cajero en esta
+    // iteración: el mesero sigue viendo el catálogo sin contadores.
+    lunchStock: null,
   });
 
   return {
@@ -217,6 +242,13 @@ export async function createPosOrder(
   let order: Awaited<ReturnType<typeof prisma.order.create>>;
   try {
     order = await prisma.$transaction(async (tx) => {
+      // Barrera de cupo. El mesero no muestra contadores ni aparta unidades (eso
+      // es del POS del cajero), pero sí puede vender almuerzos del día, así que
+      // al guardar se comprueba que quede cupo. Sin identificador de caja, el
+      // `remaining` descuenta todos los apartados: solo puede vender lo que
+      // nadie tiene tomado.
+      await assertLunchCapacity(tx, "", lunchDemand(items), todayKey());
+
       // El seq es global y único; el ticket visible es el daySeq diario (#001...).
       const first = await tx.order.findFirst({
         orderBy: { seq: "desc" },
@@ -250,6 +282,7 @@ export async function createPosOrder(
       });
     });
   } catch (e) {
+    if (e instanceof LunchCapacityError) throw e;
     console.error("No se pudo crear el pedido:", e);
     throw new Error(
       "No se pudo crear el pedido. Intenta de nuevo o contacta al administrador.",

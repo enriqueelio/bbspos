@@ -103,6 +103,11 @@ function dayBounds(key: string): { gte: Date; lt: Date } {
   return { gte: start, lt: new Date(start.getTime() + 24 * 3_600_000) };
 }
 
+/** Límites [gte, lt) de una jornada local (YYYY-MM-DD) como instantes UTC.
+ *  Exportado para que otros cálculos por jornada (cantidades de almuerzos) no
+ *  repitan el redondeo a la medianoche de America/La_Paz. */
+export { dayBounds as zonedDayBounds };
+
 function avgDeliveryMinutes(
   orders: { createdAt: Date; deliveredAt: Date | null }[],
 ): number | null {

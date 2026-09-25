@@ -1,0 +1,15 @@
+PROPUESTA: CONTROL DE ALMUERZOS - STOCK DIARIO POR CANTIDAD (BBSPOS V5)
+
+1. MODELO: DailyAvailability { date, productId, initialQty, currentQty, soldQty, lowThreshold=5 } + unique[date, productId]
+   Product.isLunch boolean para marcar queperi, chaufa
+
+2. ADMIN: Pantalla /almuerzos "Hoy" con inputs 40/25, upsert diario, historial. Rol ADMIN/COCINA.
+
+3. CAJERO: En cada tarjeta de producto si tiene stock hoy:
+   - Badge [40] verde, si <=5 rojo parpadeante, si 0 gris AGOTADO no clickeable
+   - Click en el número NO agrega, abre popup: [-5][-1][+1][+5][+10] + motivo
+   - Descuento real solo al COBRAR (acceptedAt) con transacción, no al agregar al carrito
+
+4. TIEMPO REAL: SSE lunch-stock-update para que todas las cajas vean "quedan 3"
+
+5. REPORTES: inicial vs vendido vs sobra

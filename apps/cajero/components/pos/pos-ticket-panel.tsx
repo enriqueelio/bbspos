@@ -6,6 +6,7 @@ import {
   formatPrice,
   MenuCategoryLabel,
   shortCustomerName,
+  type CartItem,
   type CustomerLoyaltyView,
   type CustomerSuggestion,
 } from "@bbspos/types";
@@ -14,6 +15,7 @@ import {
   getCustomerSuggestions,
   registerCustomerAtPos,
 } from "@/app/actions/customers";
+import { holdLunchUnits, unholdLunchUnits } from "@/actions/lunch-stock";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 import { PAY_BUTTON } from "./pos-styles";
 
@@ -69,6 +71,57 @@ export function PosTicketPanel({
   const [regPhone, setRegPhone] = useState("");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
+
+  // Los steppers de un almuerzo también mueven el cupo: subir aparta las
+  // unidades para esta caja y bajar las suelta. Si al subir ya no hay
+  // (porque otra caja se las llevó), la cantidad no cambia y se avisa, en vez de
+  // dejar una línea que no se podría cobrar.
+  async function changeQuantity(item: CartItem, next: number) {
+    const target = Math.max(1, next);
+    const delta = target - item.quantity;
+    if (delta === 0) return;
+
+    if (item.kind === "MENU_ITEM" && delta > 0) {
+      try {
+        // `scheduledFor` en null (o vacío) = venta de hoy: ahí sí se aparta. En
+        // una reserva para otro día la acción no aparta nada y el cupo de esa
+        // fecha se revisa al guardar.
+        await holdLunchUnits(
+          cart.cartId,
+          item.menuItemId,
+          delta,
+          cart.scheduledFor || null,
+        );
+      } catch (e) {
+        onNotice(
+          e instanceof Error
+            ? e.message
+            : "Ya no hay unidades disponibles de ese almuerzo.",
+        );
+        return;
+      }
+    } else if (item.kind === "MENU_ITEM") {
+      // Suelta el cupo aunque falle la llamada: quitar la línea nunca se bloquea
+      // y, en el peor caso, el apartado se libera solo al vencer.
+      try {
+        await unholdLunchUnits(cart.cartId, item.menuItemId, -delta);
+      } catch {
+        // Sin efecto: el TTL limpia lo que quede.
+      }
+    }
+    cart.updateQuantity(item.id, target);
+  }
+
+  async function removeLine(item: CartItem) {
+    if (item.kind === "MENU_ITEM") {
+      try {
+        await unholdLunchUnits(cart.cartId, item.menuItemId, item.quantity);
+      } catch {
+        // Sin efecto: el TTL limpia lo que quede.
+      }
+    }
+    cart.removeItem(item.id);
+  }
 
   // Autocompletado de clientes (lealtad): busca coincidencias por nombre o
   // teléfono con debounce de 250 ms; si el cajero edita el texto, se quita el
@@ -269,7 +322,7 @@ export function PosTicketPanel({
                     type="button"
                     aria-label="Restar cantidad"
                     className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={() => cart.updateQuantity(item.id, item.quantity - 1)}
+                    onClick={() => changeQuantity(item, item.quantity - 1)}
                   >
                     −
                   </button>
@@ -280,7 +333,7 @@ export function PosTicketPanel({
                     type="button"
                     aria-label="Sumar cantidad"
                     className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={() => cart.updateQuantity(item.id, item.quantity + 1)}
+                    onClick={() => changeQuantity(item, item.quantity + 1)}
                   >
                     +
                   </button>
@@ -288,7 +341,7 @@ export function PosTicketPanel({
                     type="button"
                     aria-label="Quitar ítem del ticket"
                     className="h-8 px-3 rounded-lg bg-red-600/90 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-500"
-                    onClick={() => cart.removeItem(item.id)}
+                    onClick={() => removeLine(item)}
                   >
                     Quitar
                   </button>

@@ -92,6 +92,27 @@ export interface MenuItemOptionView {
   requiredSauces: number | null;
 }
 
+/** Estado de cantidad de la jornada para un plato del Menú del Día. Se deriva
+ *  de los pedidos (nunca de un contador), así que anular un pedido lo restituye
+ *  solo. `planned`/`remaining` en null = nadie programó una cantidad todavía:
+ *  el terminal bloquea el plato hasta que se le asigne una. */
+export interface LunchStockState {
+  /** Unidades que la cocina prepara hoy. */
+  planned: number | null;
+  /** Unidades ya vendidas en la jornada (pedidos no anulados). */
+  sold: number;
+  /** Unidades apartadas por alguna caja que ya las metió a su ticket. */
+  held: number;
+  /** De las anteriores, cuántas son de esta misma caja: lo que el cajero ya se
+   *  llevó a su propio ticket y por eso no puede volver a agregar. */
+  heldByMe: number;
+  /** planned + Σ ajustes − sold − apartados ajenos; null cuando no hay
+   *  cantidad programada. Es el disponible para la caja que lo consulta. */
+  remaining: number | null;
+  /** Aviso de stock bajo por debajo de este número de unidades. */
+  lowThreshold: number;
+}
+
 /** Vista de un platillo entregado a las terminales: solo Menú del Día vigente
  *  (ALMUERZO) o items de la carta (cualquier otra categoría). */
 export interface MenuItemView {
@@ -106,6 +127,8 @@ export interface MenuItemView {
   /** Alitas Mixtas: salsas por defecto cuando el tamaño no tiene el suyo. */
   requiredSauces: number | null;
   options: MenuItemOptionView[];
+  /** Cantidad de la jornada; solo en los platos del Menú del Día. */
+  lunchStock: LunchStockState | null;
 }
 
 export interface Size {

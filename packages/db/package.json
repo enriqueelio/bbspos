@@ -14,11 +14,14 @@
     "migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",
     "daily-report": "tsx scripts/daily-report-worker.ts",
+    "verify:lunch": "tsx scripts/verify-lunch-stock.ts && tsx scripts/verify-lunch-holds.ts",
+    "verify:lunch-stock": "tsx scripts/verify-lunch-stock.ts",
+    "verify:lunch-holds": "tsx scripts/verify-lunch-holds.ts",
     "menu-day-cleanup": "tsx scripts/menu-day-cleanup-worker.ts",
     "telegram-alert": "tsx scripts/telegram-alert-worker.ts",
     "rename-toppings": "tsx scripts/rename-toppings.mjs",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src prisma --ext .ts"
+    "lint": "eslint src prisma scripts --ext .ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

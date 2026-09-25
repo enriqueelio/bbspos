@@ -10,6 +10,10 @@ import type {
   MenuCategory,
   Size,
 } from "@bbspos/types";
+import {
+  CART_ID_STORAGE_KEY,
+  mirrorCartIdCookie,
+} from "@/lib/cart-id";
 
 export type PosDeliveryType = "MESA" | "LLEVAR" | "DELIVERY";
 
@@ -122,6 +126,46 @@ let editingOrderId =
   typeof stored.editingOrderId === "string" && stored.editingOrderId
     ? stored.editingOrderId
     : null;
+
+/** Identidad de esta caja para el apartado de cupo de los almuerzos. Distingue
+ *  "las unidades que esta caja tiene en el ticket" de "las que tienen las
+ *  demás", y es lo que se manda al servidor para apartar y soltar. Vive fuera
+ *  del snapshot del carrito a propósito: el carrito se vacía al confirmar un
+ *  pedido y el ticket siguiente vuelve a apartar con la misma identidad. */
+function newCartId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `cart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+let memoryCartId = "";
+
+function loadCartId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const saved = window.localStorage.getItem(CART_ID_STORAGE_KEY);
+    if (saved) {
+      mirrorCartIdCookie(saved);
+      return saved;
+    }
+    const fresh = newCartId();
+    window.localStorage.setItem(CART_ID_STORAGE_KEY, fresh);
+    mirrorCartIdCookie(fresh);
+    return fresh;
+  } catch {
+    // Sin almacenamiento el id solo vive en memoria: el apartado funciona
+    // igual mientras la pestaña no se recargue.
+    if (!memoryCartId) {
+      memoryCartId = newCartId();
+      mirrorCartIdCookie(memoryCartId);
+    }
+    return memoryCartId;
+  }
+}
+
+const cartId = loadCartId();
+
 let snapshot: PosCartSnapshot = {
   items,
   customerName,
@@ -133,8 +177,8 @@ let snapshot: PosCartSnapshot = {
   editingOrderId,
 };
 
-function emit() {
-  snapshot = {
+function currentState(): PosCartSnapshot {
+  return {
     items,
     customerName,
     customerId,
@@ -144,7 +188,20 @@ function emit() {
     reserveLeadMin,
     editingOrderId,
   };
+}
+
+function emit() {
+  snapshot = currentState();
   for (const listener of listeners) listener();
+}
+
+/** El carrito vivo, leído del módulo y no del snapshot de React. Necesario en
+ *  los efectos que corren al montar: `usePosCart` devuelve el snapshot vacío del
+ *  servidor mientras hidrata, así que ahí `cart.items` todavía es `[]` aunque el
+ *  navegador ya tenga el ticket guardado. Reconciliar los apartados con ese
+ *  carrito vacío soltaba el cupo de la caja en cada recarga. */
+export function getPosState(): PosCartSnapshot {
+  return currentState();
 }
 
 export function addPosItem(input: AddPosItemInput, quantity = 1) {
@@ -329,6 +386,8 @@ export function usePosCart() {
   );
   return {
     ...state,
+    /** Identidad de esta caja para el apartado de cupo de almuerzos. */
+    cartId,
     addItem: addPosItem,
     addMenuItem: addPosMenuItem,
     updateQuantity: updatePosQuantity,

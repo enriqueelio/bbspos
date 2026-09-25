@@ -1,18 +1,27 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import {
   prisma,
   todayMenuItems,
   cartaMenuItems,
+  lunchStockByItem,
   todayKey,
+  zonedDateKey,
+  touchCartLunchHolds,
+  assertLunchCapacity,
+  consumeCartLunchHolds,
+  LunchCapacityError,
 } from "@bbspos/db";
 import {
   OrderStatus,
   type CartItem,
   type Catalog,
+  type LunchStockState,
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
+import { CART_ID_COOKIE } from "@/lib/cart-id";
 import { printText, formatComanda, getPrinterConfig } from "@/lib/printing";
 import productosTiempoData from "../../../data/productos-tiempo.json";
 
@@ -31,7 +40,15 @@ function productionMinutesFor(item: CartItem): number {
 /** Catálogo activo para el punto de venta: tamaños, sabores, tipos de boba,
  *  la matriz de precios, los toppings disponibles, el Menú del Día vigente
  *  y la carta fija (a la carta, categorías distintas de ALMUERZO). */
-export async function getPosCatalog(): Promise<Catalog> {
+export async function getPosCatalog(
+  cartIdArg?: string | null,
+): Promise<Catalog> {
+  // Identidad de esta caja para el apartado de cupo. El catálogo se arma en un
+  // server component, así que la caja llega por la cookie espejo que dejó el
+  // POS en el navegador; sin ella se leen los números como "cualquiera".
+  const jar = await cookies();
+  const cartId = cartIdArg ?? jar.get(CART_ID_COOKIE)?.value ?? null;
+
   const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems] =
     await Promise.all([
       prisma.size.findMany({
@@ -68,6 +85,7 @@ export async function getPosCatalog(): Promise<Catalog> {
       requiredSauces: number | null;
       options?: { id: string; name: string; price: number; requiredSauces: number | null }[];
     },
+    lunchStock: LunchStockState | null = null,
   ) => ({
     id: mi.id,
     name: mi.name,
@@ -78,7 +96,24 @@ export async function getPosCatalog(): Promise<Catalog> {
     isMixtas: mi.isMixtas,
     requiredSauces: mi.requiredSauces,
     options: mi.options ?? [],
+    lunchStock,
   });
+
+  // Cantidad de la jornada de cada almuerzo del día: la cocina la prepara y el
+  // cajero la descuenta en el POS. La carta no lleva control de stock.
+  //
+  // El poll del POS llama a esta función cada 15s, así que además de leer sirve
+  // para dos cosas del apartado: los números llegan ya sin lo que esta caja tiene
+  // apartado (su propio cupo no le resta) y se renuevan los apartados que están
+  // por vencer, para que un ticket abierto mucho rato no los pierda.
+  const [lunchStock] = await Promise.all([
+    lunchStockByItem(
+      menuItems.map((mi) => ({ id: mi.id, name: mi.name })),
+      todayKey(),
+      { excludeCartId: cartId ?? null },
+    ),
+    cartId ? touchCartLunchHolds(cartId) : Promise.resolve(0),
+  ]);
 
   return {
     sizes,
@@ -92,8 +127,8 @@ export async function getPosCatalog(): Promise<Catalog> {
     bobaTypes,
     drinkPrices,
     toppings,
-    menuItems: menuItems.map(toMenuItemView),
-    cartaItems: cartaItems.map(toMenuItemView),
+    menuItems: menuItems.map((mi) => toMenuItemView(mi, lunchStock.get(mi.id) ?? null)),
+    cartaItems: cartaItems.map((mi) => toMenuItemView(mi)),
   };
 }
 
@@ -226,6 +261,27 @@ function reservationOf(
   return { scheduled, lead };
 }
 
+/** Unidades de almuerzo que el pedido quiere vender, agrupadas por plato.
+ *  Usa el mismo nombre que queda guardado en OrderItem.menuItemName, que es
+ *  con el que después se cuenta lo vendido. */
+function lunchDemand(items: CartItem[]) {
+  const demand = new Map<
+    string,
+    { menuItemId: string; name: string; quantity: number }
+  >();
+  for (const item of items) {
+    if (item.kind !== "MENU_ITEM") continue;
+    const row = demand.get(item.menuItemId) ?? {
+      menuItemId: item.menuItemId,
+      name: item.name,
+      quantity: 0,
+    };
+    row.quantity += item.quantity;
+    demand.set(item.menuItemId, row);
+  }
+  return [...demand.values()];
+}
+
 /** Crea un pedido de venta manual (POS): carrito, cliente y tipo de entrega.
  *  Asigna el seq (número de pedido), lo deja en ACEPTADO (pendiente de cobro)
  *  y calcula el total. El pago se registra después por el cajero, incluso tras
@@ -240,6 +296,7 @@ export async function createPosOrder(
   customerId?: string | null,
   scheduledFor?: string | null,
   reserveLeadMin?: number | null,
+  cartId?: string | null,
 ): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
 
@@ -282,9 +339,18 @@ export async function createPosOrder(
 
   const { orderItems, total, tiempoEstimado } = await pricePosItems(items);
 
+  // Jornada donde va a contar la venta: la fecha pactada de la reserva (sus
+  // unidades consumen el cupo de ese día) o hoy para una venta normal.
+  const lunchDate = scheduled ? zonedDateKey(scheduled) : todayKey();
+
   let order: Awaited<ReturnType<typeof prisma.order.create>>;
   try {
     order = await prisma.$transaction(async (tx) => {
+      // Barrera de cupo: el apartado puede haberse vencido si la caja estuvo
+      // mucho rato con el ticket abierto y otra caja se llevó lo suyo. Va dentro
+      // de la transacción para que no haya ventana entre el control y el guardado.
+      await assertLunchCapacity(tx, cartId ?? "", lunchDemand(items), lunchDate);
+
       // El seq es global y único (nunca se repite en la BD): es la clave de
       // orden cronológico de todo el historial. El ticket visible al cliente
       // es el daySeq, que sí se reinicia a 1 cada medianoche.
@@ -302,7 +368,7 @@ export async function createPosOrder(
       });
       const daySeq = (last?.daySeq ?? 0) + 1;
 
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           customerName: customerName?.trim() || null,
           deliveryType: deliveryType ?? null,
@@ -323,8 +389,15 @@ export async function createPosOrder(
           },
         },
       });
+
+      // El pedido ya está guardado: las unidades dejan de estar apartadas y
+      // pasan a contar como vendidas.
+      await consumeCartLunchHolds(tx, cartId ?? "");
+
+      return created;
     });
   } catch (e) {
+    if (e instanceof LunchCapacityError) throw e;
     console.error("No se pudo crear el pedido:", e);
     throw new Error(
       "No se pudo crear el pedido. Intenta de nuevo o contacta al administrador.",
@@ -404,6 +477,7 @@ export async function updatePosOrder(
   customerId?: string | null,
   scheduledFor?: string | null,
   reserveLeadMin?: number | null,
+  cartId?: string | null,
 ): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
   const session = await getRequiredSession();
 
@@ -470,6 +544,17 @@ export async function updatePosOrder(
 
   try {
     await prisma.$transaction(async (tx) => {
+      // Barrera de cupo. Se excluye este pedido del `sold`: sus ítems viejos
+      // siguen contados en la base y se están por reemplazar, así que sin la
+      // exclusión se sumarían dos veces y el control rechazaría la edición.
+      await assertLunchCapacity(
+        tx,
+        cartId ?? "",
+        lunchDemand(items),
+        zonedDateKey(scheduled!),
+        existing.id,
+      );
+
       // Reemplaza los ítems viejos por los nuevos (mismo ticket/día).
       await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
       await tx.order.update({
@@ -491,8 +576,11 @@ export async function updatePosOrder(
           },
         },
       });
+
+      await consumeCartLunchHolds(tx, cartId ?? "");
     });
   } catch (e) {
+    if (e instanceof LunchCapacityError) throw e;
     console.error("No se pudo actualizar la reserva:", e);
     throw new Error(
       "No se pudo actualizar la reserva. Intenta de nuevo o contacta al administrador.",

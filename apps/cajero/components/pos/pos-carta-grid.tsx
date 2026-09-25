@@ -36,7 +36,7 @@ export function PosCartaGrid({
 
       {/* Grilla de platos de la categoría seleccionada (CSS Grid táctil:
           tarjetas ~140px, altura fija 70px, precio en la esquina inferior) */}
-      <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(140px,1fr))]">
+      <div className="grid grid-cols-5 gap-2">
         {items.map((item) => {
           const selected = variantItem?.id === item.id;
           return (

@@ -15,6 +15,7 @@ Monorepo pnpm `bbspos`: POS de té (Bubble Tea). Apps Next.js: `apps/admin` (300
 ## Comandos
 
 - `pnpm -r typecheck` · `pnpm -r lint` · `pnpm --filter @bbspos/cajero dev` (puerto 3002)
+- Cantidades y apartado de almuerzos: `pnpm --filter @bbspos/db verify:lunch` (o `verify:lunch-stock` / `verify:lunch-holds`). Son scripts de tsx contra `dev.db`: crean un plato propio y lo borran al terminar, nunca tocan platos reales.
 
 ## Nota
 

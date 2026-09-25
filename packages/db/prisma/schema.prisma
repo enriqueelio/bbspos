@@ -101,6 +101,8 @@ model MenuItem {
   // Salsas a elegir por defecto en las Alitas Mixtas (por plato).
   requiredSauces Int?
   options        MenuItemOption[]
+  lunchQuotas    LunchQuota[]
+  lunchHolds     LunchHold[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -312,6 +314,62 @@ model PrinterConfig {
   outputPath   String   @default("./tickets-output")
   paperWidthMm Int      @default(80)
   updatedAt    DateTime @updatedAt
+}
+
+// Cantidad diaria de un plato del Menú del Día: una fila por (plato, jornada).
+// `planned` es lo que la cocina prepara (null = nadie lo programó todavía) y
+// `lowThreshold` el aviso de stock bajo, ajustable por plato y día. El vendido
+// NO se guarda: se deriva de los pedidos no anulados de la jornada, así que
+// remaining = planned + Σ LunchAdjust.delta − sold nunca se desincroniza y
+// anular un pedido lo restituye solo.
+model LunchQuota {
+  id           String   @id @default(cuid())
+  menuItemId   String
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  // Día local YYYY-MM-DD en America/La_Paz (zonedDateKey).
+  date         String
+  planned      Int?
+  lowThreshold Int      @default(5)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  adjusts      LunchAdjust[]
+
+  @@unique([menuItemId, date])
+  @@index([date])
+}
+
+// Bitácora de correcciones manuales sobre la cantidad de una jornada: el delta
+// aplicado, la nota del motivo, quién lo hizo y cuándo.
+model LunchAdjust {
+  id        String    @id @default(cuid())
+  quotaId   String
+  quota     LunchQuota @relation(fields: [quotaId], references: [id], onDelete: Cascade)
+  delta     Int
+  note      String?
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([quotaId])
+}
+
+// Apartado de cupo mientras el almuerzo esta en el ticket en curso: una fila por
+// (menuItemId, date, cartId). Impide que otra terminal venda lo que esta caja ya
+//prometio. expiresAt libera el cupo si la caja abandona el ticket.
+model LunchHold {
+  id         String   @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  date       String
+  cartId     String
+  quantity   Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  expiresAt  DateTime
+
+  @@unique([menuItemId, date, cartId])
+  @@index([date])
+  @@index([cartId])
+  @@index([expiresAt])
 }
 
 model DailyReportLog {

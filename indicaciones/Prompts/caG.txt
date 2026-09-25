@@ -1,0 +1,24 @@
+PROPUESTA: CONTROL DE STOCK DIARIO PARA ALMUERzOS (BBSPOS)
+1. Modelo de Datos (Prisma / Base de Datos)
+
+Añadir un campo o tabla de control diario para los platos del menú del día.
+
+Propuesta en schema.prisma:
+
+Agregar campos de stock diario (ej. dailyStock para el total asignado por la cocina y el stock restante o vendido del día).
+
+Cada vez que se confirma una venta de un almuerzo en el cajero, se descuenta automáticamente 1 unidad del stock disponible del día.
+
+2. Indicador Visual en la Tarjeta (Badge de Stock)
+
+En la esquina superior derecha de la tarjeta del almuerzo en el menú del cajero, se mostrará un distintivo numérico con la cantidad exacta restante (ej. 40 para el keperi, 25 para el arroz chaufa).
+
+Alerta de Stock Bajo (menor o igual a 5 unidades): Cuando queden 5 o menos porciones, el número cambiará automáticamente a color rojo intenso para advertir visualmente al cajero.
+
+Agotado (0 unidades): Si el stock llega a cero, la tarjeta se bloqueará o se marcará visualmente como "AGOTADO" para impedir que se sigan tomando pedidos de ese plato.
+
+3. Menú Emergente Interactivo (Ajuste Rápido)
+
+Al hacer clic directamente sobre el numerito de stock en la tarjeta, se desplegará un pequeño menú emergente (popover).
+
+Desde este menú, el administrador o cajero podrá sumar o restar unidades de manera inmediata (por ejemplo, si la cocinera avisa de última hora que sobraron o faltaron porciones).

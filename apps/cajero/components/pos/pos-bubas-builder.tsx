@@ -82,8 +82,9 @@ export function PosBubasBuilder({
         })}
       </div>
 
-      {/* Grilla de sabores */}
-      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+      {/* Grilla de sabores: misma retícula de 5 columnas que la barra de
+          categorías y los almuerzos del día, para que las columnas alineen. */}
+      <div className="grid grid-cols-5 gap-2">
         {flavors.map((flavor) => {
           const selected = selectedFlavorId === flavor.id;
           return (

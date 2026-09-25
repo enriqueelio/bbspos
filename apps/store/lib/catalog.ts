@@ -48,6 +48,9 @@ export async function getCatalog(): Promise<Catalog> {
     isMixtas: mi.isMixtas,
     requiredSauces: mi.requiredSauces,
     options: mi.options ?? [],
+    // La tienda pública no expone cantidades de cocina: el contador es interno
+    // del punto de venta.
+    lunchStock: null,
   });
 
   return {

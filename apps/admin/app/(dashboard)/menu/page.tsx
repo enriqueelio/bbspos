@@ -1,4 +1,10 @@
-import { prisma, resetStaleMenuDelDia, zonedDateKey } from "@bbspos/db";
+import {
+  lunchStockByItem,
+  lunchStockHistory,
+  prisma,
+  resetStaleMenuDelDia,
+  zonedDateKey,
+} from "@bbspos/db";
 import { Role } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { MenuManager } from "./menu-manager";
@@ -34,6 +40,16 @@ export default async function MenuPage() {
 
   const today = zonedDateKey();
 
+  // Cantidad de la jornada en solo lectura (el admin no programa ni ajusta: eso
+  // es del cajero) y el histórico por jornada para comparar plan vs venta.
+  const lunchTargets = menuItems
+    .filter((mi) => mi.category === "ALMUERZO")
+    .map((mi) => ({ id: mi.id, name: mi.name }));
+  const [lunchStock, lunchHistory] = await Promise.all([
+    lunchStockByItem(lunchTargets),
+    lunchStockHistory(),
+  ]);
+
   return (
     <MenuManager
       currentUserRole={currentUserRole}
@@ -63,7 +79,16 @@ export default async function MenuPage() {
         available: mi.available,
         enMenuDelDiaHoy:
           mi.enMenuDelDia && mi.menuDelDiaDate === today,
+        lunchStock: lunchStock.get(mi.id) ?? {
+          planned: null,
+          sold: 0,
+          held: 0,
+          heldByMe: 0,
+          remaining: null,
+          lowThreshold: 5,
+        },
       }))}
+      lunchHistory={lunchHistory}
       alitaSauces={alitaSauces.map((s) => ({
         id: s.id,
         name: s.name,

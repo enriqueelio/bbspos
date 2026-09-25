@@ -97,74 +97,12 @@ export async function getPosCatalog(): Promise<Catalog> {
   };
 }
 
-/** Crea un pedido de venta manual (POS): carrito, cliente y tipo de entrega.
- *  Asigna el seq (número de pedido), lo deja en ACEPTADO (pendiente de cobro)
- *  y calcula el total. El pago se registra después por el cajero, incluso tras
- *  la entrega. La comanda se imprime una sola vez, al crear el pedido — salvo
- *  reservas (`scheduledFor`): ahí se imprime al CONFIRMAR (cobro) desde la
- *  cola, y hasta entonces la reserva espera su franja sin tickear producción. */
-export async function createPosOrder(
-  items: CartItem[],
-  customerName?: string,
-  deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
-  notes?: string | null,
-  customerId?: string | null,
-  scheduledFor?: string | null,
-  reserveLeadMin?: number | null,
-): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
-  const session = await getRequiredSession();
-
-  if (items.length === 0) {
-    throw new Error("El carrito está vacío");
-  }
-
-  if (!customerName?.trim()) {
-    throw new Error("El nombre o mesa del cliente es obligatorio.");
-  }
-
-  if (!deliveryType) {
-    throw new Error("Elige MESA, LLEVAR o DELIVERY.");
-  }
-
-  // La reserva exige una hora pactada válida; el minuto de aviso se normaliza
-  // (>= 1, default 30) y la validación de "hora en el futuro" la hace el
-  // cliente (server strict por si acaso: se permite, igual se puede anular).
-  let scheduled: Date | null = null;
-  if (scheduledFor) {
-    const parsed = new Date(scheduledFor);
-    scheduled = Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  const lead =
-    typeof reserveLeadMin === "number" &&
-    reserveLeadMin > 0 &&
-    Number.isFinite(reserveLeadMin)
-      ? Math.trunc(reserveLeadMin)
-      : 30;
-
-  // El cliente vinculado (autocompletado/registro) debe existir para no violar
-  // la llave foránea; el texto libre sin coincidencia queda como invitado
-  // (customerId null) — nadie se crea al vender.
-  if (customerId) {
-    const linked = await prisma.customer.findUnique({
-      where: { id: customerId },
-      select: { id: true },
-    });
-    if (!linked) {
-      throw new Error("El cliente vinculado no existe.");
-    }
-  }
-
-  // Verifica que el usuario de la sesión exista para no violar la llave
-  // foránea a la hora de asociar el pedido. Si no existe, se crea sin usuario.
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true },
-  });
-
-  // ===== Precios autoritativos desde la BD =====
-  // Nunca se confía en item.unitPrice del cliente: se recalculan el precio de la
-  // bebida (matriz DrinkPrice + toppings) y el de los platillos (precio de la
-  // variante elegida o del producto base).
+/** Precios autoritativos desde la BD para un set de ítems del carrito.
+ *  Nunca se confía en item.unitPrice del cliente: se recalculan el precio de la
+ *  bebida (matriz DrinkPrice + toppings) y el de los platillos (precio de la
+ *  variante elegida o del producto base). Devuelve la forma persistible de los
+ *  ítems (OrderItem create), el total y el tiempo estimado del pedido. */
+async function pricePosItems(items: CartItem[]) {
   const toppingIds = [
     ...new Set(
       items.flatMap((i) =>
@@ -264,6 +202,85 @@ export async function createPosOrder(
     (max, item) => Math.max(max, productionMinutesFor(item)),
     0,
   );
+
+  return { orderItems, total, tiempoEstimado };
+}
+
+/** Normaliza la hora pactada de una reserva (ISO string → Date; inválida =
+ *  null) y el minuto de aviso (>= 1, default 30). */
+function reservationOf(
+  scheduledFor?: string | null,
+  reserveLeadMin?: number | null,
+) {
+  let scheduled: Date | null = null;
+  if (scheduledFor) {
+    const parsed = new Date(scheduledFor);
+    scheduled = Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const lead =
+    typeof reserveLeadMin === "number" &&
+    reserveLeadMin > 0 &&
+    Number.isFinite(reserveLeadMin)
+      ? Math.trunc(reserveLeadMin)
+      : 30;
+  return { scheduled, lead };
+}
+
+/** Crea un pedido de venta manual (POS): carrito, cliente y tipo de entrega.
+ *  Asigna el seq (número de pedido), lo deja en ACEPTADO (pendiente de cobro)
+ *  y calcula el total. El pago se registra después por el cajero, incluso tras
+ *  la entrega. La comanda se imprime una sola vez, al crear el pedido — salvo
+ *  reservas (`scheduledFor`): ahí se imprime al CONFIRMAR (cobro) desde la
+ *  cola, y hasta entonces la reserva espera su franja sin tickear producción. */
+export async function createPosOrder(
+  items: CartItem[],
+  customerName?: string,
+  deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
+  notes?: string | null,
+  customerId?: string | null,
+  scheduledFor?: string | null,
+  reserveLeadMin?: number | null,
+): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
+  const session = await getRequiredSession();
+
+  if (items.length === 0) {
+    throw new Error("El carrito está vacío");
+  }
+
+  if (!customerName?.trim()) {
+    throw new Error("El nombre o mesa del cliente es obligatorio.");
+  }
+
+  if (!deliveryType) {
+    throw new Error("Elige MESA, LLEVAR o DELIVERY.");
+  }
+
+  // La reserva exige una hora pactada válida; el minuto de aviso se normaliza
+  // (>= 1, default 30) y la validación de "hora en el futuro" la hace el
+  // cliente (server strict por si acaso: se permite, igual se puede anular).
+  const { scheduled, lead } = reservationOf(scheduledFor, reserveLeadMin);
+
+  // El cliente vinculado (autocompletado/registro) debe existir para no violar
+  // la llave foránea; el texto libre sin coincidencia queda como invitado
+  // (customerId null) — nadie se crea al vender.
+  if (customerId) {
+    const linked = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true },
+    });
+    if (!linked) {
+      throw new Error("El cliente vinculado no existe.");
+    }
+  }
+
+  // Verifica que el usuario de la sesión exista para no violar la llave
+  // foránea a la hora de asociar el pedido. Si no existe, se crea sin usuario.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+
+  const { orderItems, total, tiempoEstimado } = await pricePosItems(items);
 
   let order: Awaited<ReturnType<typeof prisma.order.create>>;
   try {
@@ -370,4 +387,124 @@ export async function createPosOrder(
   }
 
   return { orderId: order.id, seq: order.seq ?? 0, daySeq: order.daySeq ?? 0, total };
+}
+
+/** Actualiza una reserva SIN confirmar desde el POS: reemplaza sus ítems
+ *  (recalculando precios con datos de la BD), puede cambiar nombre, tipo de
+ *  entrega, notas, cliente vinculado y la hora pactada. Conserva el seq y el
+ *  daySeq (el mismo ticket sigue en la cola como reserva), NO imprime comanda
+ *  (se imprime al confirmar el cobro) y solo es válido para reservas que aún
+ *  no fueron confirmadas, pagadas o anuladas. */
+export async function updatePosOrder(
+  orderId: string,
+  items: CartItem[],
+  customerName?: string,
+  deliveryType?: "MESA" | "LLEVAR" | "DELIVERY" | null,
+  notes?: string | null,
+  customerId?: string | null,
+  scheduledFor?: string | null,
+  reserveLeadMin?: number | null,
+): Promise<{ orderId: string; seq: number; daySeq: number; total: number }> {
+  const session = await getRequiredSession();
+
+  if (items.length === 0) {
+    throw new Error("El carrito está vacío");
+  }
+
+  if (!customerName?.trim()) {
+    throw new Error("El nombre o mesa del cliente es obligatorio.");
+  }
+
+  if (!deliveryType) {
+    throw new Error("Elige MESA, LLEVAR o DELIVERY.");
+  }
+
+  const existing = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      seq: true,
+      daySeq: true,
+      scheduledFor: true,
+      reservationConfirmed: true,
+      status: true,
+      paidAt: true,
+    },
+  });
+  if (!existing) {
+    throw new Error("No se encontró el pedido a editar.");
+  }
+  if (
+    !existing.scheduledFor ||
+    existing.reservationConfirmed ||
+    existing.paidAt ||
+    existing.status === OrderStatus.ANULADO ||
+    existing.status === OrderStatus.ENTREGADO
+  ) {
+    throw new Error(
+      "Solo se pueden editar reservas sin confirmar (sin cobrar ni anular).",
+    );
+  }
+
+  const { scheduled, lead } = reservationOf(scheduledFor, reserveLeadMin);
+  if (!scheduled) {
+    throw new Error("Al editar una reserva debes mantener una hora pactada.");
+  }
+
+  if (customerId) {
+    const linked = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true },
+    });
+    if (!linked) {
+      throw new Error("El cliente vinculado no existe.");
+    }
+  }
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+
+  const { orderItems, total, tiempoEstimado } = await pricePosItems(items);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Reemplaza los ítems viejos por los nuevos (mismo ticket/día).
+      await tx.orderItem.deleteMany({ where: { orderId: existing.id } });
+      await tx.order.update({
+        where: { id: existing.id },
+        data: {
+          customerName: customerName?.trim() || null,
+          deliveryType: deliveryType ?? null,
+          customerId: customerId?.trim() || null,
+          notes: notes?.trim() || null,
+          status: OrderStatus.ACEPTADO,
+          total,
+          tiempoEstimado,
+          scheduledFor: scheduled,
+          reservationConfirmed: false,
+          reserveLeadMin: lead,
+          userId: dbUser ? dbUser.id : null,
+          items: {
+            create: orderItems,
+          },
+        },
+      });
+    });
+  } catch (e) {
+    console.error("No se pudo actualizar la reserva:", e);
+    throw new Error(
+      "No se pudo actualizar la reserva. Intenta de nuevo o contacta al administrador.",
+    );
+  }
+
+  revalidatePath("/");
+
+  return {
+    orderId: existing.id,
+    seq: existing.seq ?? 0,
+    daySeq: existing.daySeq ?? 0,
+    total,
+  };
 }

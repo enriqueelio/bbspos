@@ -21,14 +21,21 @@ import {
   type Role as RoleType,
   type Topping,
 } from "@bbspos/types";
-import { createPosOrder } from "@/actions/pos";
+import {
+  createPosOrder,
+  updatePosOrder,
+} from "@/actions/pos";
 import {
   getCustomerLoyalty,
   linkCustomerByText,
 } from "@/app/actions/customers";
-import { usePosCart } from "./pos-cart-store";
+import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
 import { QueueView } from "@/components/queue-view";
-import type { Order } from "@bbspos/types";
+import type {
+  CartItem,
+  CartTopping,
+  Order,
+} from "@bbspos/types";
 import type { PensionCustomerOption } from "@/components/pension-payment-dialog";
 import type { CustomerLoyaltyView } from "@bbspos/types";
 import { PosCategoryBar } from "./pos-category-bar";
@@ -109,6 +116,98 @@ function defaultPane(catalog: Catalog): CatalogPane {
   if (first) return first;
   if (catalog.menuItems.length > 0) return MenuCategory.ALMUERZO;
   return BUBAS_PANE;
+}
+
+/** Reconstruye los CartItems de una reserva desde sus datos persistidos para
+ *  poder cargarlos en el ticket (al editar). Los productos se re-resuelven por
+ *  nombre contra el catálogo activo; los que ya no existen se omiten y se
+ *  reportan en `skipped` para avisar al cajero. El id de cada ítem coincide
+ *  con el que usaría addItem/addMenuItem para que siga sumando cantidades. */
+function reconstructOrderItems(
+  order: Order,
+  catalog: Catalog,
+): { items: CartItem[]; skipped: string[] } {
+  const items: CartItem[] = [];
+  const skipped: string[] = [];
+  const sizeByName = new Map(catalog.sizes.map((s) => [s.name, s]));
+  const flavorByName = new Map(catalog.flavors.map((f) => [f.name, f]));
+  const bobaByName = new Map(catalog.bobaTypes.map((b) => [b.name, b]));
+  const toppingByName = new Map(catalog.toppings.map((t) => [t.name, t]));
+  const catalogItems = [...catalog.cartaItems, ...catalog.menuItems];
+
+  for (const item of order.items) {
+    if (item.sizeName) {
+      const size = sizeByName.get(item.sizeName);
+      const flavor = item.flavorName
+        ? flavorByName.get(item.flavorName)
+        : undefined;
+      const boba = item.bobaTypeName
+        ? bobaByName.get(item.bobaTypeName)
+        : undefined;
+      if (!size || !flavor || !boba) {
+        skipped.push(`${item.flavorName ?? "Bebida"} (${item.sizeName ?? ""})`);
+        continue;
+      }
+      const category: FlavorCategoryType =
+        item.flavorCategory ?? flavor.categories[0];
+      const toppings: CartTopping[] = [];
+      for (const t of item.toppings) {
+        const db = toppingByName.get(t.toppingName);
+        if (db) {
+          toppings.push({ id: db.id, name: db.name, price: db.price });
+        } else {
+          skipped.push(`${item.flavorName} · topping ${t.toppingName}`);
+        }
+      }
+      const toppingKey = toppings.map((t) => t.id).sort().join("+");
+      const id = [
+        category,
+        size.name,
+        flavor.name,
+        boba.name,
+        toppingKey,
+      ].join("-");
+      items.push({
+        kind: "DRINK",
+        id,
+        size,
+        flavor,
+        category,
+        bobaType: boba,
+        unitPrice: item.unitPrice,
+        toppings,
+        quantity: item.quantity,
+      });
+      continue;
+    }
+
+    const name = item.menuItemName ?? "";
+    const catalogItem = catalogItems.find((m) => m.name === name);
+    if (!catalogItem) {
+      skipped.push(name || "Producto sin nombre");
+      continue;
+    }
+    const option = item.menuItemOptionName
+      ? (catalogItem.options.find((o) => o.name === item.menuItemOptionName) ??
+        null)
+      : null;
+    const detail = item.menuItemDetail ?? null;
+    const id = `menu-item-${catalogItem.id}-${item.menuItemOptionName ?? ""}-${detail ?? ""}`;
+    items.push({
+      kind: "MENU_ITEM",
+      id,
+      menuItemId: catalogItem.id,
+      name,
+      category:
+        (item.menuItemCategory as MenuCategoryType) ?? catalogItem.category,
+      unitPrice: item.unitPrice,
+      optionId: option?.id ?? null,
+      optionName: item.menuItemOptionName,
+      detail,
+      quantity: item.quantity,
+    });
+  }
+  return { items, skipped };
 }
 
 export function PosTerminal({
@@ -368,16 +467,28 @@ export function PosTerminal({
           customerName = shortCustomerName(loyalty).toUpperCase();
         }
       }
-      const result = await createPosOrder(
-        cart.items,
-        customerName,
-        deliveryType,
-        cart.notes,
-        customerId,
-        cart.scheduledFor || null,
-        cart.reserveLeadMin,
-      );
+      const result = cart.editingOrderId
+        ? await updatePosOrder(
+            cart.editingOrderId,
+            cart.items,
+            customerName,
+            deliveryType,
+            cart.notes,
+            customerId,
+            cart.scheduledFor || null,
+            cart.reserveLeadMin,
+          )
+        : await createPosOrder(
+            cart.items,
+            customerName,
+            deliveryType,
+            cart.notes,
+            customerId,
+            cart.scheduledFor || null,
+            cart.reserveLeadMin,
+          );
       const isReservation = cart.scheduledFor !== "";
+      const wasEditing = cart.editingOrderId !== null;
       cart.clear();
       // Devuelve los selectores a su estado por defecto para no arrastrar
       // las opciones del pedido anterior.
@@ -392,7 +503,9 @@ export function PosTerminal({
         ? ` · Nivel ${loyalty.levelName} (${loyalty.points} pts)`
         : "";
       setNotice(
-        `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}${loyaltyText}${isReservation ? " · Reserva, confirmar desde la cola" : ""}`,
+        wasEditing
+          ? `Pedido #${formatOrderCode(result.daySeq)} actualizado · Total ${formatPrice(result.total)}${loyaltyText} · Reserva, confirmar desde la cola`
+          : `Pedido #${formatOrderCode(result.daySeq)} creado · Total ${formatPrice(result.total)}${loyaltyText}${isReservation ? " · Reserva, confirmar desde la cola" : ""}`,
       );
       // El pedido se registra y el cajero/mesero se mantiene en Nueva Venta.
       router.push("/?tab=venta");
@@ -418,6 +531,29 @@ export function PosTerminal({
     setVariantSize(null);
     setVariantSauces([]);
     setProductQty(1);
+  }
+
+  // Carga una reserva sin confirmar en el TICKET EN CURSO para editarla
+  // (ítems, nombre, hora pactada, etc.). Se conserva el mismo pedido al
+  // guardar: ver PosTerminal.submit → updatePosOrder.
+  function handleEditReservation(order: Order) {
+    const { items: restored, skipped } = reconstructOrderItems(order, catalog);
+    cart.setItems(restored);
+    cart.setCustomerName((order.customerName ?? "").toUpperCase());
+    cart.setCustomerId(order.customerId ?? null);
+    cart.setDeliveryType(
+      (order.orderType as PosDeliveryType) || ("LLEVAR" as PosDeliveryType),
+    );
+    cart.setNotes(order.notes ?? "");
+    cart.setScheduledFor(order.scheduledFor ?? "");
+    cart.setReserveLeadMin(order.reserveLeadMin || 30);
+    cart.setEditingOrder(order.id);
+    setError(null);
+    setNotice(
+      skipped.length > 0
+        ? `Editando #${formatOrderCode(order.daySeq ?? order.seq ?? 0)}. No se incluyeron (ya no disponibles): ${skipped.join(", ")}.`
+        : `Editando reserva #${formatOrderCode(order.daySeq ?? order.seq ?? 0)}. Reparte y pulsa GUARDAR.`,
+    );
   }
 
   const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
@@ -573,6 +709,8 @@ export function PosTerminal({
             role={role}
             customers={customers}
             compact
+            onEditReservation={handleEditReservation}
+            editingOrderId={cart.editingOrderId}
           />
         </div>
       </aside>

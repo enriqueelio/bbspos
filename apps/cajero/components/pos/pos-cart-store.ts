@@ -48,6 +48,10 @@ export interface PosCartSnapshot {
   /** Minutos antes de la hora pactada en que hay que avisar/iluminar la
    *  reserva en la cola (se configura por reserva al crearla; default 30). */
   reserveLeadMin: number;
+  /** Id del pedido que se está editando (reserva sin confirmar cargada desde
+   *  la cola); null = venta nueva. Al enviar reemplaza ítems/campos del pedido
+   *  en vez de crear uno nuevo. */
+  editingOrderId: string | null;
 }
 
 const listeners = new Set<() => void>();
@@ -114,6 +118,10 @@ let reserveLeadMin =
   typeof stored.reserveLeadMin === "number" && stored.reserveLeadMin > 0
     ? stored.reserveLeadMin
     : 30;
+let editingOrderId =
+  typeof stored.editingOrderId === "string" && stored.editingOrderId
+    ? stored.editingOrderId
+    : null;
 let snapshot: PosCartSnapshot = {
   items,
   customerName,
@@ -122,6 +130,7 @@ let snapshot: PosCartSnapshot = {
   notes,
   scheduledFor,
   reserveLeadMin,
+  editingOrderId,
 };
 
 function emit() {
@@ -133,6 +142,7 @@ function emit() {
     notes,
     scheduledFor,
     reserveLeadMin,
+    editingOrderId,
   };
   for (const listener of listeners) listener();
 }
@@ -254,6 +264,22 @@ export function setPosReserveLeadMin(min: number) {
   persistState();
 }
 
+/** Reemplaza todos los ítems del carrito de una vez (al cargar una reserva
+ *  para editar). Los ítems vienen reconstruidos desde los datos del pedido. */
+export function setPosItems(newItems: CartItem[]) {
+  items = [...newItems];
+  emit();
+  persistState();
+}
+
+/** Marca que el carrito está editando el pedido con `id` (reserva sin
+ *  confirmar); null vuelve a modo venta nueva. */
+export function setPosEditingOrder(id: string | null) {
+  editingOrderId = id;
+  emit();
+  persistState();
+}
+
 export function clearPosCart() {
   items = [];
   customerName = "";
@@ -262,6 +288,7 @@ export function clearPosCart() {
   notes = "";
   scheduledFor = "";
   reserveLeadMin = 30;
+  editingOrderId = null;
   emit();
   if (typeof window !== "undefined") {
     try {
@@ -291,6 +318,7 @@ const SERVER_SNAPSHOT: PosCartSnapshot = {
   notes: "",
   scheduledFor: "",
   reserveLeadMin: 30,
+  editingOrderId: null,
 };
 
 export function usePosCart() {
@@ -311,6 +339,8 @@ export function usePosCart() {
     setNotes: setPosNotes,
     setScheduledFor: setPosScheduledFor,
     setReserveLeadMin: setPosReserveLeadMin,
+    setItems: setPosItems,
+    setEditingOrder: setPosEditingOrder,
     clear: clearPosCart,
   };
 }

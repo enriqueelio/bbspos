@@ -50,6 +50,7 @@ function toPlainOrder(order: {
     menuItemName: string | null;
     menuItemCategory: string | null;
     menuItemOptionName: string | null;
+    menuItemDetail: string | null;
     unitPrice: number;
     quantity: number;
     tiempoProduccion: number;
@@ -93,6 +94,7 @@ function toPlainOrder(order: {
       menuItemCategory:
         item.menuItemCategory as Order["items"][number]["menuItemCategory"],
       menuItemOptionName: item.menuItemOptionName,
+      menuItemDetail: item.menuItemDetail,
       unitPrice: item.unitPrice,
       quantity: item.quantity,
       tiempoProduccion: item.tiempoProduccion,

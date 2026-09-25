@@ -106,6 +106,57 @@ export async function acceptQueueOrder(orderId: string) {
   revalidatePath("/");
 }
 
+/** Confirma una reserva SIN cobrar: la pasa a producción (ACEPTADO), marca
+ *  `reservationConfirmed` (el timer de preparación arranca ahora), imprime la
+ *  comanda —que hasta ahora estaba en espera— y la deja en "Pedidos en cola",
+ *  donde el cobro se registra con el flujo normal (Cobrar). */
+export async function confirmReservation(orderId: string) {
+  await getRequiredSession();
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+  });
+
+  if (!order) {
+    throw new Error("Pedido no encontrado.");
+  }
+
+  if (order.status === OrderStatus.ANULADO) {
+    throw new Error("La reserva está anulada.");
+  }
+
+  if (order.status === OrderStatus.ENTREGADO) {
+    throw new Error("La reserva ya fue entregada.");
+  }
+
+  if (!order.scheduledFor) {
+    throw new Error("Este pedido no es una reserva.");
+  }
+
+  if (order.reservationConfirmed) {
+    throw new Error("Esta reserva ya fue confirmada.");
+  }
+
+  if (order.paidAt) {
+    throw new Error("Esta reserva ya fue cobrada.");
+  }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      status: OrderStatus.ACEPTADO,
+      acceptedAt: new Date(),
+      reservationConfirmed: true,
+    },
+  });
+
+  revalidatePath("/");
+
+  // La comanda de una reserva se imprime recién al confirmarla: recién ahora
+  // entra a producción (best-effort: si la impresora falla, el cobro sigue).
+  await tryPrintComanda(orderId);
+}
+
 /** Registra el pago de un pedido. Al cobrar un pedido RECIBIDO (proveniente
  *  de la tienda web) lo pasa a ACEPTADO; los pedidos ya ACEPTADO o ENTREGADO
  *  (tomados en el POS) se cobran sin cambiar su estado, pues el cliente puede

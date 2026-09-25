@@ -423,6 +423,7 @@ export interface OrderItem {
   menuItemName: string | null;
   menuItemCategory: MenuCategory | null;
   menuItemOptionName: string | null;
+  menuItemDetail?: string | null;
   unitPrice: number;
   quantity: number;
   /** Minutos estimados de producción de este producto (más uno de los

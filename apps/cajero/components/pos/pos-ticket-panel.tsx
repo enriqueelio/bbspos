@@ -124,6 +124,18 @@ export function PosTicketPanel({
     }
   }
 
+  // Activa/desactiva la reserva del ticket con el icono de calendario: al
+  // activarla fija por defecto la hora pactada a +30 min y despliega los campos
+  // (fecha/hora y aviso). Al desactivarla vuelve a ser un pedido inmediato.
+  function toggleReservation() {
+    if (cart.scheduledFor !== "") {
+      cart.setScheduledFor("");
+    } else {
+      const d = new Date(Date.now() + 30 * 60_000);
+      cart.setScheduledFor(d.toISOString());
+    }
+  }
+
   // Formulario "Registrar" junto al campo de nombre (solo roles que cobran):
   // crea el cliente explícitamente, lo vincula al pedido y muestra su nombre
   // corto.
@@ -201,6 +213,12 @@ export function PosTicketPanel({
       {error && (
         <p className="shrink-0 mx-4 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
           ⚠ {error}
+        </p>
+      )}
+      {isBilling && cart.editingOrderId && (
+        <p className="shrink-0 mx-4 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          Editando reserva: al pulsar GUARDAR los cambios se aplican al mismo
+          pedido en la cola (se mantiene la hora pactada).
         </p>
       )}
 
@@ -322,9 +340,61 @@ export function PosTicketPanel({
                 type="button"
                 onClick={openRegister}
                 title="Registrar un cliente nuevo y vincularlo al pedido"
-                className="h-10 shrink-0 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 text-xs font-bold uppercase tracking-wide text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95"
               >
-                Registrar
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-user-plus h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <line x1="19" x2="19" y1="8" y2="14" />
+                  <line x1="22" x2="16" y1="11" y2="11" />
+                </svg>
+              </button>
+            )}
+            {isBilling && (
+              <button
+                type="button"
+                onClick={toggleReservation}
+                title={
+                  cart.scheduledFor !== ""
+                    ? "Quitar la reserva (pedido inmediato)"
+                    : "Hacer reserva: fija la hora pactada y el aviso"
+                }
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                  cart.scheduledFor !== ""
+                    ? "border-purple-400 bg-purple-500/25 text-purple-200"
+                    : "border-slate-700 bg-slate-800 text-slate-400 hover:border-purple-400/70 hover:text-purple-200"
+                }`}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="lucide lucide-calendar-fold h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path d="M16 2v3" />
+                  <path d="M21 15V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h10v-5a1 1 0 011-1za2.4 2.4 0 01-.706 1.706l-3.588 3.588A2.4 2.4 0 0115 21" />
+                  <path d="M3 9h18" />
+                  <path d="M8 2v3" />
+                </svg>
               </button>
             )}
           </div>
@@ -395,60 +465,38 @@ export function PosTicketPanel({
         />
 
         {/* Reserva: hora pactada + minutos antes para avisar (solo cajero/
-            admin). La reserva NO imprime comanda al crearse; entra en la cola
-            como reserva y se confirma (cobro + comanda) en su momento. */}
-        {isBilling && (
-          <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/60 p-2">
-            <label className="flex cursor-pointer select-none items-center justify-between gap-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-purple-300">
-                Es reserva
+            admin). Se despliega con el icono de calendario junto al de
+            registrar. La reserva NO imprime comanda al crearse; entra en la
+            cola como reserva y se confirma (cobro + comanda) en su momento. */}
+        {isBilling && cart.scheduledFor !== "" && (
+          <div className="space-y-2 rounded-xl border border-purple-500/40 bg-purple-500/5 p-2">
+            <input
+              type="datetime-local"
+              value={toLocalDateTime(cart.scheduledFor)}
+              onChange={(e) => {
+                if (e.target.value) {
+                  cart.setScheduledFor(new Date(e.target.value).toISOString());
+                }
+              }}
+              className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:border-purple-400/70 focus:outline-none transition-shadow"
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                Avisar
               </span>
               <input
-                type="checkbox"
-                checked={cart.scheduledFor !== ""}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    // Por defecto fija la hora pactada a +30 min.
-                    const d = new Date(Date.now() + 30 * 60_000);
-                    cart.setScheduledFor(d.toISOString());
-                  } else {
-                    cart.setScheduledFor("");
-                  }
-                }}
-                className="h-5 w-5 accent-purple-500"
+                type="number"
+                min={1}
+                value={cart.reserveLeadMin}
+                onChange={(e) =>
+                  cart.setReserveLeadMin(Number(e.target.value))
+                }
+                className="h-8 w-16 rounded-lg border border-slate-700 bg-slate-800 px-2 text-center text-sm font-bold text-slate-200 focus:border-purple-400/70 focus:outline-none"
               />
-            </label>
-            {cart.scheduledFor !== "" && (
-              <>
-                <input
-                  type="datetime-local"
-                  value={toLocalDateTime(cart.scheduledFor)}
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      cart.setScheduledFor(new Date(e.target.value).toISOString());
-                    }
-                  }}
-                  className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:border-purple-400/70 focus:outline-none transition-shadow"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                    Avisar
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={cart.reserveLeadMin}
-                    onChange={(e) =>
-                      cart.setReserveLeadMin(Number(e.target.value))
-                    }
-                    className="h-8 w-16 rounded-lg border border-slate-700 bg-slate-800 px-2 text-center text-sm font-bold text-slate-200 focus:border-purple-400/70 focus:outline-none"
-                  />
-                  <span className="text-[10px] text-slate-500">
-                    min antes (en la cola)
-                  </span>
-                </div>
-              </>
-            )}
+              <span className="text-[10px] text-slate-500">
+                min antes (en la cola)
+              </span>
+            </div>
           </div>
         )}
 
@@ -463,9 +511,16 @@ export function PosTicketPanel({
           }`}
         >
           {busy ? (
-            "Enviando…"
+            cart.editingOrderId ? "Guardando…" : "Enviando…"
           ) : cartTotal === 0 ? (
             "COMPLETAR PEDIDO"
+          ) : isBilling && cart.editingOrderId ? (
+            <>
+              <span className="text-base font-bold">GUARDAR</span>
+              <span className="font-mono text-lg font-bold">
+                {formatPrice(cartTotal)}
+              </span>
+            </>
           ) : isBilling ? (
             <>
               <span className="text-base font-bold">ACEPTAR</span>

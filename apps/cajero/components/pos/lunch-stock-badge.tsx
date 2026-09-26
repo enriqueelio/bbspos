@@ -3,22 +3,27 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { LunchStockState } from "@bbspos/types";
 import { adjustLunchStock } from "@/actions/lunch-stock";
+import { addableUnits } from "@/lib/lunch-stock";
 
-/** Estilo del número, calcado del badge de atajos de la barra de categorías
- *  (pos-category-bar.tsx) para que el contador se lea como parte del mismo
- *  sistema visual del POS. */
+/** Estilo del número: un contador compacto y legible en la esquina de la
+ *  tarjeta, con el mismo tamaño de fuente y el mismo redondeo de las cifras
+ *  del POS para que se lea como un número más del sistema y no como un dato
+ *  ajeno. No lleva ningún número de tecla: es unidades de almuerzo. */
 const BADGE_BASE =
   "flex h-5 min-w-[22px] items-center justify-center rounded-full border px-1 font-mono text-[10px] leading-none transition-colors";
 
-/** Los cuatro estados del contador:
+/** Los cuatro estados del contador, calculados sobre las unidades que esta caja
+ *  todavía puede agregar (`remaining - heldByMe`): así el número baja cuando el
+ *  cajero suma una línea a su ticket y sube cuando la quita.
  *  sin cantidad -> guion neutro · normal -> número neutro · pocas -> rojo fijo
  *  agotado -> número real en gris (la tarjeta la marca AGOTADO). Cuando lo que
- *  queda ya está apartado en el ticket de esta caja el número sigue en su color
- *  normal: no se agotó, simplemente el cajero ya lo tiene todo (la tarjeta lo
- *  marca EN TU TICKET). */
+ *  queda ya está apartado en el ticket de esta caja el número llega a cero pero
+ *  no se pinta de agotado: no se agotó, simplemente el cajero ya lo tiene todo
+ *  (la tarjeta lo marca EN TU TICKET). */
 function badgeTone(state: LunchStockState): { tone: string; label: string } {
-  const { remaining, planned, lowThreshold, heldByMe } = state;
-  if (planned == null || remaining == null) {
+  const { remaining, planned, lowThreshold } = state;
+  const addable = addableUnits(state);
+  if (planned == null || remaining == null || addable == null) {
     return {
       tone: "border-amber-300/30 bg-transparent text-amber-200/60",
       label: "Sin cantidad: sumale unidades para empezar",
@@ -30,21 +35,21 @@ function badgeTone(state: LunchStockState): { tone: string; label: string } {
       label: "Agotado: sumale unidades para volver a venderlo",
     };
   }
-  if (remaining - heldByMe <= 0) {
+  if (addable <= 0) {
     return {
       tone: "border-amber-300/40 bg-amber-500/20 text-amber-100",
       label: `Las ${remaining} que quedan ya están en tu ticket`,
     };
   }
-  if (remaining <= lowThreshold) {
+  if (addable <= lowThreshold) {
     return {
       tone: "border-red-400/70 bg-red-500/25 text-red-200",
-      label: `Pocas unidades: ${remaining}`,
+      label: `Pocas unidades: ${addable}`,
     };
   }
   return {
     tone: "border-amber-300/40 bg-amber-500/20 text-amber-100",
-    label: `Quedan ${remaining}`,
+    label: `Quedan ${addable}`,
   };
 }
 
@@ -151,7 +156,11 @@ export function LunchStockBadge({
   const sinCantidad = state.planned == null || state.remaining == null;
   const agotado = state.remaining !== null && state.remaining <= 0;
   const { tone, label } = badgeTone(state);
-  const number = state.remaining === null ? "—" : String(state.remaining);
+  // El número es lo que la caja todavía puede agregar, no el disponible bruto:
+  // si no, una tarjeta con 5 unidades sigue marcando 5 con las 5 ya en el
+  // ticket y el cajero no ve que se está acabando su parte.
+  const addable = addableUnits(state);
+  const number = addable === null ? "—" : String(addable);
 
   return (
     <div className="relative" ref={wrapRef} onClick={(e) => e.stopPropagation()}>

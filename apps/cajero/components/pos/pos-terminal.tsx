@@ -44,9 +44,9 @@ import { PosTicketPanel } from "./pos-ticket-panel";
 import { PosBubasBuilder } from "./pos-bubas-builder";
 import { PosCartaGrid } from "./pos-carta-grid";
 import { LunchStockBadge } from "./lunch-stock-badge";
-import { usePosKeyboard } from "./use-pos-keyboard";
 import { getRequiredSauces, isMixtasItem } from "./pos-variant-selector";
 import { holdLunchUnits, syncLunchHolds } from "@/actions/lunch-stock";
+import { addableUnits } from "@/lib/lunch-stock";
 
 const CATEGORIES = FlavorCategoryList;
 
@@ -666,10 +666,11 @@ export function PosTerminal({
    *  si se puede vender. Son tres casos distintos y se muestran distinto:
    *  - `sin-cantidad`: todavía no se le asignó una cantidad para hoy. No se
    *    vende nada hasta que alguien le asigne una.
-   *  - `agotado`: tenía unidades y ya no queda ninguna. Se repone desde el número.
-   *  - `todo-apartado`: las unidades que quedan ya están en el ticket de ESTA
-   *    caja (`heldByMe`), así que no hay nada más que agregar. Al quitar líneas
-   *    se liberan y vuelve a habilitarse.
+   *  - `agotado`: tenía unidades y ya no queda ninguna, para nadie. Se repone
+   *    desde el número.
+   *  - `todo-apartado`: lo que le queda ya está en el ticket de ESTA caja, así
+   *    que no hay nada más que agregar. Al quitar líneas se liberan y vuelve a
+   *    habilitarse.
    *  Un plato sin control de cantidad (`lunchStock` null, una terminal que no
    *  lo lleva) no se bloquea: no hay dato para saber si tiene. */
   function lunchBlock(
@@ -679,7 +680,8 @@ export function PosTerminal({
     if (!stock) return null;
     if (stock.planned == null || stock.remaining == null) return "sin-cantidad";
     if (stock.remaining <= 0) return "agotado";
-    return stock.remaining - stock.heldByMe <= 0 ? "todo-apartado" : null;
+    const addable = addableUnits(stock);
+    return addable != null && addable <= 0 ? "todo-apartado" : null;
   }
   function applyStockOverride(
     menuItemId: string,
@@ -724,7 +726,15 @@ export function PosTerminal({
   async function tapMenuDayItem(menuItem: MenuItemView) {
     setNotice(null);
     try {
-      await holdLunchUnits(cart.cartId, menuItem.id, 1, cart.scheduledFor || null);
+      const next = await holdLunchUnits(
+        cart.cartId,
+        menuItem.id,
+        1,
+        cart.scheduledFor || null,
+      );
+      // El número de la tarjeta baja en uno con este estado, sin esperar el
+      // refresco: `heldByMe` ya viene incrementado.
+      if (next) applyStockOverride(menuItem.id, next);
     } catch (e) {
       setNotice(
         e instanceof Error
@@ -742,8 +752,8 @@ export function PosTerminal({
       optionId: null,
       optionName: null,
     });
-    // El número de la tarjeta no cambia (era nuestro cupo), pero el de las otras
-    // cajas sí: refrescás para que el resto del catálogo se actualice.
+    // El resto del catálogo también se actualiza (lo que otra caja tomó se ve
+    // desde acá), así que refrescamos igual.
     router.refresh();
   }
 
@@ -832,16 +842,6 @@ export function PosTerminal({
   const formOk =
     cart.items.length > 0 && !needsName && !needsDelivery;
 
-  // Atajos de teclado (flujo rápido tipo Square): teclas 1-9 seleccionan la
-  // categoría por índice y Enter dispara el cobro cuando hay productos.
-  usePosKeyboard({
-    panes: catalogPanes,
-    switchPane: (key) => switchPane(key as CatalogPane),
-    submit,
-    hasItems: cart.items.length > 0,
-    busy,
-  });
-
   return (
     <div className="flex h-full w-full bg-slate-950 overflow-hidden">
       {/* ===== Columna 1 (20%): Pedidos en Cola con scroll propio ===== */}
@@ -873,6 +873,7 @@ export function PosTerminal({
         onClear={handleClear}
         onSubmit={submit}
         onNotice={setNotice}
+        onLunchStock={applyStockOverride}
       />
 
       {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}

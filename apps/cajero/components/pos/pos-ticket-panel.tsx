@@ -9,6 +9,7 @@ import {
   type CartItem,
   type CustomerLoyaltyView,
   type CustomerSuggestion,
+  type LunchStockState,
 } from "@bbspos/types";
 import {
   getCustomerLoyalty,
@@ -46,6 +47,7 @@ export function PosTicketPanel({
   onClear,
   onSubmit,
   onNotice,
+  onLunchStock,
 }: {
   cart: ReturnType<typeof usePosCart>;
   isBilling: boolean;
@@ -62,6 +64,9 @@ export function PosTicketPanel({
   onSubmit: () => void;
   /** Muestra un aviso no bloqueante en el panel del ticket (lealtad, registro). */
   onNotice: (msg: string) => void;
+  /** Estado de la jornada del almuerzo recalculado tras apartar o soltar
+   *  unidades, para que el número de la tarjeta baje o suba en el acto. */
+  onLunchStock: (menuItemId: string, state: LunchStockState) => void;
 }) {
   const [suggestions, setSuggestions] = useState<CustomerSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -86,12 +91,14 @@ export function PosTicketPanel({
         // `scheduledFor` en null (o vacío) = venta de hoy: ahí sí se aparta. En
         // una reserva para otro día la acción no aparta nada y el cupo de esa
         // fecha se revisa al guardar.
-        await holdLunchUnits(
+        const next = await holdLunchUnits(
           cart.cartId,
           item.menuItemId,
           delta,
           cart.scheduledFor || null,
         );
+        // El número de la tarjeta baja ya, sin esperar el refresco.
+        if (next) onLunchStock(item.menuItemId, next);
       } catch (e) {
         onNotice(
           e instanceof Error
@@ -104,7 +111,9 @@ export function PosTicketPanel({
       // Suelta el cupo aunque falle la llamada: quitar la línea nunca se bloquea
       // y, en el peor caso, el apartado se libera solo al vencer.
       try {
-        await unholdLunchUnits(cart.cartId, item.menuItemId, -delta);
+        const next = await unholdLunchUnits(cart.cartId, item.menuItemId, -delta);
+        // Y el número de la tarjeta sube en el acto.
+        if (next) onLunchStock(item.menuItemId, next);
       } catch {
         // Sin efecto: el TTL limpia lo que quede.
       }
@@ -115,7 +124,12 @@ export function PosTicketPanel({
   async function removeLine(item: CartItem) {
     if (item.kind === "MENU_ITEM") {
       try {
-        await unholdLunchUnits(cart.cartId, item.menuItemId, item.quantity);
+        const next = await unholdLunchUnits(
+          cart.cartId,
+          item.menuItemId,
+          item.quantity,
+        );
+        if (next) onLunchStock(item.menuItemId, next);
       } catch {
         // Sin efecto: el TTL limpia lo que quede.
       }

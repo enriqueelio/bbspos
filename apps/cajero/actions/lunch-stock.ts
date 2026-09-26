@@ -5,11 +5,10 @@ import {
   prisma,
   acquireLunchHold,
   adjustLunchStockForDay,
+  lunchStockByItem,
   reconcileCartLunchHolds,
   releaseCartLunchHolds,
   releaseLunchHold,
-  setLunchLowThresholdForDay,
-  setLunchPlannedForDay,
   zonedDateKey,
 } from "@bbspos/db";
 import type { LunchStockState } from "@bbspos/types";
@@ -29,21 +28,6 @@ async function requireUserId() {
   return user.id;
 }
 
-/** Programa la cantidad de unidades que la cocina prepara hoy para un plato.
- *  Devuelve el estado recalculado para que la tarjeta se actualice en el acto.
- *  Exige sesión; el rango y la pertenencia al Menú del Día de hoy se validan en
- *  la capa de base de datos. */
-export async function setLunchPlanned(
-  menuItemId: string,
-  planned: number,
-  cartId?: string | null,
-): Promise<LunchStockState> {
-  await getRequiredSession();
-  const state = await setLunchPlannedForDay(menuItemId, planned, cartId);
-  revalidatePath("/");
-  return state;
-}
-
 /** Corrige la cantidad disponible de la jornada con un delta, dejando registro
  *  de quién lo hizo, cuándo y con qué nota. Si el plato no tiene cantidad
  *  programada, una reposición positiva la establece como base. */
@@ -59,23 +43,6 @@ export async function adjustLunchStock(
     delta,
     await requireUserId(),
     note,
-    cartId,
-  );
-  revalidatePath("/");
-  return state;
-}
-
-/** Cambia el umbral de aviso de stock bajo del plato en la jornada, sin tocar la
- *  cantidad: el aviso de "pocas unidades" no habilita ni bloquea la venta. */
-export async function setLunchLowThreshold(
-  menuItemId: string,
-  lowThreshold: number,
-  cartId?: string | null,
-): Promise<LunchStockState> {
-  await getRequiredSession();
-  const state = await setLunchLowThresholdForDay(
-    menuItemId,
-    lowThreshold,
     cartId,
   );
   revalidatePath("/");
@@ -109,15 +76,38 @@ export async function holdLunchUnits(
   return state;
 }
 
-/** Devuelve unidades al común: el cajero quitó la línea o bajó la cantidad. */
+/** Estado de la jornada de un plato tal como lo ve esta caja: el disponible
+ *  descuenta lo apartado por las demás, no lo propio. Es lo que deja al número
+ *  de la tarjeta subir en el acto cuando el cajero suelta una línea. */
+async function stockForThisCart(
+  cartId: string,
+  menuItemId: string,
+): Promise<LunchStockState | null> {
+  const item = await prisma.menuItem.findUnique({
+    where: { id: menuItemId },
+    select: { id: true, name: true },
+  });
+  if (!item) return null;
+  const rows = await lunchStockByItem(
+    [{ id: item.id, name: item.name }],
+    zonedDateKey(),
+    { excludeCartId: cartId || null },
+  );
+  return rows.get(item.id) ?? null;
+}
+
+/** Devuelve unidades al común: el cajero quitó la línea o bajó la cantidad.
+ *  Devuelve el estado recalculado para que el contador de la tarjeta suba sin
+ *  esperar el refresco del catálogo. */
 export async function unholdLunchUnits(
   cartId: string,
   menuItemId: string,
   quantity?: number,
-): Promise<void> {
+): Promise<LunchStockState | null> {
   await getRequiredSession();
   await releaseLunchHold(cartId, menuItemId, quantity ?? 1);
   revalidatePath("/");
+  return stockForThisCart(cartId, menuItemId);
 }
 
 /** Reclava los apartados con las líneas que tiene el ticket ahora mismo. Se

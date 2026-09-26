@@ -77,10 +77,16 @@ export async function acquireLunchHold(
     const free = row.remaining - myHeld;
 
     if (free <= 0 || myHeld + quantity > row.remaining) {
+      // Tres motivos distintos, y el cajero necesita saber cuál: si el cupo
+      // restante ya está en su propio ticket no tiene nada que resolver (basta
+      // con quitar la línea si la quiere antes); si se lo llevó otra caja hay que
+      // avisar de que ya no está; y en el medio está "alcanza para algunas".
       throw new Error(
-        free <= 0
-          ? `A ${item.name} ya no le queda nada: otra caja se lo llevó.`
-          : `A ${item.name} solo le quedan ${free} para esta caja.`,
+        row.remaining > 0 && myHeld >= row.remaining
+          ? `A ${item.name} ya lo tenés todo apartado en tu ticket. Quitá la línea si querés vender otra cosa.`
+          : free <= 0
+            ? `A ${item.name} ya no le queda nada: otra caja se lo llevó.`
+            : `A ${item.name} solo le quedan ${free} para esta caja.`,
       );
     }
 

@@ -43,15 +43,26 @@ async function see(cartId: string | null, id: string, name: string) {
   return rows.get(id)!;
 }
 
-async function rejects(label: string, fn: () => Promise<unknown>) {
+async function rejects(
+  label: string,
+  fn: () => Promise<unknown>,
+  expectIn?: string,
+) {
   try {
     await fn();
     console.log(`FALLA ${label}: se aceptó y no debía`);
     process.exitCode = 1;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.log(`OK   ${label}: ${msg.slice(0, 78)}`);
-    pass += 1;
+    // El texto importa tanto como el rechazo: el cajero tiene que saber si lo que
+    // no alcanza es porque ya lo tiene en su ticket o porque lo tomó otra caja.
+    const ok = expectIn == null || msg.includes(expectIn);
+    if (ok) pass += 1;
+    console.log(`${ok ? "OK  " : "FALLA"} ${label}: ${msg.slice(0, 78)}`);
+    if (!ok) {
+      console.log(`      (se esperaba que el motivo contenga "${expectIn}")`);
+      process.exitCode = 1;
+    }
   }
 }
 
@@ -104,10 +115,45 @@ async function main() {
   assert("heldByMe de A", a.heldByMe, 4);
   assert("heldByMe de B", b.heldByMe, 6);
   assert("heldByMe de C (no tiene nada)", (await see(C, item.id, item.name)).heldByMe, 0);
-  await rejects("A no puede pasar de 10 en total", () => acquireLunchHold(A, item.id, 4));
-  await rejects("A ya no puede tomar ni una más", () => acquireLunchHold(A, item.id, 1));
-  await rejects("B ya no puede tomar más", () => acquireLunchHold(B, item.id, 1));
-  await rejects("C no puede tomar ni una", () => acquireLunchHold(C, item.id, 1));
+  // El motivo del rechazo dice la verdad: A y B tienen el cupo tomado por su
+  // propio ticket, C por el de los otros.
+  await rejects(
+    "A no puede pasar de 10 en total",
+    () => acquireLunchHold(A, item.id, 4),
+    "ya lo tenés todo apartado en tu ticket",
+  );
+  await rejects(
+    "A ya no puede tomar ni una más",
+    () => acquireLunchHold(A, item.id, 1),
+    "ya lo tenés todo apartado en tu ticket",
+  );
+  await rejects(
+    "B ya no puede tomar más",
+    () => acquireLunchHold(B, item.id, 1),
+    "ya lo tenés todo apartado en tu ticket",
+  );
+  await rejects(
+    "C no puede tomar ni una",
+    () => acquireLunchHold(C, item.id, 1),
+    "otra caja se lo llevó",
+  );
+
+  // 4b. El caso intermedio: A suelta 3 de las 4, así que le alcanza para 3 más y
+  //     solo entonces el rechazo dice cuántas le quedan. Un pedido de 20 (el
+  //     "no debería pasar" de un ticket grande) cae acá: nunca se acepta.
+  await releaseLunchHold(A, item.id, 3);
+  await rejects(
+    "A pide 20 y no alcanza",
+    () => acquireLunchHold(A, item.id, 20),
+    "solo le quedan 3 para esta caja",
+  );
+  await rejects(
+    "A pide 4 y solo le alcanzan 3",
+    () => acquireLunchHold(A, item.id, 4),
+    "solo le quedan 3 para esta caja",
+  );
+  await acquireLunchHold(A, item.id, 3);
+  assert("A vuelve a tener 4", (await see(A, item.id, item.name)).heldByMe, 4);
 
   // 5. B suelta 2 unidades: vuelven al común y A puede tomarlas.
   const left = await releaseLunchHold(B, item.id, 2);

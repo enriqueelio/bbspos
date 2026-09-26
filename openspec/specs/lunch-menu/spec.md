@@ -90,7 +90,7 @@ El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo 
 
 ### Requirement: Entrega del Menú del Día a las terminales
 
-El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo público de la tienda— únicamente los platos disponibles con la bandera de Menú del Día vigente para la jornada actual, cada uno con su precio fijo y con el estado de cantidad de la jornada: cuántas unidades se programaron para el día, cuántas se vendieron, cuántas hay apartadas en tickets en curso y cuántas quedan disponibles. La cantidad disponible SHALL descontar los apartados de las otras cajas y no los de la caja que consulta, de modo que el número de la tarjeta no se mueva cuando el propio cajero suma líneas y las demás cajas sí vean esas unidades descontadas. Cuando nadie ha programado una cantidad para ese plato en la jornada, el sistema SHALL entregarlo sin cantidad controlada. La cantidad SHALL corresponder a la jornada en que el plato se produce, de modo que un pedido reservado para otra fecha consuma la cantidad de esa otra fecha.
+El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo público de la tienda— únicamente los platos disponibles con la bandera de Menú del Día vigente para la jornada actual, cada uno con su precio fijo y con el estado de cantidad de la jornada: cuántas unidades se programaron para el día, cuántas se vendieron, cuántas hay apartadas en tickets en curso y cuántas quedan disponibles. La cantidad disponible SHALL descontar los apartados de las otras cajas y no los de la caja que consulta, de modo que las demás cajas vean esas unidades descontadas. Junto con ese valor, el sistema SHALL entregar a la caja que consulta cuántas de esas unidades tiene ella misma apartadas en su ticket, para que la terminal pueda mostrarle lo que todavía puede agregar. Cuando nadie ha programado una cantidad para ese plato en la jornada, el sistema SHALL entregarlo sin cantidad controlada. La cantidad SHALL corresponder a la jornada en que el plato se produce, de modo que un pedido reservado para otra fecha consuma la cantidad de esa otra fecha.
 
 #### Scenario: La terminal muestra los platos del día
 
@@ -118,7 +118,9 @@ El sistema SHALL controlar, por plato del Menú del Día y por jornada, la canti
 
 La programación y los ajustes SHALL realizarse desde la app del cajero, por personal con sesión iniciada, sin requerir permisos especiales de administración, y cada ajuste SHALL quedar registrado con su monto, la fecha y hora, y el usuario que lo realizó. El sistema SHALL rechazar la programación o el ajuste de un plato que no pertenece al Menú del Día de la jornada, o de una jornada distinta a la actual.
 
-El sistema SHALL impedir agregar al ticket en curso un plato cuya cantidad disponible haya llegado a cero o sea negativa, dejando disponible la vía para reponer unidades y rehabilitarlo. El bloqueo SHALL operar sobre el alta del plato en el ticket y SHALL sostenerse en el servidor, no solo en la pantalla: agregar un plato del Menú del Día al ticket SHALL apartar sus unidades para esa caja antes de agregarlo, y si ya no alcanzan, el servidor SHALL rechazar el alta y la línea no SHALL quedar en el ticket. La cantidad de cada jornada SHALL conservarse como histórico para poder comparar lo programado con lo vendido, y el personal del admin SHALL poder consultar esa comparación por jornada sin poder modificar las cantidades desde el admin.
+El sistema SHALL impedir agregar al ticket en curso un plato cuya cantidad disponible haya llegado a cero o sea negativa, dejando disponible la vía para reponer unidades y rehabilitarlo. El bloqueo SHALL operar sobre el alta del plato en el ticket y SHALL sostenerse en el servidor, no solo en la pantalla: agregar un plato del Menú del Día al ticket SHALL apartar sus unidades para esa caja antes de agregarlo, y si ya no alcanzan, el servidor SHALL rechazar el alta y la línea no SHALL quedar en el ticket. La cantidad de cada jornada SHALL conservarse como histórico para poder comparar lo programado con lo vendido.
+
+Las cantidades de la jornada y su comparación por jornada SHALL appartener exclusivamente a la app del cajero, que las programa, ajusta y muestra en la tarjeta de cada plato. La gestión de menú del admin SHALL limitarse a definir qué almuerzos se ofrecen en la jornada y a qué precio: no SHALL mostrar la cantidad programada, la vendida, la apartada ni la disponible, ni el histórico por jornada, y no SHALL ofrecer ninguna vía para programarlas o ajustarlas.
 
 #### Scenario: El personal programa la cantidad del día
 
@@ -158,12 +160,17 @@ El sistema SHALL impedir agregar al ticket en curso un plato cuya cantidad dispo
 #### Scenario: El admin consulta el día en curso
 
 - **WHEN** el admin abre la gestión de almuerzos durante la jornada
-- **THEN** ve la cantidad programada, la vendida, la apartada en tickets en curso y la disponible de cada plato del Menú del Día, sin poder modificarlas
+- **THEN** ve el nombre, el precio y las acciones de cada plato del Menú del Día, y no ve la cantidad programada, la vendida, la apartada ni la disponible
 
 #### Scenario: El admin compara jornadas
 
-- **WHEN** el admin consulta el histórico de almuerzos
-- **THEN** ve por fecha y plato lo que se programó, lo que se vendió, lo que está apartado y lo que quedó, de jornadas anteriores
+- **WHEN** el admin busca consultar el histórico de almuerzos por jornada
+- **THEN** la gestión de menú no le ofrece esa comparación, aunque el histórico de cantidades de esas jornadas siga conservado
+
+#### Scenario: El admin no programa cantidades
+
+- **WHEN** el admin intenta cambiar la cantidad programada, la apartada o la disponible de un plato del Menú del Día
+- **THEN** la interfaz no le ofrece ninguna vía para hacerlo y la jornada conserva las cantidades que fijó el cajero
 
 #### Scenario: Ajuste sobre un plato que no es del Menú del Día
 

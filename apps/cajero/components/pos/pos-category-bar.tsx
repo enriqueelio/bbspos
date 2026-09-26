@@ -82,35 +82,22 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
 };
 
 /** Tarjeta de categoría: fondo oscuro sutil, borde elegante, hover suave y
- *  estado activo de alto contraste con el acento esmeralda del tema. */
+ *  estado activo de alto contraste con el acento esmeralda del tema. La
+ *  esquina queda libre a propósito: el número de unidades del almuerzo que se
+ *  muestra en las tarjetas de la grilla se lee como dato de esa tarjeta, y no
+ *  como un número de acceso rápido de la barra.
+ *
+ *  `focus:outline-none` no es decoración: sin atajos de teclado la sección se
+ *  elige con el clic, y el anillo de foco que dibuja el navegador (blanco sobre
+ *  este fondo) saltaba a la vista en cuanto el cajero apretaba cualquier tecla
+ *  después de elegir, haciendo creer que el borde había cambiado de color. Es el
+ *  mismo tratamiento que ya reciben los campos de texto del POS. */
 const CATEGORY_CARD = {
-  base: "relative inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border px-2 text-xs font-bold capitalize tracking-wide transition-all duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
+  base: "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border px-2 text-xs font-bold capitalize tracking-wide transition-all duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
   selected:
     "border-success bg-success/15 text-white shadow-md shadow-success/25",
   idle: "border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-600 hover:bg-slate-800/80 hover:text-white",
 };
-
-/** Badge del atajo de teclado (teclas 1-9): visible solo en los primeros 9
- *  panes de la barra, la misma numeración que usa el listener de teclado. */
-function ShortcutBadge({
-  index,
-  selected,
-}: {
-  index: number;
-  selected: boolean;
-}) {
-  return (
-    <span
-      className={`absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full border font-mono text-[9px] leading-none ${
-        selected
-          ? "border-success/60 text-white"
-          : "border-slate-600 text-slate-500"
-      }`}
-    >
-      {index + 1}
-    </span>
-  );
-}
 
 export function PosCategoryBar({
   panes,
@@ -124,7 +111,7 @@ export function PosCategoryBar({
   return (
     <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
       <div className="grid grid-cols-5 justify-items-stretch gap-2 px-4">
-        {panes.map((pane, index) => {
+        {panes.map((pane) => {
           const selected = pane.key === activeKey;
           const Icon = PANE_ICON[pane.key];
           return (
@@ -147,7 +134,6 @@ export function PosCategoryBar({
                 />
               )}
               <span className="leading-tight line-clamp-2">{pane.label}</span>
-              {index <= 8 && <ShortcutBadge index={index} selected={selected} />}
             </button>
           );
         })}

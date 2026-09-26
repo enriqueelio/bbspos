@@ -235,7 +235,7 @@ El terminal SHALL mostrar una sección "Carta" además de la de Almuerzos, con u
 
 ### Requirement: Contador de unidades en la tarjeta de almuerzo
 
-La grilla de almuerzos del día del terminal del cajero SHALL mostrar en la esquina superior derecha de cada tarjeta de plato las unidades que esa caja todavía puede agregar, es decir la cantidad disponible de la jornada menos las que ya tiene apartadas en su propio ticket, con el mismo lenguaje visual que los números de acceso directo del catálogo. El número SHALL bajar en uno cada vez que el cajero agrega una unidad a su ticket y SHALL subir en uno cada vez que la quita, sin que el cajero tenga que recargar la página. El sistema SHALL mostrar un guion cuando el plato aún no tiene cantidad, el número de unidades agregables en estado normal, el número en rojo cuando llegue al umbral de aviso, y el número real en gris cuando no quede ninguna, mostrando la diferencia cuando la venta haya superado lo disponible. El umbral de aviso SHALL ser de cinco unidades, y el sistema no SHALL ofrecer ninguna vía para cambiarlo desde el POS ni desde el admin.
+La grilla de almuerzos del día del terminal del cajero SHALL mostrar en la esquina superior derecha de cada tarjeta de plato las unidades que esa caja todavía puede agregar, es decir la cantidad disponible de la jornada menos las que ya tiene apartadas en su propio ticket. Ese número SHALL ser el único número en esa esquina de la tarjeta, para que se lea como la cantidad de almuerzo y no como otra cosa del catálogo. El número SHALL bajar en uno cada vez que el cajero agrega una unidad a su ticket y SHALL subir en uno cada vez que la quita, sin que el cajero tenga que recargar la página. El sistema SHALL mostrar un guion cuando el plato aún no tiene cantidad, el número de unidades agregables en estado normal, el número en rojo cuando llegue al umbral de aviso, y el número real en gris cuando no quede ninguna, mostrando la diferencia cuando la venta haya superado lo disponible. El umbral de aviso SHALL ser de cinco unidades, y el sistema no SHALL ofrecer ninguna vía para cambiarlo desde el POS ni desde el admin.
 
 Un almuerzo del día SHALL bloquearse, sin agregar el plato al ticket en curso, mientras no se le haya asignado una cantidad para la jornada, cuando ya no le quede ninguna unidad, o cuando las unidades que le quedan ya estén todas en el ticket de esa misma caja. En los tres casos la tarjeta SHALL verse en gris y SHALL distinguir el motivo: **sin cantidad** cuando todavía no se le asignó ninguna, **agotada** cuando se le asignó y ya no queda ninguna, y **en tu ticket** cuando lo que queda ya lo tiene esa caja. El bloqueo por cupo propio SHALL aplicarse sin depender del refresco del catálogo. El número de esas tarjetas SHALL seguir siendo interactivo, para que el cajero pueda asignar la cantidad o reponer unidades y rehabilitar la tarjeta.
 
@@ -257,6 +257,11 @@ Hacer clic sobre el número de la tarjeta SHALL abrir un menú emergente cuya ú
 
 - **WHEN** un plato del Menú del Día tiene unidades disponibles por encima del umbral de aviso y esa caja no tiene ninguna apartada en su ticket
 - **THEN** su tarjeta muestra la cantidad disponible en la esquina superior derecha, junto al nombre y al precio
+
+#### Scenario: El número de la tarjeta no se confunde con otro dato
+
+- **WHEN** el cajero mira la tarjeta de un plato del Menú del Día
+- **THEN** el único número en su esquina superior derecha es el de las unidades agregables, sin ningún otro número de la barra de secciones en la misma posición
 
 #### Scenario: Pocas unidades
 
@@ -327,6 +332,42 @@ Hacer clic sobre el número de la tarjeta SHALL abrir un menú emergente cuya ú
 
 - **WHEN** el cajero intenta agregar una unidad de un plato del Menú del Día cuyas unidades disponibles ya están todas apartadas por su propio ticket
 - **THEN** el servidor rechaza el alta, la línea no se agrega al ticket y el aviso dice que ya las tiene todas en su ticket, en vez de culpar a otra caja
+
+### Requirement: POS conducido con el mouse
+
+La vista de Nueva Venta del terminal del cajero SHALL conducirse con el mouse: SHALL NOT registrar ningún atajo de teclado global que cambie de sección del catálogo ni que dispare el cobro, y la barra de secciones del catálogo SHALL cambiar de sección únicamente al hacer clic en la tarjeta de la sección. Las tarjetas de la barra SHALL NOT mostrar numeritos de tecla, ni ninguna otra marca que sugiera que su sección se puede elegir con el teclado. La tarjeta de sección SHALL mantener su mismo aspecto al apretar cualquier tecla, sin que aparezca un borde de otro color: el sistema SHALL NOT dibujar el anillo de foco del navegador sobre ella. El cobro SHALL quedar a cargo del botón de cobro del ticket en curso, que SHALL seguir validando el nombre del cliente y el tipo de entrega antes de enviar el pedido.
+
+El sistema SHALL NOT eliminar el uso del teclado donde no obliga a soltar el mouse: la escritura en los campos de texto SHALL seguir funcionando con normalidad, `Enter` en el campo de nombre del cliente SHALL seguir aceptando el nombre escrito, `Escape` SHALL seguir cerrando los menús emergentes y el popover del contador, y la grilla del arqueo de caja SHALL conservar su navegación por teclado.
+
+#### Scenario: Las teclas de número no cambian de sección
+
+- **WHEN** el cajero presiona una tecla numérica sobre la vista de Nueva Venta
+- **THEN** la sección activa del catálogo no cambia y el teclado no produce ninguna otra acción en la pantalla
+
+#### Scenario: La barra de secciones no muestra numeritos
+
+- **WHEN** el cajero mira la barra de secciones del catálogo
+- **THEN** cada tarjeta muestra solo su ícono y su nombre, sin ningún número ni marca de tecla de acceso rápido
+
+#### Scenario: El borde de la sección no cambia al apretar una tecla
+
+- **WHEN** el cajero elige una sección con el clic y después aprieta cualquier tecla del teclado
+- **THEN** la tarjeta de esa sección mantiene exactamente el mismo borde y color, sin que aparezca un anillo de foco de otro color, y la sección activa sigue siendo la elegida con el clic
+
+#### Scenario: El cobro es solo con el botón del ticket
+
+- **WHEN** el cajero tiene productos en el ticket en curso y presiona Enter
+- **THEN** no se cobra el pedido y el cobro solo ocurre al hacer clic en el botón de cobro del ticket en curso
+
+#### Scenario: Se cobra igual con el botón
+
+- **WHEN** el cajero completa nombre y tipo de entrega y hace clic en el botón de cobro del ticket
+- **THEN** el pedido se envía igual que antes y no depende de ninguna tecla
+
+#### Scenario: El teclado sigue escribiendo en los campos
+
+- **WHEN** el cajero escribe el nombre del cliente y presiona Enter en ese campo
+- **THEN** el nombre se acepta y se cierra el desplegable de sugerencias, como antes de quitar los atajos
 
 ### Requirement: El número del ticket y el apartado van juntos
 

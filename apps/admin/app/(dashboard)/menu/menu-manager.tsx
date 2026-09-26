@@ -36,7 +36,6 @@ import {
   type DrinkPrice,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
-  type LunchStockState,
   type MenuCategory as MenuCategoryType,
   type Size,
   type Topping,
@@ -196,23 +195,12 @@ export interface MenuItemAdminView {
   imageUrl: string | null;
   options: { id: string; name: string; price: number }[];
   available: boolean;
-  enMenuDelDiaHoy: boolean;
-  /** Cantidad de la jornada en solo lectura: el admin observa, el cajero
-   *  programa y ajusta. Sin cantidad programada planned/remaining son null. */
-  lunchStock: LunchStockState;
 }
 
 export interface AlitaSauceAdminView {
   id: string;
   name: string;
   available: boolean;
-}
-
-/** Una fila del histórico: la cantidad de un plato en una jornada concreta. */
-export interface LunchHistoryAdminView extends LunchStockState {
-  date: string;
-  menuItemId: string;
-  name: string;
 }
 
 /** Tabs de la página de gestión del menú: una sección visible a la vez. */
@@ -264,191 +252,6 @@ function CollapsibleCard({
         </div>
       </div>
     </Card>
-  );
-}
-
-/** dd/mm/aaaa a partir de la clave de jornada, sin pasar por `new Date` para
- *  no confiar en la zona horaria del navegador. */
-function formatDayKey(date: string) {
-  const [y, m, d] = date.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-function dayWeekday(date: string) {
-  const [y, m, d] = date.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("es-BO", {
-    weekday: "long",
-  });
-}
-
-/** Hist collapsible de almuerzos por jornada, agrupado por fecha y con el
- *  total de la jornada para comparar de un vistazo lo programado contra lo
- *  vendido. Solo lectura. */
-function LunchHistoryPanel({ rows }: { rows: LunchHistoryAdminView[] }) {
-  const [open, setOpen] = useState(false);
-  const byDate = new Map<string, LunchHistoryAdminView[]>();
-  for (const row of rows) {
-    const list = byDate.get(row.date) ?? [];
-    list.push(row);
-    byDate.set(row.date, list);
-  }
-  // Jornada más reciente primero.
-  const dates = [...byDate.keys()].sort((a, b) => b.localeCompare(a));
-
-  return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-slate-800">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 bg-slate-900/60 px-4 py-3 text-left transition-colors hover:bg-slate-900"
-      >
-        <span className="text-sm font-semibold text-white">
-          Histórico por jornada
-          <span className="ml-2 font-normal text-muted-foreground">
-            {dates.length === 0
-              ? "sin jornadas con cantidad programada"
-              : `${dates.length} ${dates.length === 1 ? "jornada" : "jornadas"}`}
-          </span>
-        </span>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-300",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-in-out",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-        )}
-      >
-        <div className="overflow-hidden">
-          {dates.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-muted-foreground">
-              Todavía no hay cantidades programadas en ninguna jornada. En cuanto
-              el cajero programe un almuerzo, aquí se podrá comparar lo
-              programado contra lo vendido.
-            </p>
-          ) : (
-            <div className="divide-y divide-slate-800">
-              {dates.map((date) => {
-                const items = (byDate.get(date) ?? []).sort((a, b) =>
-                  a.name.localeCompare(b.name),
-                );
-                const totalPlanned = items.reduce(
-                  (acc, r) => acc + (r.planned ?? 0),
-                  0,
-                );
-                const totalSold = items.reduce((acc, r) => acc + r.sold, 0);
-                const totalHeld = items.reduce((acc, r) => acc + r.held, 0);
-                // El disponible se suma desde las filas: cada una ya descuenta sus
-                // propios ajustes y lo apartado, así que planned − sold mentía
-                // cuando la cocina corrigió cantidades o una caja tiene el plato
-                // en su ticket.
-                const totalRemaining = items.reduce(
-                  (acc, r) => acc + (r.remaining ?? 0),
-                  0,
-                );
-                return (
-                  <div key={date} className="px-4 py-3">
-                    <div className="mb-2 flex items-baseline justify-between gap-2">
-                      <p className="text-sm font-medium capitalize text-white">
-                        {formatDayKey(date)}{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          {dayWeekday(date)}
-                        </span>
-                      </p>
-                      <p className="text-xs tabular-nums text-muted-foreground">
-                        Total programado{" "}
-                        <span className="font-semibold text-foreground">
-                          {totalPlanned}
-                        </span>{" "}
-                        · vendido{" "}
-                        <span className="font-semibold text-foreground">
-                          {totalSold}
-                        </span>{" "}
-                        · apartado{" "}
-                        <span className="font-semibold text-foreground">
-                          {totalHeld}
-                        </span>{" "}
-                        · disponibles{" "}
-                        <span
-                          className={cn(
-                            "font-semibold",
-                            totalRemaining <= 0
-                              ? "text-red-500"
-                              : "text-foreground",
-                          )}
-                        >
-                          {totalRemaining}
-                        </span>
-                      </p>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                          <th className="py-1 font-medium">Plato</th>
-                          <th className="py-1 text-right font-medium">
-                            Prog.
-                          </th>
-                          <th className="py-1 text-right font-medium">
-                            Vend.
-                          </th>
-                          <th
-                            className="py-1 text-right font-medium"
-                            title="Unidades en el ticket en curso de alguna caja"
-                          >
-                            Apart.
-                          </th>
-                          <th className="py-1 text-right font-medium">
-                            Disponib.
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.map((r) => (
-                          <tr key={r.menuItemId} className="border-t border-slate-800/60">
-                            <td className="py-1.5 text-foreground">{r.name}</td>
-                            <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                              {r.planned ?? "—"}
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                              {r.planned === null ? "—" : r.sold}
-                            </td>
-                            <td className="py-1.5 text-right tabular-nums text-muted-foreground">
-                              {r.planned === null || r.held === 0
-                                ? "—"
-                                : r.held}
-                            </td>
-                            <td
-                              className={cn(
-                                "py-1.5 text-right tabular-nums font-medium",
-                                r.remaining === null
-                                  ? "text-muted-foreground"
-                                  : r.remaining <= 0
-                                    ? "text-red-500"
-                                    : r.remaining <= r.lowThreshold
-                                      ? "text-amber-500"
-                                      : "text-foreground",
-                              )}
-                            >
-                              {r.remaining ?? "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -887,7 +690,6 @@ export function MenuManager({
   toppings,
   drinkPrices,
   menuItems,
-  lunchHistory,
   alitaSauces,
 }: {
   currentUserRole: Role;
@@ -897,8 +699,6 @@ export function MenuManager({
   toppings: Topping[];
   drinkPrices: DrinkPrice[];
   menuItems: MenuItemAdminView[];
-  /** Histórico por jornada de almuerzos, agrupado por fecha en la vista. */
-  lunchHistory: LunchHistoryAdminView[];
   alitaSauces: AlitaSauceAdminView[];
 }) {
   const isSuperAdmin = currentUserRole === Role.SUPER_ADMIN;
@@ -955,7 +755,7 @@ export function MenuManager({
     description: "",
   });
   const [almuerzosQuery, setAlmuerzosQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<MenuTabKey>("carta");
+  const [activeTab, setActiveTab] = useState<MenuTabKey>("almuerzos");
   const [salsaForm, setSalsaForm] = useState({ name: "" });
   const [editingSalsa, setEditingSalsa] = useState<AlitaSauceAdminView | null>(
     null,
@@ -1274,24 +1074,6 @@ export function MenuManager({
                 <tr className="border-b border-slate-800 bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Nombre</th>
                   <th className="px-4 py-3 text-right font-medium">Precio</th>
-                  <th className="px-4 py-3 text-right font-medium" title="Unidades que la cocina programó para hoy">
-                    Prog.
-                  </th>
-                  <th className="px-4 py-3 text-right font-medium" title="Unidades ya vendidas hoy">
-                    Vend.
-                  </th>
-                  <th
-                    className="px-4 py-3 text-right font-medium"
-                    title="Unidades que ya están en el ticket en curso de alguna caja"
-                  >
-                    Apart.
-                  </th>
-                  <th
-                    className="px-4 py-3 text-right font-medium"
-                    title="Programado + ajustes − vendido − apartado"
-                  >
-                    Disponib.
-                  </th>
                   <th className="px-4 py-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
@@ -1299,9 +1081,6 @@ export function MenuManager({
                 {filteredAlmuerzos.map((item, i) => {
                   const isAvailable = item.available;
                   const zebra = i % 2 === 1 ? "bg-slate-900/40" : undefined;
-                  const stock = item.lunchStock;
-                  const agotado =
-                    stock.remaining !== null && stock.remaining <= 0;
                   return (
                     <tr
                       key={item.id}
@@ -1315,38 +1094,6 @@ export function MenuManager({
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">
                         {formatPrice(item.price)}
-                      </td>
-                      {/* Lectura de la jornada: guion si el plato no tiene
-                          cantidad programada. Programar y reponer es del cajero. */}
-                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                        {stock.planned ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                        {stock.planned === null ? "—" : stock.sold}
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                        {stock.planned === null || stock.held === 0
-                          ? "—"
-                          : stock.held}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-2.5 text-right tabular-nums font-medium",
-                          stock.remaining === null
-                            ? "text-muted-foreground"
-                            : agotado
-                              ? "text-red-500"
-                              : stock.remaining <= stock.lowThreshold
-                                ? "text-amber-500"
-                                : "text-foreground",
-                        )}
-                      >
-                        {stock.remaining ?? "—"}
-                        {agotado && (
-                          <span className="ml-1.5 text-[10px] font-semibold uppercase text-red-500/80">
-                            agotado
-                          </span>
-                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-2">
@@ -1394,7 +1141,7 @@ export function MenuManager({
                 {filteredAlmuerzos.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={3}
                       className="px-4 py-6 text-center text-sm text-muted-foreground"
                     >
                       {almuerzos.length === 0
@@ -1406,8 +1153,6 @@ export function MenuManager({
               </tbody>
             </table>
           </div>
-
-          <LunchHistoryPanel rows={lunchHistory} />
         </div>
       </CollapsibleCard>
       )}

@@ -11,6 +11,7 @@ import {
   cartItemUnitTotal,
   formatOrderCode,
   formatPrice,
+  isLunchItem,
   Role,
   shortCustomerName,
   type Catalog,
@@ -333,7 +334,7 @@ export function PosTerminal({
     syncLunchHolds(
       cart.cartId,
       live.items
-        .filter((i) => i.kind === "MENU_ITEM")
+        .filter(isLunchItem)
         .map((i) => ({ menuItemId: i.menuItemId, quantity: i.quantity })),
       live.scheduledFor || null,
     )

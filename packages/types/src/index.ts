@@ -241,6 +241,16 @@ export interface MenuItemCartItem {
 
 export type CartItem = DrinkCartItem | MenuItemCartItem;
 
+/** ¿El ítem del carrito lleva control de cantidad por jornada? Solo los almuerzos
+ *  del Menú del Día (categoría ALMUERZO) tienen `LunchQuota`; la carta se vende
+ *  libre. Sin esta separación, apartar o validar el cupo de una milanesa o un
+ *  postre la rechazaría con "no tiene cantidad asignada". */
+export function isLunchItem(
+  item: CartItem,
+): item is MenuItemCartItem {
+  return item.kind === "MENU_ITEM" && item.category === MenuCategory.ALMUERZO;
+}
+
 /** Suma unitaria (sin multiplicar por cantidad) del ítem de carrito. */
 export function cartItemUnitTotal(item: CartItem): number {
   return item.kind === "DRINK"

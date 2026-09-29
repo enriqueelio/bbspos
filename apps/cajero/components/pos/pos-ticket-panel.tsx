@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   cartItemUnitTotal,
   formatPrice,
+  isLunchItem,
   MenuCategoryLabel,
   shortCustomerName,
   type CartItem,
@@ -86,7 +87,7 @@ export function PosTicketPanel({
     const delta = target - item.quantity;
     if (delta === 0) return;
 
-    if (item.kind === "MENU_ITEM" && delta > 0) {
+    if (isLunchItem(item) && delta > 0) {
       try {
         // `scheduledFor` en null (o vacío) = venta de hoy: ahí sí se aparta. En
         // una reserva para otro día la acción no aparta nada y el cupo de esa
@@ -107,7 +108,7 @@ export function PosTicketPanel({
         );
         return;
       }
-    } else if (item.kind === "MENU_ITEM") {
+    } else if (isLunchItem(item)) {
       // Suelta el cupo aunque falle la llamada: quitar la línea nunca se bloquea
       // y, en el peor caso, el apartado se libera solo al vencer.
       try {
@@ -122,7 +123,7 @@ export function PosTicketPanel({
   }
 
   async function removeLine(item: CartItem) {
-    if (item.kind === "MENU_ITEM") {
+    if (isLunchItem(item)) {
       try {
         const next = await unholdLunchUnits(
           cart.cartId,

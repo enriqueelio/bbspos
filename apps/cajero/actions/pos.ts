@@ -15,6 +15,7 @@ import {
   LunchCapacityError,
 } from "@bbspos/db";
 import {
+  isLunchItem,
   OrderStatus,
   type CartItem,
   type Catalog,
@@ -263,14 +264,19 @@ function reservationOf(
 
 /** Unidades de almuerzo que el pedido quiere vender, agrupadas por plato.
  *  Usa el mismo nombre que queda guardado en OrderItem.menuItemName, que es
- *  con el que después se cuenta lo vendido. */
+ *  con el que después se cuenta lo vendido.
+ *
+ *  Solo entran los platos de categoría ALMUERZO: la carta no lleva control de
+ *  cantidad (es lo que hace `cartaMenuItems`), así que un milanesa o un postre
+ *  no tiene `LunchQuota` y, de contarse, la barrera de cupo lo rechazaría con
+ *  "no tiene cantidad asignada" en vez de venderlo. */
 function lunchDemand(items: CartItem[]) {
   const demand = new Map<
     string,
     { menuItemId: string; name: string; quantity: number }
   >();
   for (const item of items) {
-    if (item.kind !== "MENU_ITEM") continue;
+    if (!isLunchItem(item)) continue;
     const row = demand.get(item.menuItemId) ?? {
       menuItemId: item.menuItemId,
       name: item.name,

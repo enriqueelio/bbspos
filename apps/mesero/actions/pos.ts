@@ -10,6 +10,7 @@ import {
   LunchCapacityError,
 } from "@bbspos/db";
 import {
+  isLunchItem,
   OrderStatus,
   type CartItem,
   type Catalog,
@@ -31,14 +32,16 @@ function productionMinutesFor(item: CartItem): number {
 }
 
 /** Unidades de almuerzo que el pedido quiere vender, agrupadas por plato, para
- *  comprobar el cupo de la jornada al guardar. */
+ *  comprobar el cupo de la jornada al guardar. Solo los platos de categoría
+ *  ALMUERZO: la carta no lleva control de cantidad, así que contarla haría que
+ *  la barrera de cupo la rechazara con "no tiene cantidad asignada". */
 function lunchDemand(items: CartItem[]) {
   const demand = new Map<
     string,
     { menuItemId: string; name: string; quantity: number }
   >();
   for (const item of items) {
-    if (item.kind !== "MENU_ITEM") continue;
+    if (!isLunchItem(item)) continue;
     const row = demand.get(item.menuItemId) ?? {
       menuItemId: item.menuItemId,
       name: item.name,

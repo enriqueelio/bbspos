@@ -30,12 +30,25 @@ function validateName(name: string) {
   return trimmed;
 }
 
+/** Normaliza un teléfono igual que el terminal del cajero (quita espacios y
+ *  guiones) para que Admin y POS escriban el mismo valor y el vínculo por
+ *  teléfono siga funcionando. Vacío = null (cliente sin teléfono). */
 function validatePhone(phone: string) {
-  const trimmed = phone.trim();
-  if (!trimmed) {
-    throw new Error("El teléfono es obligatorio.");
+  const trimmed = phone.trim().replace(/[\s-]+/g, "");
+  return trimmed ? trimmed : null;
+}
+
+/** El teléfono es único en BD: se valida antes de escribir para dar un error
+ *  claro en vez del P2002 crudo de Prisma. */
+async function assertPhoneAvailable(phone: string | null, excludeId?: string) {
+  if (!phone) return;
+  const existing = await prisma.customer.findFirst({
+    where: { phone },
+    select: { id: true, name: true },
+  });
+  if (existing && existing.id !== excludeId) {
+    throw new Error(`El teléfono ${phone} ya está registrado para ${existing.name}.`);
   }
-  return trimmed;
 }
 
 function parsePensionType(value: string): PensionTypeType {
@@ -65,14 +78,14 @@ function parseFundsMethod(value: string): PaymentMethodType {
 export async function createCustomer(input: {
   name: string;
   ci?: string;
-  phone: string;
+  phone?: string;
   pensionType: string;
   creditLimit?: number;
 }) {
   await requireAdminSession();
 
   const name = validateName(input.name);
-  const phone = validatePhone(input.phone);
+  const phone = validatePhone(input.phone ?? "");
   const pensionType = parsePensionType(input.pensionType);
   const ci = input.ci?.trim() ? input.ci.trim() : null;
   // El límite de crédito solo aplica a los Postpago; prepago se cobra por saldo.
@@ -80,6 +93,8 @@ export async function createCustomer(input: {
     pensionType === PensionType.POSTPAGO
       ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
       : 0;
+
+  await assertPhoneAvailable(phone);
 
   await prisma.customer.create({
     data: {
@@ -99,14 +114,14 @@ export async function updateCustomer(input: {
   customerId: string;
   name: string;
   ci?: string;
-  phone: string;
+  phone?: string;
   pensionType: string;
   creditLimit?: number;
 }) {
   await requireAdminSession();
 
   const name = validateName(input.name);
-  const phone = validatePhone(input.phone);
+  const phone = validatePhone(input.phone ?? "");
   const pensionType = parsePensionType(input.pensionType);
   const ci = input.ci?.trim() ? input.ci.trim() : null;
   const creditLimit =
@@ -120,6 +135,8 @@ export async function updateCustomer(input: {
   if (!customer) {
     throw new Error("Cliente no encontrado.");
   }
+
+  await assertPhoneAvailable(phone, customer.id);
 
   await prisma.customer.update({
     where: { id: input.customerId },

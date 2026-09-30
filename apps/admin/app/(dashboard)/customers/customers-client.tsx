@@ -135,7 +135,9 @@ cliente&rdquo;.
                 <tr key={customer.id} className="border-b last:border-b-0">
                   <td className="px-4 py-2 font-medium">{customer.name}</td>
                   <td className="px-4 py-2">{customer.ci ?? "—"}</td>
-                  <td className="px-4 py-2">{customer.phone}</td>
+                  <td className="px-4 py-2">
+                    {customer.phone || "—"}
+                  </td>
                   <td className="px-4 py-2">
                     <Badge
                       variant={
@@ -339,11 +341,10 @@ function CustomerFormDialog({
         </div>
 
         <div className="space-y-1">
-          <Label htmlFor="c-phone">Teléfono</Label>
+          <Label htmlFor="c-phone">Teléfono (opcional)</Label>
           <Input
             id="c-phone"
             type="text"
-            required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Ej. 76543210"

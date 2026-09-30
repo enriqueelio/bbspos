@@ -138,11 +138,13 @@ model AlitaSauce {
 // (Postpago). creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
 // Los campos de lealtad (totalVisits/totalSpent/lastVisitAt/points) son una caché
 // de métricas para rankings rápidos; la fuente de verdad es Order con paidAt.
+// phone es opcional (los clientes de mostrador solo dan nombre) pero único: en
+// SQLite los NULL no chocan entre sí, así que puede haber varios sin teléfono.
 model Customer {
   id          String           @id @default(cuid())
   name        String
   ci          String?
-  phone       String?
+  phone       String?          @unique
   pensionType PensionType      @default(PREPAGO)
   balance     Int              @default(0)
   creditLimit Int              @default(0)

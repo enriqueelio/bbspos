@@ -15,9 +15,16 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6">
+    // Columna flex a altura de ventana: el navbar queda fuera del flujo
+    // scrolleable y las páginasoccupan el alto restante. El contenedor de
+    // children conserva `overflow-y-auto` para que las páginas normales
+    // sigan haciendo scroll normal; las vistas que necesitan su propio
+    // scroll interno (menú) ocupan `h-full` y scrollean adentro.
+    <div className="mx-auto flex h-screen w-full max-w-6xl flex-col px-4 py-6">
       <AdminNav userName={session.user.name ?? "Admin"} />
-      {children}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }

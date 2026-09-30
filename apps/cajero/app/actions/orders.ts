@@ -108,7 +108,7 @@ export async function acceptQueueOrder(orderId: string) {
 
 /** Confirma una reserva SIN cobrar: la pasa a producción (ACEPTADO), marca
  *  `reservationConfirmed` (el timer de preparación arranca ahora), imprime la
- *  comanda —que hasta ahora estaba en espera— y la deja en "Pedidos en cola",
+ *  comanda —que hasta ahora estaba en espera— y la deja en "Pendientes",
  *  donde el cobro se registra con el flujo normal (Cobrar). */
 export async function confirmReservation(orderId: string) {
   await getRequiredSession();
@@ -248,7 +248,11 @@ export async function acceptOrder(
           : {}),
         // Unifica el inicio del reloj: si el pedido aún no fue aceptado
         // (RECIBIDO cobrado al instante), el timer arranca en este momento.
-        acceptedAt: order.acceptedAt ?? new Date(),
+        // Si ya estaba entregado, se usa la entrega como arranque: poner la
+        // hora del cobro dejaba `acceptedAt` después de `deliveredAt`, y medir
+        // la duración contra un arranque posterior al cierre daba 0 ("Tardó
+        // 0m") en pedidos que el cliente había esperado 14 minutos.
+        acceptedAt: order.acceptedAt ?? order.deliveredAt ?? new Date(),
         // Al confirmar (cobrar) una reserva, la marca como confirmada: entra
         // a producción y su comanda (diferida) se imprime aquí.
         ...(order.scheduledFor && !order.reservationConfirmed
@@ -374,8 +378,10 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
           ? { status: OrderStatus.ACEPTADO }
           : {}),
         // Unifica el inicio del reloj: si el pedido aún no fue aceptado
-        // (RECIBIDO cobrado contra la cuenta al instante), arranca ahora.
-        acceptedAt: order.acceptedAt ?? new Date(),
+        // (RECIBIDO cobrado contra la cuenta al instante), arranca ahora. Si ya
+        // estaba entregado, arranca en la entrega, nunca en la hora del cobro
+        // (ver la nota equivalente en `acceptOrder`).
+        acceptedAt: order.acceptedAt ?? order.deliveredAt ?? new Date(),
         // Al confirmar (cobrar) una reserva, la marca como confirmada: entra
         // a producción y su comanda (diferida) se imprime aquí.
         ...(order.scheduledFor && !order.reservationConfirmed

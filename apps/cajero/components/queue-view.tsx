@@ -56,7 +56,7 @@ import {
   orderTypeBackgroundVariants,
   visualStateOf,
 } from "@/components/orders/statusVariants";
-import { delayLevelOf, delayMinutes, getStartTime } from "@/lib/time";
+import { delayLevelOf, delayMinutes, getElapsedMs } from "@/lib/time";
 
 // El ticket que ve el cliente es el daySeq diario (#001...), no el seq global.
 function ticketOf(o: { seq: number | null; daySeq?: number | null }): number {
@@ -405,6 +405,26 @@ function useQueueClock(orders: Order[]) {
   };
 }
 
+// Momento en que el pedido dejó de estar en producción, o null si sigue en
+// ella. Es el instante contra el que hay que medir la demora de un pedido ya
+// cerrado: usar la hora actual hacía que un pedido entregado a tiempo
+// terminara acumulando demora con el correr de las horas. Anulado cuenta como
+// cierre (`cancelledAt`), y si un pedido se anuló sin ese sello se recurre al
+// resto de marcas para no dejarlo con reloj corriendo.
+function productionEndMs(order: Order): number | null {
+  if (order.status === OrderStatus.ANULADO) {
+    return (
+      (order.cancelledAt ? new Date(order.cancelledAt).getTime() : null) ??
+      (order.deliveredAt ? new Date(order.deliveredAt).getTime() : null) ??
+      (order.paidAt ? new Date(order.paidAt).getTime() : null)
+    );
+  }
+  if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
+    return new Date(order.deliveredAt).getTime();
+  }
+  return null;
+}
+
 function AgeBadge({
   order,
   now,
@@ -416,38 +436,43 @@ function AgeBadge({
   // producción, así que no se muestra antigüedad.
   if (order.status === OrderStatus.RECIBIDO) return null;
 
-  // Entregado: tiempo fijo desde que se aceptó hasta la entrega.
-  if (order.status === OrderStatus.ENTREGADO && order.deliveredAt) {
-    const deliveredAtMs = new Date(order.deliveredAt).getTime();
-    const minutes = Math.max(
-      0,
-      Math.floor((deliveredAtMs - getStartTime(order).getTime()) / 60_000),
-    );
-    const demora = delayMinutes(order, deliveredAtMs);
+  // Pedido cerrado (entregado o anulado): el reloj ya no corre. Se mide contra
+  // el momento del cierre y no contra `now`, porque si no un pedido de hace
+  // varios días seguía sumando minutos y terminaba en "Ingresado hace 5000m",
+  // que no le dice nada al cajero. Anulado y entregado usan textos distintos a
+  // propósito: "Ingresado hace" solo tiene sentido si el pedido sigue vivo.
+  const closedAtMs = productionEndMs(order);
+  if (closedAtMs !== null) {
+    const minutes = Math.floor(getElapsedMs(order, closedAtMs) / 60_000);
+    const demora = delayMinutes(order, closedAtMs);
+    const anulado = order.status === OrderStatus.ANULADO;
     return (
       <span
         className={cn(
           "font-bold",
+          // Rojo fijo, sin parpadeo: en el Historial el pedido ya se entregó y
+          // un texto que late pide una acción que no hay que hacer.
           orderDelayVariants({ delay: delayLevelOf(demora) }),
         )}
       >
-        ⏱ Tardó {formatDurationMinutes(minutes)}
+        {anulado
+          ? `✕ Anulado tras ${formatDurationMinutes(minutes)}`
+          : `⏱ Tardó ${formatDurationMinutes(minutes)}`}
       </span>
     );
   }
 
   // En producción: el reloj corre desde que se aceptó el pedido. La demora es
   // el transcurrido menos el tiempo estimado del pedido.
-  const minutes = Math.max(
-    0,
-    Math.floor((now - getStartTime(order).getTime()) / 60_000),
-  );
+  const minutes = Math.floor(getElapsedMs(order, now) / 60_000);
   const demora = delayMinutes(order, now);
   return (
     <span
       className={cn(
         "font-bold",
-        orderDelayVariants({ delay: delayLevelOf(demora) }),
+        // Aquí sí late: el pedido sigue en producción y el cajero tiene que
+        // verlo. Es el único sitio donde el rojo pulsa.
+        orderDelayVariants({ delay: delayLevelOf(demora), pulse: true }),
       )}
     >
       Ingresado hace {formatDurationMinutes(minutes)}
@@ -699,6 +724,11 @@ function OrderCard({
   const isEditing = editingOrderId !== null && editingOrderId === order.id;
   // Finalizado = cobrado Y entregado. Se auto-contrae (acordeón cerrado).
   const isFinished = Boolean(order.paidAt && order.deliveredAt);
+  // Y anulado también es un cierre, no una espera: el pedido no vuelve a la
+  // cocina, así que su punto de demora deja de ser una alarma de "corre que se
+  // tarda" aunque siga mostrando que se tardó. Por eso el punto no parpadea
+  // en el Historial; la demora se calcula igual para saber si debe verse.
+  const isAnulado = order.status === OrderStatus.ANULADO;
   // En modo compact (cola del 20%) TODOS los pedidos nacen contraídos y cada
   // tarjeta se expande/contrae manualmente al hacer clic.
   const isOpen = expandedId === order.id;
@@ -715,9 +745,12 @@ function OrderCard({
     }
     prevFinished.current = isFinished;
   }, [isFinished, setExpandedId]);
-  // Demora frente al tiempo estimado: positiva = el pedido ya se tardó. Se usa
+// Demora frente al tiempo estimado: positiva = el pedido ya se tardó. Se usa
   // para el puntito de la vista colapsada (mismo reloj que AgeBadge/Telegram).
-  const demora = delayMinutes(order, clock.now);
+  // Para un pedido cerrado el reloj se congela en `productionEndMs`, igual que
+  // hace `AgeBadge`, para que el punto y el texto no se contradigan.
+  const closedAtMs = productionEndMs(order);
+  const demora = delayMinutes(order, closedAtMs ?? clock.now);
 
   return (
     <div
@@ -786,11 +819,18 @@ function OrderCard({
                   Reserva {horaReserva(order)}
                 </span>
               )
-            ) : (
-              demora > 0 && (
-                <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-red-500" />
-              )
-            )}
+            // El punto de demora deja de parpadear cuando el pedido ya se cerró (entregado
+              // o anulado): parpadeando pide una acción, y en el Historial ya
+              // no hay nada que hacer. El color sigue marcando la demora real.
+              ) : (
+                demora > 0 && (
+                  <div
+                    className={`h-2 w-2 shrink-0 rounded-full bg-red-500 ${
+                      isFinished || isAnulado ? "" : "animate-pulse"
+                    }`}
+                  />
+                )
+              )}
             {!inReservas && order.customerName && (
               <span
                 className={`truncate font-black ${
@@ -991,7 +1031,7 @@ function OrderCard({
                   onClick={() =>
                     clock.askConfirm(
                       order.id,
-                      `¿Confirmas esta reserva? Entra a producción y se imprime la comanda. El cobro se registra en Pedidos en cola.`,
+                      `¿Confirmas esta reserva? Entra a producción y se imprime la comanda. El cobro se registra en Pendientes.`,
                       async () => {
                         await confirmReservation(order.id);
                       },
@@ -1295,7 +1335,7 @@ function OrderCardItem({
   );
 }
 
-// Grupos colapsables de la cola (excluidos "Pedidos en cola", siempre visible).
+// Grupos colapsables de la cola (excluidos "Pendientes", siempre visible).
 type QueueGroupKey = "reservas" | "entregados";
 
 // Acordeón de grupo: cabecera con chevrón y contenido desplegable. Si no es
@@ -1374,14 +1414,14 @@ export function QueueView({
   const [query, setQuery] = useState("");
   // Acordeón único: solo una tarjeta expandida a la vez en toda la cola.
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Grupos auxiliares "Reservas" y "Pedidos entregados": contraídos por
-  // defecto y mutuamente excluyentes (abrir uno cierra el otro). El grupo
-  // "Pedidos en cola" no es colapsable: siempre queda visible.
+  // Grupos auxiliares "Reservas" y "Historial": contraídos por defecto y
+  // mutuamente excluyentes (abrir uno cierra el otro). El grupo "Pendientes"
+  // no es colapsable: siempre queda visible.
   const [openGroup, setOpenGroup] = useState<QueueGroupKey | null>(null);
   const toggleGroup = (group: QueueGroupKey) =>
     setOpenGroup((current) => (current === group ? null : group));
   // Al expandir una tarjeta se abre el acordeón que la contiene y se cierran
-  // los demás; las tarjetas de "Pedidos en cola" (fuera de cualquier acordeón
+  // los demás; las tarjetas de "Pendientes" (fuera de cualquier acordeón
   // auxiliar) cierran todos los auxiliares.
   const expandIn =
     (group: QueueGroupKey | null) => (id: string | null) => {
@@ -1408,7 +1448,7 @@ export function QueueView({
     const newest = fresh.reduce((a, b) => (ticketOf(a) >= ticketOf(b) ? a : b));
     // El pedido nuevo aterriza desplegado (para ver sus ítems y botones). Al
     // ser acordeón único, esto cierra cualquier otra tarjeta abierta. Si lo
-    // nuevo es una reserva se abre su grupo (cerrando Pedidos entregados); si
+    // nuevo es una reserva se abre su grupo (cerrando Historial); si
     // entra a la cola de producción se cierran los grupos auxiliares.
     setExpandedId(newest.id);
     setOpenGroup(isReservation(newest) ? "reservas" : null);
@@ -1460,10 +1500,10 @@ export function QueueView({
   // `ordered`):
   // - Reservas: hora pactada aún sin confirmar (su comanda se imprime al
   //   confirmarlas desde el cajero).
-  // - En cola: Recibidos/Aceptados reales (incluye reservas ya confirmadas,
+  // - Pendientes: Recibidos/Aceptados reales (incluye reservas ya confirmadas,
   //   cuyo timer arrancó al cobrarse) y los Entregados sin cobrar, que quedan
   //   a la vista para registrar el pago pendiente.
-  // - Entregados: historial del día (Entregados Y cobrados, y Anulados).
+  // - Historial: lo ya cerrado (Entregados Y cobrados, y Anulados).
   const reservas = filtered
     .filter(
       (o) =>
@@ -1561,7 +1601,7 @@ export function QueueView({
           <>
             {/* Reservas: hora pactada aún sin confirmar. Se confirman con
                 Confirmar (pasan a producción e imprimen comanda; el cobro queda
-                en Pedidos en cola). Se contrae solo si no queda ninguna. */}
+                en Pendientes). Se contrae solo si no queda ninguna. */}
             <QueueGroupAccordion
               title="Reservas"
               count={reservas.length}
@@ -1588,15 +1628,19 @@ export function QueueView({
               ))}
             </QueueGroupAccordion>
 
-            {/* Pedidos en la cola de producción: Recibidos (web) que se
-                aceptan aquí y Aceptados (POS) aún no entregados, incluidas
-                reservas ya confirmadas cuyo timer arrancó al confirmarse. Este
-                grupo nunca se contrae: es la vista operativa siempre visible. */}
-            <QueueGroupAccordion
-              title="Pedidos en cola"
-              count={enCola.length}
-              open
-            >
+            {/* Pendientes: lo que se está preparando ahora. Recibidos (web) que
+                se aceptan aquí y Aceptados (POS) aún no entregados, incluidas
+                reservas ya confirmadas cuyo timer arrancó al confirmarse, más
+                los Entregados sin cobrar, que quedan a la vista para registrar
+                el pago pendiente. Este grupo nunca se contrae: es la vista
+                operativa siempre visible.
+
+                El título va en una palabra y no como "Pedidos en cola" por dos
+                razones: repetía el encabezado de la columna, que ya dice
+                PEDIDOS EN COLA, y confundía con RESERVAS, que es justo lo
+                contrario (lo que todavía no entró a producción). "Pendientes"
+                dice lo mismo sin pisarse con el título de arriba. */}
+            <QueueGroupAccordion title="Pendientes" count={enCola.length} open>
               {enCola.length === 0 ? (
                 <p className="rounded-md border border-slate-800 bg-slate-900/60 px-4 py-6 text-center text-muted-foreground">
                   No hay pedidos por preparar ahora mismo.
@@ -1621,10 +1665,15 @@ export function QueueView({
               )}
             </QueueGroupAccordion>
 
-            {/* Entregados: historial del día (Entregados y Anulados),
-                contraído por defecto y excluyente con Reservas. */}
+            {/* Historial: lo que ya se cerró hoy. Son los Entregados cobrados Y
+                los Anulados, contraído por defecto y excluyente con Reservas.
+
+                "Historial" y no "Pedidos entregados" porque este grupo también
+                trae los anulados: con el nombre viejo, un cajero buscaba ahí un
+                pedido anulado y no lo encontraba, o contaba como entregados
+                ventas que se devolvieron. */}
             <QueueGroupAccordion
-              title="Pedidos entregados"
+              title="Historial"
               count={entregados.length}
               open={openGroup === "entregados" && entregados.length > 0}
               collapsible={entregados.length > 0}

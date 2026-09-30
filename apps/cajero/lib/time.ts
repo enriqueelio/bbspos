@@ -27,6 +27,23 @@ export function getStartTime(order: Pick<Order, "acceptedAt" | "createdAt" | "sc
   return new Date(effectiveStartMs(order));
 }
 
+/** Milutos transcurridos desde el arranque de producción hasta `endMs`.
+ *  `getStartTime` es la fuente normal, pero hay pedidos cuyo arranque quedó
+ *  DESPUÉS del cierre: si el cajero entrega y cobra casi juntos, el cobro
+ *  rellena el `acceptedAt` que faltaba con la hora de ese momento, y queda
+ *  posterior al `deliveredAt`. Medir contra un arranque posterior al cierre da
+ *  cero, y un pedido que el cliente esperó 14 minutos aparece como "Tardó 0m".
+ *  Cuando pasa eso el arranque real no se puede saber, así que se usa
+ *  `createdAt`, que es cuando el pedido apareció. */
+export function getElapsedMs(
+  order: Pick<Order, "acceptedAt" | "createdAt" | "scheduledFor" | "tiempoEstimado">,
+  endMs: number,
+): number {
+  const start = getStartTime(order).getTime();
+  const real = start < endMs ? start : new Date(order.createdAt).getTime();
+  return Math.max(0, endMs - real);
+}
+
 /** Demora en minutos: tiempo transcurrido (desde el inicio del reloj hasta un
  *  momento dado) menos el tiempo estimado de producción del pedido. Valor
  *  positivo = el pedido ya se pasó de su tiempo estimado. */
@@ -34,8 +51,7 @@ export function delayMinutes(
   order: Pick<Order, "acceptedAt" | "createdAt" | "tiempoEstimado" | "scheduledFor">,
   nowMs: number,
 ): number {
-  const start = getStartTime(order).getTime();
-  const elapsed = Math.max(0, Math.floor((nowMs - start) / 60_000));
+  const elapsed = Math.floor(getElapsedMs(order, nowMs) / 60_000);
   return elapsed - (order.tiempoEstimado ?? 10);
 }
 

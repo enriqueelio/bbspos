@@ -64,18 +64,29 @@ export const orderCardVariants = cva("animate-in fade-in slide-in-from-bottom-4 
 /*  Texto de antigüedad según la demora vs el tiempo estimado          */
 /* ------------------------------------------------------------------ */
 
-/** Según la demora (transcurrido - tiempoEstimado) el texto de antigüedad
- *  cambia de color: verde dentro del estimado, amarillo de aviso y rojo
- *  pulsante cuando supera la demora crítica. */
+/** Color del texto de antigüedad según la demora (transcurrido
+ *  tiempoEstimado): verde dentro del estimado, amarillo de aviso y rojo cuando
+ *  se pasó de la demora crítica.
+ *
+ *  El parpadeo va en una variante aparte y no dentro de `critical`. Son dos
+ *  cosas distintas: el color informa cuánto se tardó, el parpadeo pide una
+ *  acción. En el Historial el pedido ya se entregó y no hay nada que hacer, así
+ *  que ahí se quiere el rojo fijo; separarlos permite pedirlo sin tener que
+ *  pelar dos clases de animación en el `className`. */
 export const orderDelayVariants = cva("", {
   variants: {
     delay: {
       ok: "text-green-400",
       warning: "text-yellow-400",
-      critical: "text-red-500 animate-pulse",
+      critical: "text-red-500",
+    },
+    // Solo para pedidos que siguen en producción: late para jalar la atención.
+    pulse: {
+      true: "animate-pulse",
+      false: "",
     },
   },
-  defaultVariants: { delay: "ok" },
+  defaultVariants: { delay: "ok", pulse: false },
 });
 
 export const orderTypeBackgroundVariants = cva("transition-all duration-300", {

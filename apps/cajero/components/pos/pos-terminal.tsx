@@ -7,7 +7,6 @@ import {
   FlavorCategoryList,
   MenuCategory,
   MenuCategoryLabel,
-  MenuCategoryList,
   cartItemUnitTotal,
   formatOrderCode,
   formatPrice,
@@ -114,23 +113,6 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
       catalog.flavors.some((f) => f.categories.includes(c) && f.available),
     ) ?? FlavorCategory.MILK
   );
-}
-
-/** Categoría que debe quedar seleccionada al abrir el POS o iniciar una nueva
- *  venta: Milanesas por defecto; si no hay, la primera categoría de la carta que
- *  tenga productos; si tampoco hay carta, el Menú del Día y por último Bubas. */
-function defaultPane(catalog: Catalog): CatalogPane {
-  if (
-    catalog.cartaItems.some((i) => i.category === MenuCategory.MILANESA)
-  ) {
-    return MenuCategory.MILANESA;
-  }
-  const first = MenuCategoryList.find((c) =>
-    catalog.cartaItems.some((i) => i.category === c),
-  );
-  if (first) return first;
-  if (catalog.menuItems.length > 0) return MenuCategory.ALMUERZO;
-  return BUBAS_PANE;
 }
 
 /** Reconstruye los CartItems de una reserva desde sus datos persistidos para
@@ -240,9 +222,11 @@ export function PosTerminal({
   const cart = usePosCart();
   const isBilling =
     role === Role.CAJERO || role === Role.ADMIN || role === Role.SUPER_ADMIN;
-  const [activePane, setActivePane] = useState<CatalogPane>(() =>
-    defaultPane(catalog),
-  );
+  // Categoría abierta en la carta. Empieza en null a propósito: el POS no arroja
+  // al cajero a Milanesas al abrirlo, elige él con un clic y solo entonces se
+  // despliegan los productos. En null la zona de productos de abajo no se
+  // renderiza y todas las tarjetas de categoría se ven a tamaño completo.
+  const [activePane, setActivePane] = useState<CatalogPane | null>(null);
   const [bubaCategory, setBubaCategory] = useState<FlavorCategoryType>(
     firstActiveCategory(catalog),
   );
@@ -274,9 +258,11 @@ export function PosTerminal({
   const catalogRef = useRef<HTMLElement>(null);
 
   // Al entrar (montar) se dejan los selectores en blanco para que el mesero
-  // arranque un pedido nuevo sin arrastrar selecciones. Corre una sola vez (ref
-  // guard): el catálogo cambia de identidad en cada refresh (router.refresh de
-  // la cola) y re-ejecutarlo resetea la categoría activa a Milanesas.
+  // arranque un pedido nuevo sin arrastrar selecciones. `activePane` no se
+  // restaura aquí: ya arranca en null y así la carta sale cerrada. Corre una
+  // sola vez (ref guard): el catálogo cambia de identidad en cada refresh
+  // (router.refresh de la cola) y re-ejecutarlo cerraría la categoría que el
+  // cajero acaba de abrir.
   useEffect(() => {
     if (didMount.current) return;
     didMount.current = true;
@@ -289,7 +275,6 @@ export function PosTerminal({
     setVariantSize(null);
     setVariantSauces([]);
     setBubaCategory(firstActiveCategory(catalog));
-    setActivePane(defaultPane(catalog));
   }, [catalog]);
 
   // El catálogo cambia de identidad en cada `router.refresh()` (el polling de
@@ -309,7 +294,7 @@ export function PosTerminal({
       setIsAfter16(past16);
       if (past16) {
         setActivePane((pane) =>
-          pane === MenuCategory.ALMUERZO ? defaultPane(catalog) : pane,
+          pane === MenuCategory.ALMUERZO ? null : pane,
         );
       }
     };
@@ -445,7 +430,10 @@ export function PosTerminal({
     setProductQty(1);
   }
 
-  function switchPane(pane: CatalogPane) {
+  /** Abrir una categoría, o cerrarla con null (botón "Volver"): en cualquiera de
+   *  los dos casos se sueltan las variantes para no dejar un selector de plato
+   *  apuntando a algo que ya no está en pantalla. */
+  function switchPane(pane: CatalogPane | null) {
     setActivePane(pane);
     setVariantItem(null);
     setVariantSize(null);
@@ -574,7 +562,9 @@ export function PosTerminal({
       setBobaTypeId("");
       setSelectedFlavorId(null);
       setBubaCategory(firstActiveCategory(catalog));
-      setActivePane(defaultPane(catalog));
+      // El ticket se acaba de mandar: la carta vuelve a su estado inicial, sin
+      // categoría abierta, para que el siguiente pedido se elija desde cero.
+      setActivePane(null);
       setProductQty(1);
       const loyaltyText = loyalty?.levelName
         ? ` · Nivel ${loyalty.levelName} (${loyalty.points} pts)`
@@ -641,17 +631,23 @@ export function PosTerminal({
     );
   }
 
-  const isMenuDelDia = activePane === MenuCategory.ALMUERZO;
   const isBubas = activePane === BUBAS_PANE;
-  const isCartaPane = !isMenuDelDia && !isBubas;
+  // Panel de productos visible debajo de la barra. En null (estado inicial, o
+  // tras "Volver") no hay nada que mostrar y este es el valor que impide
+  // renderizar la zona de productos: antes `!isMenuDelDia && !isBubas` daba
+  // true con el catálogo cerrado y pintaba una grilla vacía.
+  const cartaPane =
+    activePane !== null && activePane !== MenuCategory.ALMUERZO && !isBubas
+      ? activePane
+      : null;
   // Productos ordenados por precio de mayor a menor (en toda la carta).
-  const cartaItems = isCartaPane
+  const cartaItems = cartaPane
     ? catalog.cartaItems
         .filter((i) =>
-          activePane === SANDWICHES_PANE
+          cartaPane === SANDWICHES_PANE
             ? i.category === MenuCategory.SANDWICH ||
               i.category === MenuCategory.PANINI
-            : i.category === activePane,
+            : i.category === cartaPane,
         )
         .sort((a, b) => b.price - a.price)
     : [];
@@ -955,11 +951,15 @@ export function PosTerminal({
           )}
 
           {/* Barra de categorías como tarjetas: pega arriba al scrollear y usa la
-              misma retícula de 5 columnas que los productos para quedar alineada */}
+              misma retícula de 5 columnas que los productos para quedar alineada.
+              Con `activeKey` en null muestra todas las tarjetas completas; con una
+              categoría abierta, esa tarjeta conserva el texto y el resto se
+              encoge a solo ícono, sin dejar de ser pulsables. */}
           <PosCategoryBar
             panes={catalogPanes}
             activeKey={activePane}
             onSwitch={(key) => switchPane(key as CatalogPane)}
+            onBack={() => switchPane(null)}
           />
 
           {/* Bloque inferior: productos de la categoría seleccionada. Sin tope de
@@ -993,11 +993,14 @@ export function PosTerminal({
                 />
               )}
 
-              {isCartaPane && (
+              {/* Productos de la categoría abierta. Con la carta cerrada
+                  (`cartaPane` null) no se renderiza nada: el bloque entero
+                  desaparece en vez de quedar con una grilla vacía. */}
+              {cartaPane && (
                 <PosCartaGrid
                   paneTitle={
-                    PANE_TITLE[activePane] ??
-                    MenuCategoryLabel[activePane as MenuCategoryType]
+                    PANE_TITLE[cartaPane] ??
+                    MenuCategoryLabel[cartaPane as MenuCategoryType]
                   }
                   items={cartaItems}
                   variantItem={variantItem}

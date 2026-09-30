@@ -2,6 +2,7 @@
 
 import type { ComponentType } from "react";
 import {
+  ArrowLeft,
   Baby,
   Beef,
   Bird,
@@ -87,13 +88,41 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *  muestra en las tarjetas de la grilla se lee como dato de esa tarjeta, y no
  *  como un número de acceso rápido de la barra.
  *
+ *  La fila cambia de layout según el estado. Sin categoría seleccionada
+ *  (`activeKey === null`) es una cuadrícula de 5 columnas y todas las tarjetas
+ *  ocupan su celda, que es la lectura uniforme de un vistazo. Al abrir una
+ *  categoría pasa a flex: la tarjeta abierta se mide por su contenido y las
+ *  demás son cuadrados fijos que no crecen, agrupados sin los huecos que dejaba
+ *  la retícula al encogerse.
+ *
+ *  `transition-colors`, y no `transition-all`, por una razón medida. La tarjeta
+ *  del estado inicial lleva `w-full`, o sea `width: 100%`: un porcentaje que se
+ *  resuelve distinto según el bloque contenedor. Al abrir una categoría el
+ *  contenedor pasa de `display: grid` a `display: flex` en el mismo frame en que
+ *  la tarjeta cambia de `w-full` a `w-14`, así que ese `100%` pasa a resolver
+ *  contra el flex completo (807px en lugar de los 155px de la celda) y la
+ *  transición arrancaba desde ahí. Lo medido: los 15 íconos salían ocupando
+ *  807px, uno por fila (17 filas, barra de 1041px) y se encogían en 300ms,
+ *  arrastrando a los productos 900px hacia arriba. Aquí solo se animan los
+ *  colores, así que el cambio de tamaño es instantáneo y no se ve. El `onClick`
+ *  tampoco cambia y la tarjeta encogida sigue siendo pulsable, para cambiar de
+ *  categoría de un solo clic.
+ *
  *  `focus:outline-none` no es decoración: sin atajos de teclado la sección se
  *  elige con el clic, y el anillo de foco que dibuja el navegador (blanco sobre
  *  este fondo) saltaba a la vista en cuanto el cajero apretaba cualquier tecla
  *  después de elegir, haciendo creer que el borde había cambiado de color. Es el
  *  mismo tratamiento que ya reciben los campos de texto del POS. */
 const CATEGORY_CARD = {
-  base: "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border px-2 text-xs font-bold capitalize tracking-wide transition-all duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
+  base: "inline-flex items-center justify-center gap-2 rounded-xl border text-xs font-bold capitalize tracking-wide transition-colors duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
+  // Cuadrícula (estado inicial): la tarjeta ocupa su celda y queda uniforme.
+  expandedIdle: "h-12 w-full px-2",
+  // Flex (con categoría abierta): la abierta se ajusta al texto y las demás son
+  // cuadrados fijos. `w-full` y `justify-self-center` sobran aquí: en flex el
+  // ancho lo fija el propio cuadrado.
+  expandedActive: "min-h-14 shrink-0 px-6 py-3",
+  collapsed: "h-14 w-14 shrink-0 px-0",
+  back: "h-14 w-14 shrink-0 px-0",
   selected:
     "border-success bg-success/15 text-white shadow-md shadow-success/25",
   idle: "border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-600 hover:bg-slate-800/80 hover:text-white",
@@ -103,26 +132,50 @@ export function PosCategoryBar({
   panes,
   activeKey,
   onSwitch,
+  onBack,
 }: {
   panes: { key: string; label: string }[];
-  activeKey: string;
+  /** Categoría abierta, o null cuando la fila está en su estado inicial. */
+  activeKey: string | null;
   onSwitch: (key: string) => void;
+  /** Cierra la categoría abierta y vuelve a mostrar todas las tarjetas grandes. */
+  onBack: () => void;
 }) {
+  const isIdle = activeKey === null;
   return (
     <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
-      <div className="grid grid-cols-5 justify-items-stretch gap-2 px-4">
+      {/* El contenedor cambia de layout con el estado: la retícula de 5 columnas
+          deja huecos enormes en cuanto las tarjetas se encogen a 56px, así que
+          en el estado activo se agrupan en flex, que las junta sin huecos. */}
+      <div
+        className={
+          isIdle
+            ? "grid grid-cols-5 justify-items-stretch gap-2 px-4"
+            : "flex flex-wrap items-center gap-3 px-4"
+        }
+      >
         {panes.map((pane) => {
           const selected = pane.key === activeKey;
           const Icon = PANE_ICON[pane.key];
+          // Con una categoría abierta solo esa tarjeta conserva el texto; el
+          // título sigue en `title`/`aria-label` para que el ícono encogido se
+          // pueda identificar al pasar el mouse o con lector de pantalla.
+          const showLabel = isIdle || selected;
           return (
             <button
               key={pane.key}
               type="button"
               title={pane.label}
+              aria-label={pane.label}
+              aria-pressed={selected}
               onClick={() => onSwitch(pane.key)}
               className={`${CATEGORY_CARD.base} ${
-                selected ? CATEGORY_CARD.selected : CATEGORY_CARD.idle
-              }`}
+                showLabel
+                  ? isIdle
+                    ? CATEGORY_CARD.expandedIdle
+                    : CATEGORY_CARD.expandedActive
+                  : CATEGORY_CARD.collapsed
+              } ${selected ? CATEGORY_CARD.selected : CATEGORY_CARD.idle}`}
             >
               {Icon && (
                 <Icon
@@ -133,10 +186,30 @@ export function PosCategoryBar({
                   }`}
                 />
               )}
-              <span className="leading-tight line-clamp-2">{pane.label}</span>
+              {showLabel && (
+                <span className="leading-tight line-clamp-2">{pane.label}</span>
+              )}
             </button>
           );
         })}
+
+        {/* Salir del estado categorical: sin categoría seleccionada el bloque de
+            productos de abajo no se renderiza y todas las tarjetas recuperan su
+            tamaño completo. Va al final de la fila, en rojo y con el mismo
+            cuadrado de las tarjetas encogidas para que se lea como salida y no
+            como una categoría más. Solo flecha: el texto estorba en una fila de
+            cuadrados; el nombre queda en `title` y `aria-label`. */}
+        {!isIdle && (
+          <button
+            type="button"
+            title="Volver"
+            aria-label="Volver"
+            onClick={onBack}
+            className={`${CATEGORY_CARD.base} ${CATEGORY_CARD.back} border-red-900/70 bg-red-950/30 text-red-200 hover:border-red-700 hover:bg-red-900/40`}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" />
+          </button>
+        )}
       </div>
     </div>
   );

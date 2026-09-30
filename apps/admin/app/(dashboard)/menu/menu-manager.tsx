@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,7 +6,6 @@ import { ChevronDown, ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
-  Card,
   cn,
   Dialog,
   DialogContent,
@@ -214,46 +213,6 @@ const MENU_TABS = [
 ] as const;
 
 type MenuTabKey = (typeof MENU_TABS)[number]["key"];
-
-function CollapsibleCard({
-  title,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Card>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 rounded-t-xl border-b border-slate-800 px-6 py-4 text-left transition-colors hover:bg-slate-900/50"
-      >
-        <span className="text-xl font-bold text-white">{title}</span>
-        <ChevronDown
-          className={cn(
-            "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-300",
-            open && "rotate-180",
-          )}
-        />
-      </button>
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows] duration-300 ease-in-out",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-        )}
-      >
-        <div className="overflow-hidden">
-          <div className="p-6">{children}</div>
-        </div>
-      </div>
-    </Card>
-  );
-}
 
 function SubSection({
   title,
@@ -503,6 +462,34 @@ function normalize(text: string): string {
     .toLowerCase();
 }
 
+/**
+ * Filtro de visibilidad de una sección del menú.
+ *
+ * Antes la tabla se ordenaba por `available` para agrupar los disponibles al
+ * principio, pero eso movía la fila recién activada al inicio de la lista y
+ * obligaba a volver a bajar a buscarla. Ahora el orden siempre es el del
+ * servidor y, si hace falta ver solo un grupo, se filtra explícitamente.
+ */
+type DisponibilidadFiltro = "TODOS" | "DISPONIBLES" | "NO_DISPONIBLES";
+
+const DISPONIBILIDAD_FILTERS: {
+  value: DisponibilidadFiltro;
+  label: string;
+}[] = [
+  { value: "TODOS", label: "Todos" },
+  { value: "DISPONIBLES", label: "Solo disponibles" },
+  { value: "NO_DISPONIBLES", label: "Solo no disponibles" },
+];
+
+function matchesDisponibilidad(
+  item: { available: boolean },
+  filtro: DisponibilidadFiltro,
+): boolean {
+  if (filtro === "DISPONIBLES") return item.available;
+  if (filtro === "NO_DISPONIBLES") return !item.available;
+  return true;
+}
+
 function previewImageUrl(imageUrl: string | null): string | undefined {
   return imageUrl
     ? imageUrl.replace(/^\/images\/menu\//, "/api/menu-image/")
@@ -529,6 +516,8 @@ function MenuSection({
   disponibles,
   query,
   onQueryChange,
+  filtro,
+  onFiltroChange,
   openNew,
   newButtonLabel,
   emptyText,
@@ -537,7 +526,6 @@ function MenuSection({
   onEdit,
   onDelete,
   isSuperAdmin,
-  defaultOpen,
 }: {
   title: string;
   items: MenuItemAdminView[];
@@ -545,6 +533,8 @@ function MenuSection({
   disponibles: number;
   query: string;
   onQueryChange: (q: string) => void;
+  filtro: DisponibilidadFiltro;
+  onFiltroChange: (f: DisponibilidadFiltro) => void;
   openNew: () => void;
   newButtonLabel: string;
   emptyText: string;
@@ -553,12 +543,12 @@ function MenuSection({
   onEdit: (item: MenuItemAdminView) => void;
   onDelete: (item: MenuItemAdminView) => void;
   isSuperAdmin: boolean;
-  defaultOpen?: boolean;
 }) {
+  // Sin acordeón: la pestaña activa ya nombra la sección, así que el título
+  // repetido solo ocupaba espacio y obligaba a un clic extra para ver el contenido.
   return (
-    <CollapsibleCard title={title} defaultOpen={defaultOpen ?? false}>
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
           <div className="relative w-full max-w-xs">
             <Input
               value={query}
@@ -585,21 +575,52 @@ function MenuSection({
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Badge variant="success">{disponibles} disponibles</Badge>
           <Badge variant="secondary">{items.length} totales</Badge>
+          <div
+            className="ml-auto flex overflow-hidden rounded-lg border border-slate-800"
+            role="group"
+            aria-label={`Filtrar por disponibilidad: ${title}`}
+          >
+            {DISPONIBILIDAD_FILTERS.map((f, i) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => onFiltroChange(f.value)}
+                aria-pressed={filtro === f.value}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium transition-colors",
+                  i > 0 && "border-l border-slate-800",
+                  filtro === f.value
+                    ? "bg-slate-700 text-white"
+                    : "text-muted-foreground hover:bg-slate-900",
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="overflow-hidden rounded-lg border border-slate-800">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-800 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Nombre</th>
+              <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <th className="sticky top-0 z-20 rounded-tl-lg bg-slate-900 px-4 py-3 font-medium">
+                  Nombre
+                </th>
                 {showCategory && (
-                  <th className="px-4 py-3 font-medium">Categoría</th>
+                  <th className="sticky top-0 z-20 bg-slate-900 px-4 py-3 font-medium">
+                    Categoría
+                  </th>
                 )}
-                <th className="px-4 py-3 text-right font-medium">Precio</th>
-                <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                <th className="sticky top-0 z-20 bg-slate-900 px-4 py-3 text-right font-medium">
+                  Precio
+                </th>
+                <th className="sticky top-0 z-20 rounded-tr-lg bg-slate-900 px-4 py-3 text-right font-medium">
+                  Acciones
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -670,7 +691,9 @@ function MenuSection({
                   >
                     {items.length === 0
                       ? emptyText
-                      : "No se encontraron platos con ese nombre"}
+                      : query.trim()
+                        ? "No se encontraron platos con ese nombre"
+                        : "Ningún plato coincide con el filtro de disponibilidad"}
                   </td>
                 </tr>
               )}
@@ -678,7 +701,6 @@ function MenuSection({
           </table>
         </div>
       </div>
-    </CollapsibleCard>
   );
 }
 
@@ -732,6 +754,14 @@ export function MenuManager({
   const [cartaQuery, setCartaQuery] = useState("");
   const [bebidasQuery, setBebidasQuery] = useState("");
   const [cafeteriaQuery, setCafeteriaQuery] = useState("");
+  const [almuerzosFiltro, setAlmuerzosFiltro] =
+    useState<DisponibilidadFiltro>("TODOS");
+  const [cartaFiltro, setCartaFiltro] =
+    useState<DisponibilidadFiltro>("TODOS");
+  const [bebidasFiltro, setBebidasFiltro] =
+    useState<DisponibilidadFiltro>("TODOS");
+  const [cafeteriaFiltro, setCafeteriaFiltro] =
+    useState<DisponibilidadFiltro>("TODOS");
   const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
@@ -762,9 +792,13 @@ export function MenuManager({
   );
   const [salsaEdit, setSalsaEdit] = useState({ name: "" });
 
-  const almuerzos = menuItems
-    .filter((i) => i.category === MenuCategory.ALMUERZO)
-    .sort((a, b) => Number(b.available) - Number(a.available));
+  // Orden estable: la lista conserva el `orderBy` del servidor
+  // (`category asc, name asc`). Ordenar por `available` movía la fila recién
+  // activada al principio de la tabla y obligaba a volver a bajar a buscarla.
+  // Para revisar solo un grupo se usa el filtro de disponibilidad de la tabla.
+  const almuerzos = menuItems.filter(
+    (i) => i.category === MenuCategory.ALMUERZO,
+  );
   const CARTA_CATEGORIES: MenuCategoryType[] = [
     MenuCategory.SANDWICH,
     MenuCategory.PANINI,
@@ -784,43 +818,53 @@ export function MenuManager({
     MenuCategory.WAFFLE,
     MenuCategory.EXTRAS,
   ];
-  const cartaItems = menuItems
-    .filter((i) => CARTA_CATEGORIES.includes(i.category))
-    .sort((a, b) => Number(b.available) - Number(a.available));
-  const bebidasItems = menuItems
-    .filter((i) => i.category === MenuCategory.BEBIDA)
-    .sort((a, b) => Number(b.available) - Number(a.available));
-  const cafeteriaItems = menuItems
-    .filter((i) => CAFETERIA_CATEGORIES.includes(i.category))
-    .sort((a, b) => Number(b.available) - Number(a.available));
+  const cartaItems = menuItems.filter((i) =>
+    CARTA_CATEGORIES.includes(i.category),
+  );
+  const bebidasItems = menuItems.filter(
+    (i) => i.category === MenuCategory.BEBIDA,
+  );
+  const cafeteriaItems = menuItems.filter((i) =>
+    CAFETERIA_CATEGORIES.includes(i.category),
+  );
   const almuerzosDisponibles = almuerzos.filter((i) => i.available).length;
-  const filteredAlmuerzos = almuerzosQuery
-    ? almuerzos.filter((i) => normalize(i.name).includes(normalize(almuerzosQuery)))
-    : almuerzos;
+  const filteredAlmuerzos = almuerzos
+    .filter((i) => matchesDisponibilidad(i, almuerzosFiltro))
+    .filter((i) =>
+      almuerzosQuery
+        ? normalize(i.name).includes(normalize(almuerzosQuery))
+        : true,
+    );
   const cartaDisponibles = cartaItems.filter((i) => i.available).length;
-  const filteredCartaItems = cartaQuery
-    ? cartaItems.filter(
-        (i) =>
-          normalize(i.name).includes(normalize(cartaQuery)) ||
-          normalize(MenuCategoryLabel[i.category]).includes(normalize(cartaQuery)),
-      )
-    : cartaItems;
+  const filteredCartaItems = cartaItems
+    .filter((i) => matchesDisponibilidad(i, cartaFiltro))
+    .filter((i) =>
+      cartaQuery
+        ? normalize(i.name).includes(normalize(cartaQuery)) ||
+          normalize(MenuCategoryLabel[i.category]).includes(
+            normalize(cartaQuery),
+          )
+        : true,
+    );
   const bebidasDisponibles = bebidasItems.filter((i) => i.available).length;
-  const filteredBebidasItems = bebidasQuery
-    ? bebidasItems.filter((i) =>
-        normalize(i.name).includes(normalize(bebidasQuery)),
-      )
-    : bebidasItems;
+  const filteredBebidasItems = bebidasItems
+    .filter((i) => matchesDisponibilidad(i, bebidasFiltro))
+    .filter((i) =>
+      bebidasQuery
+        ? normalize(i.name).includes(normalize(bebidasQuery))
+        : true,
+    );
   const cafeteriaDisponibles = cafeteriaItems.filter((i) => i.available).length;
-  const filteredCafeteriaItems = cafeteriaQuery
-    ? cafeteriaItems.filter(
-        (i) =>
-          normalize(i.name).includes(normalize(cafeteriaQuery)) ||
+  const filteredCafeteriaItems = cafeteriaItems
+    .filter((i) => matchesDisponibilidad(i, cafeteriaFiltro))
+    .filter((i) =>
+      cafeteriaQuery
+        ? normalize(i.name).includes(normalize(cafeteriaQuery)) ||
           normalize(MenuCategoryLabel[i.category]).includes(
             normalize(cafeteriaQuery),
-          ),
-      )
-    : cafeteriaItems;
+          )
+        : true,
+    );
 
   function run(action: () => Promise<void>) {
     action().catch((e) => {
@@ -997,17 +1041,9 @@ export function MenuManager({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="mb-6 border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold text-white">Gestión del menú</h1>
-<p className="text-muted-foreground">
-          El menú se organiza en secciones por tipo: Almuerzos, Platos a la
-          carta, Bebidas, Cafetería, Bubas y las Salsas de las Alitas Mixtas.
-        </p>
-      </div>
-
+    <div className="flex h-full min-h-0 flex-col">
       {/* Barra de tabs: muestra una sección a la vez */}
-      <div className="flex flex-wrap gap-1 border-b border-slate-800">
+      <div className="flex shrink-0 flex-wrap gap-1 border-b border-slate-800">
         {MENU_TABS.map((tab) => {
           const active = activeTab === tab.key;
           return (
@@ -1028,13 +1064,12 @@ export function MenuManager({
         })}
       </div>
 
+      {/* Contenido de la pestaña activa. Las pestañas con tabla tienen su
+          propio wrapper scrolleable; aquí solo cae el scroll de Bubas/Salsas. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
       {activeTab === "almuerzos" && (
-      <CollapsibleCard
-        title="Almuerzos"
-        defaultOpen
-      >
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
             <div className="relative w-full max-w-xs">
               <Input
                 value={almuerzosQuery}
@@ -1061,20 +1096,49 @@ export function MenuManager({
             </Button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Badge variant="success">{almuerzosDisponibles} disponibles</Badge>
             <Badge variant="secondary">
               {almuerzos.length} totales
             </Badge>
+            <div
+              className="ml-auto flex overflow-hidden rounded-lg border border-slate-800"
+              role="group"
+              aria-label="Filtrar almuerzos por disponibilidad"
+            >
+              {DISPONIBILIDAD_FILTERS.map((f, i) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => setAlmuerzosFiltro(f.value)}
+                  aria-pressed={almuerzosFiltro === f.value}
+                  className={cn(
+                    "px-3 py-1 text-xs font-medium transition-colors",
+                    i > 0 && "border-l border-slate-800",
+                    almuerzosFiltro === f.value
+                      ? "bg-slate-700 text-white"
+                      : "text-muted-foreground hover:bg-slate-900",
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-slate-800">
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-800 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-900 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Nombre</th>
-                  <th className="px-4 py-3 text-right font-medium">Precio</th>
-                  <th className="px-4 py-3 text-right font-medium">Acciones</th>
+                <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="sticky top-0 z-20 rounded-tl-lg bg-slate-900 px-4 py-3 font-medium">
+                    Nombre
+                  </th>
+                  <th className="sticky top-0 z-20 bg-slate-900 px-4 py-3 text-right font-medium">
+                    Precio
+                  </th>
+                  <th className="sticky top-0 z-20 rounded-tr-lg bg-slate-900 px-4 py-3 text-right font-medium">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -1146,7 +1210,9 @@ export function MenuManager({
                     >
                       {almuerzos.length === 0
                         ? "No hay almuerzos registrados."
-                        : "No se encontraron platos con ese nombre"}
+                        : almuerzosQuery.trim()
+                          ? "No se encontraron platos con ese nombre"
+                          : "Ningún almuerzo coincide con el filtro de disponibilidad"}
                     </td>
                   </tr>
                 )}
@@ -1154,7 +1220,6 @@ export function MenuManager({
             </table>
           </div>
         </div>
-      </CollapsibleCard>
       )}
 
       {activeTab === "carta" && (
@@ -1165,6 +1230,8 @@ export function MenuManager({
           disponibles={cartaDisponibles}
           query={cartaQuery}
           onQueryChange={setCartaQuery}
+          filtro={cartaFiltro}
+          onFiltroChange={setCartaFiltro}
           openNew={() => openNewCarta(MenuCategoryList[0])}
           newButtonLabel="Nuevo Plato"
           emptyText="No hay platos a la carta registrados."
@@ -1173,8 +1240,7 @@ export function MenuManager({
           onEdit={openEditCarta}
           onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
           isSuperAdmin={isSuperAdmin}
-          defaultOpen
-        />
+          />
       )}
 
       {activeTab === "bebidas" && (
@@ -1185,6 +1251,8 @@ export function MenuManager({
           disponibles={bebidasDisponibles}
           query={bebidasQuery}
           onQueryChange={setBebidasQuery}
+          filtro={bebidasFiltro}
+          onFiltroChange={setBebidasFiltro}
           openNew={() => openNewCarta(MenuCategory.BEBIDA)}
           newButtonLabel="Nueva Bebida"
           emptyText="No hay bebidas registradas."
@@ -1193,8 +1261,7 @@ export function MenuManager({
           onEdit={openEditCarta}
           onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
           isSuperAdmin={isSuperAdmin}
-          defaultOpen
-        />
+          />
       )}
 
       {activeTab === "cafeteria" && (
@@ -1205,6 +1272,8 @@ export function MenuManager({
           disponibles={cafeteriaDisponibles}
           query={cafeteriaQuery}
           onQueryChange={setCafeteriaQuery}
+          filtro={cafeteriaFiltro}
+          onFiltroChange={setCafeteriaFiltro}
           openNew={() => openNewCarta(MenuCategory.PANCAKE)}
           newButtonLabel="Nuevo Producto"
           emptyText="No hay productos de cafetería registrados."
@@ -1213,12 +1282,10 @@ export function MenuManager({
           onEdit={openEditCarta}
           onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
           isSuperAdmin={isSuperAdmin}
-          defaultOpen
-        />
+          />
       )}
 
       {activeTab === "bubas" && (
-      <CollapsibleCard title="Bubas" defaultOpen>
         <div className="space-y-4">
           <SubSection title="Tamaños de vaso">
             <div className="space-y-4">
@@ -1639,42 +1706,40 @@ export function MenuManager({
             </SubSection>
           ))}
         </div>
-      </CollapsibleCard>
       )}
 
       {activeTab === "salsas" && (
-        <CollapsibleCard title="Salsas de Alitas" defaultOpen>
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Input
-                className="max-w-64"
-                placeholder="Nombre de la salsa"
-                value={salsaForm.name}
-                onChange={(e) =>
-                  setSalsaForm({ ...salsaForm, name: e.target.value })
-                }
-              />
-              <Button
-                onClick={() =>
-                  run(() =>
-                    createAlitaSauce({ name: salsaForm.name }).then(() =>
-                      setSalsaForm({ name: "" }),
-                    ),
-                  )
-                }
-              >
-                <Plus className="h-4 w-4" /> Agregar salsa
-              </Button>
-            </div>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="max-w-64"
+              placeholder="Nombre de la salsa"
+              value={salsaForm.name}
+              onChange={(e) =>
+                setSalsaForm({ ...salsaForm, name: e.target.value })
+              }
+            />
+            <Button
+              onClick={() =>
+                run(() =>
+                  createAlitaSauce({ name: salsaForm.name }).then(() =>
+                    setSalsaForm({ name: "" }),
+                  ),
+                )
+              }
+            >
+              <Plus className="h-4 w-4" /> Agregar salsa
+            </Button>
+          </div>
 
-            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
               <Badge variant="success">
                 {alitaSauces.filter((s) => s.available).length} disponibles
               </Badge>
               <Badge variant="secondary">{alitaSauces.length} totales</Badge>
-            </div>
+              </div>
 
-            <div className="space-y-2">
+              <div className="space-y-2">
               {alitaSauces.map((sauce) => (
                 <div
                   key={sauce.id}
@@ -1728,10 +1793,10 @@ export function MenuManager({
                   Alitas Mixtas.
                 </p>
               )}
-            </div>
-          </div>
-        </CollapsibleCard>
+              </div>
+        </div>
       )}
+      </div>
 
       <Dialog
         open={editingSize !== null}

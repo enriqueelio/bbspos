@@ -36,6 +36,17 @@
     @apply border-border;
   }
 
+  /* Ocultar barras de desplazamiento en toda la app manteniendo intacto el
+     scroll de cualquier contenedor (rueda, tactil y teclado). */
+  * {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge heredado */
+  }
+
+  *::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Silk, Edge (WebKit/Blink) */
+  }
+
   html,
   body {
     overscroll-behavior-y: none;

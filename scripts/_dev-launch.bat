@@ -17,12 +17,16 @@ if "%NAME%"=="" (
     exit /b 1
 )
 
+rem pnpm puede venir del PATH o solo via corepack
+set "PNPM=pnpm"
+where pnpm >nul 2>&1 || set "PNPM=corepack pnpm"
+
 echo [_dev-launch] Liberando el puerto %PORT%...
 call :killport %PORT%
 rem ~2s sin depender de stdin (timeout falla con entrada redirigida)
 ping -n 3 127.0.0.1 >nul
 
-start "%NAME% bbspos" /min cmd /c "cd /d ""%ROOT%"" && pnpm --filter %FILTER% dev > ""%LOG%"" 2>&1"
+start "%NAME% bbspos" /min cmd /c "cd /d ""%ROOT%"" && %PNPM% --filter %FILTER% dev > ""%LOG%"" 2>&1"
 echo [_dev-launch] %NAME%: %URL%
 echo [_dev-launch] Log: %LOG%
 exit /b 0

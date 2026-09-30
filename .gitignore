@@ -49,3 +49,6 @@ gen-icons.js
 
 # dump de la base antigua (109 MB, excede limite de GitHub; se mantiene local)
 indicaciones/bbs Antiguo.sql
+
+# documentos personales copiados por error al repo (cedulas, expedientes, reportes)
+indicaciones/Prompts/Cites CMB/

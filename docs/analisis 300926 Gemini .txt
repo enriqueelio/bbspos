@@ -1,0 +1,90 @@
+Este es el análisis arquitectónico y de negocio del sistema POS documentado, estructurado para identificar sus capacidades actuales y proyectar su escalabilidad.
+
+### 1. Resumen Ejecutivo y Arquitectura
+
+BBSPOS es un sistema de Punto de Venta (POS) diseñado específicamente para la operativa de una cafetería de *bubble tea* y almuerzos denominada "BIBOSI". Está diseñado para centralizar ventas en mostrador, toma de pedidos en salón, kioscos web de autoservicio y programas de fidelidad para clientes recurrentes (pensionados).
+
+La arquitectura es monolítica modular, construida sobre el framework Next.js utilizando App Router y Server Actions, adaptando un patrón MVC. El sistema orquesta cuatro aplicaciones distintas (tienda pública, panel administrativo, caja y terminal de meseros) que operan simultáneamente sobre una única base de datos SQLite compartida mediante Prisma ORM. El estado del cliente se maneja con Zustand, y la interfaz utiliza Tailwind CSS junto con componentes de shadcn/ui.
+
+### 2. Análisis de Módulos Core (Flujos Críticos)
+
+* **Ventas y Facturación:** El sistema cuenta con un motor sólido en el POS de mostrador, donde los precios se calculan de forma autoritativa consultando la base de datos y se ignoran los precios enviados por el cliente. Soporta flujos avanzados como pagos divididos y cobros contra el saldo de clientes con cuentas prepago o postpago. **Cuello de botella:** El módulo de venta online (tienda web) delega el cálculo de precios al cliente sin validación en el servidor, lo que representa una vulnerabilidad crítica.
+
+
+* **Gestión de Inventario:** Utiliza un mecanismo altamente transaccional para controlar el cupo diario de almuerzos (Menú del Día) mediante apartados (`LunchHold`) con un tiempo de expiración de 20 minutos basado en la regla de "el primero que agarra el plato gana". **Debilidad:** El sistema omite por completo la gestión de inventario de materia prima (insumos, tés, perlas) y proveedores, imposibilitando el costeo y cálculo de márgenes.
+
+
+* **Gestión de Caja:** El arqueo es robusto, soportando múltiples cierres por día y por turno. Recalcula los totales en el servidor para evitar manipulaciones y segrega correctamente el dinero físico de los consumos realizados a crédito por clientes pensionados.
+
+
+* **Clientes y Lealtad:** Mantiene una base de datos de clientes frecuentes, acumulando visitas y puntos (1 Bs = 1 punto) en la misma transacción del pago, garantizando la idempotencia.
+
+
+
+### 3. Seguridad, Cumplimiento y Robustez
+
+* **Roles y Permisos:** La autenticación se maneja con NextAuth v4 (JWT) dividiendo a los usuarios en SUPER_ADMIN, ADMIN, CAJERO y MESERO. Sin embargo, existen fugas de autorización graves; los endpoints de reportes (`/api/reports/*`) verifican la existencia de una sesión pero no validan el rol del usuario.
+
+
+* **Cumplimiento Fiscal:** El esquema de datos actual no modela ningún tipo de impuesto. Para profesionalizar la operativa comercial en Trinidad o el resto del país, el sistema requiere una adaptación que contemple normativas fiscales locales, como la integración con la plataforma SIAT para facturación en línea.
+
+
+* **Seguridad de Datos:** La protección contra abusos es deficiente en la capa pública, ya que la tienda web y las APIs expuestas carecen de limitación de tasa (*rate limit*).
+
+
+
+### 4. Análisis FODA (SWOT)
+
+* **Fortalezas:**
+* Gestión transaccional segura para los cupos de almuerzo que evita sobreventas entre múltiples cajas.
+
+
+* Automatización de auditorías mediante envíos diarios de reportes a Telegram garantizados por llaves de idempotencia.
+
+
+
+
+* **Oportunidades:**
+* El sistema de cobro QR actual se basa en una imagen estática configurada por el administrador. Esto abre la oportunidad de integrar pasarelas de pago QR dinámicas interbancarias (como Yape, BCP Banca Móvil o Unimóvil Plus) para automatizar la conciliación de pagos directamente en el POS.
+
+
+* Escalar la base de datos de SQLite a PostgreSQL si se planea expandir el sistema a múltiples sucursales.
+
+
+* **Debilidades:**
+* La vulnerabilidad crítica en la tienda web que permite manipular el total del pedido.
+
+
+* Archivos de interfaz gigantescos (ej. `queue-view.tsx` con 59 KB) que generarán problemas de mantenibilidad a corto plazo.
+
+
+
+
+* **Amenazas:**
+* La lógica de generación de números de ticket (`seq` y `daySeq`) utiliza un cálculo de `max + 1` sin bloqueos transaccionales. Bajo carga concurrente alta, esto provocará colisiones en la base de datos e impedirá la creación de pedidos.
+
+
+
+
+
+### 5. Recomendaciones de Mejora y Escalabilidad
+
+**Mejoras Técnicas Priorizadas:**
+
+1. **Parche de Seguridad Crítico (Web Store):** Refactorizar el archivo `apps/store/app/actions/order.ts` para que el cálculo del precio se realice autoritativamente en el servidor consultando la matriz `DrinkPrice`, replicando la lógica que ya posee el POS del cajero.
+
+
+2. **Protección de APIs de Reportes:** Actualizar el archivo `guard.ts` para aplicar un control de acceso basado en roles (RBAC) estricto en la ruta `/api/reports/*`, impidiendo que credenciales de cajero accedan a datos financieros del negocio.
+
+
+3. **Refactorización de Concurrencia:** Sustituir la lógica de numeración `max + 1` por autoincrementables a nivel de base de datos o implementar bloqueos explícitos (row-level locks) durante la transacción de creación de pedidos.
+
+
+
+**Mejoras de Negocio y UX:**
+
+1. **Integración Fiscal (SIAT):** Añadir módulos en el esquema de base de datos para manejar datos de facturación (NIT/CI, Razón Social) y conectar el flujo de cobro con los servicios de impuestos nacionales para la emisión automática de facturas electrónicas.
+2. **Módulo de Inventario de Materia Prima:** Expandir el modelo de datos para incluir proveedores, compras, recetas (escandallo) y merma. Esto es esencial para que el sistema no solo registre ingresos, sino que calcule la rentabilidad real de los platillos que no existen en el módulo actual.
+
+
+3. **Automatización del Flujo QR:** Desarrollar webhooks que escuchen las confirmaciones de las aplicaciones bancarias locales al leer el QR, cambiando el estado del pedido a pagado sin requerir la intervención manual del cajero.

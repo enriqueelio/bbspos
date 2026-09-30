@@ -1,0 +1,1044 @@
+# Informe de Arquitectura y Evaluación Técnica — BBSPOS
+
+**Fuente:** `ARQUITECTURA-BBSPOS.txt`, documento técnico generado a partir del código fuente de `bbspos`. El propio documento indica que sus afirmaciones fueron verificadas contra la implementación real. 
+
+> **Criterio del análisis:** separo lo que el documento afirma como implementado de mis conclusiones arquitectónicas. Cuando una capacidad no está documentada, no la doy por existente.
+
+---
+
+# 1. Resumen Ejecutivo y Arquitectura
+
+## 1.1 Propósito y posicionamiento
+
+BBSPOS es un **POS especializado para una cafetería/bubble tea**, concretamente el negocio denominado BIBOSI. No es un ERP ni un POS genérico: está diseñado alrededor de operaciones muy específicas como construcción de bebidas, boba/toppings, Menú del Día, pedidos de salón, mostrador, reservas, pensionados, fidelización, arqueo e impresión térmica. 
+
+El sistema contempla **cuatro terminales funcionalmente diferenciadas**:
+
+* **Store:** kiosco web/autoservicio.
+* **Cajero:** POS principal y cobro.
+* **Mesero:** toma de pedidos en salón.
+* **Admin:** configuración, usuarios, reportes y operaciones administrativas.
+
+Las cuatro aplicaciones trabajan contra **una única base SQLite compartida**, sin microservicios ni message broker. 
+
+### Público objetivo
+
+El sistema encaja especialmente bien con:
+
+* cafeterías;
+* bubble tea;
+* restaurantes pequeños/medianos;
+* locales con menú parametrizable;
+* negocios con pedidos de salón + mostrador;
+* operaciones con producción bajo demanda;
+* negocios donde existe una cantidad diaria limitada de determinados platos.
+
+No está diseñado actualmente como solución multi-sucursal empresarial. La arquitectura de SQLite compartida y la ausencia de servicios distribuidos apuntan claramente a una **operación local/individual**.
+
+---
+
+## 1.2 Arquitectura técnica
+
+La arquitectura puede resumirse así:
+
+```text
+                         ┌─────────────────────┐
+                         │     PostgreSQL*      │
+                         │       futura        │
+                         └──────────▲──────────┘
+                                    │
+                          actualmente SQLite
+                                    │
+              ┌─────────────────────┴────────────────────┐
+              │           packages/db                    │
+              │ Prisma + dominio + transacciones        │
+              └─────────────────────▲────────────────────┘
+                                    │
+         ┌──────────────┬───────────┼───────────┬──────────────┐
+         │              │           │           │              │
+      Store           Admin      Cajero       Mesero       Workers
+      :3000           :3001      :3002        :3003       Telegram/etc.
+         │              │           │           │
+         └──────────────┴───────────┴───────────┘
+                         Next.js 15
+                    Server Actions / APIs
+```
+
+El patrón es un **monolito modular** basado en Next.js App Router + Server Actions, con una adaptación de MVC. Prisma y la lógica de dominio constituyen el Model; React los componentes de View; Server Actions y Route Handlers actúan como Controller. 
+
+El stack es moderno:
+
+* TypeScript strict;
+* Node 20+;
+* Next.js 15;
+* React 19;
+* Prisma 6;
+* SQLite;
+* Zustand;
+* NextAuth;
+* bcrypt;
+* Zod;
+* Tailwind/shadcn;
+* PWA;
+* Telegram Bot API;
+* impresión Windows/PNG. 
+
+### Evaluación arquitectónica
+
+La decisión de compartir la lógica crítica en `packages/db` es correcta. Especialmente valioso es que las reglas de cupos, reservas y consistencia se ejecuten dentro de transacciones, evitando que cada aplicación tenga su propia interpretación del negocio. 
+
+**El principal problema no está en el patrón de aplicación sino en la persistencia.**
+
+SQLite es perfectamente razonable para una instalación local de baja concurrencia, pero se convierte en un cuello de botella si el negocio evoluciona hacia:
+
+* múltiples sucursales;
+* varios servidores;
+* acceso remoto;
+* mayor número de terminales;
+* reportes pesados concurrentes;
+* integración con terceros;
+* alta concurrencia de pedidos.
+
+---
+
+# 2. Análisis de Módulos Core
+
+## 2.1 Ventas y facturación
+
+### Flujo POS
+
+El flujo de venta está bastante maduro.
+
+El carrito usa Zustand y soporta bebidas y platos, cliente, tipo de entrega, notas y reservas. 
+
+Una decisión particularmente buena es que **el POS de cajero no confía en el precio enviado por el navegador**. El servidor vuelve a consultar:
+
+* matriz `DrinkPrice`;
+* toppings;
+* producto;
+* variante.
+
+Por tanto, el precio final se calcula en servidor. 
+
+Esto evita una clase importante de manipulación de precios.
+
+### Transacciones
+
+La creación de pedidos POS concentra en una transacción:
+
+1. validación de cupo;
+2. generación de numeración;
+3. creación del pedido;
+4. creación de líneas;
+5. consumo de apartados.
+
+
+
+Es una muy buena frontera transaccional.
+
+### Pero existe una vulnerabilidad crítica
+
+El **store público sí confía en el precio enviado por el cliente**:
+
+> `createOrder` utiliza `item.unitPrice` y `t.price` enviados por el navegador.
+
+El documento identifica explícitamente que un usuario podría crear un pedido con un total manipulado, incluso de Bs 1.  
+
+**Severidad: crítica.**
+
+La lógica de precios debe centralizarse para que `store`, `cajero` y cualquier futura API utilicen exactamente el mismo motor autoritativo.
+
+### Offline / online
+
+Aquí hay que hacer una distinción importante:
+
+**No se documenta un verdadero modo offline transaccional.**
+
+Aunque store y mesero son PWA, PWA no equivale a POS offline. El sistema sigue dependiendo de SQLite/servidor para las operaciones críticas.
+
+Por tanto:
+
+* PWA: **sí**.
+* Caché/offline de UI: potencialmente sí.
+* Venta offline con sincronización posterior: **no está documentada como implementada**.
+
+---
+
+## 2.2 Pagos
+
+El sistema soporta:
+
+* efectivo;
+* QR;
+* tarjeta;
+* pensionado;
+* pago dividido entre dos métodos. 
+
+El pago dividido se prorratea correctamente en los reportes y cierres.
+
+La idempotencia mediante `paidAt` es una buena decisión: evita que un doble click o reintento vuelva a acumular fidelización. 
+
+### Pensionados
+
+Esta es una funcionalidad diferencial.
+
+El sistema implementa:
+
+* Prepago;
+* Postpago;
+* límite de crédito;
+* ledger;
+* recargas;
+* pago de deuda;
+* consumo asociado a pedido.
+
+El modelo semántico `balance > 0` como saldo a favor y `< 0` como deuda está claramente definido. 
+
+Además, el consumo pensionado **no entra a caja**, mientras que las recargas sí. Esa separación es importante contablemente. 
+
+---
+
+# 2.3 Inventario
+
+Aquí aparece una de las mayores limitaciones del producto.
+
+### Lo que sí existe
+
+Existe control de disponibilidad:
+
+* tamaño;
+* sabor;
+* boba;
+* topping;
+* platos.
+
+Y existe un sistema bastante sofisticado de **cupos diarios de almuerzo**:
+
+```text
+planned
+   + ajustes
+   - vendido
+   - apartados de otras cajas
+   = remaining
+```
+
+ 
+
+Los `LunchHold` tienen TTL de 20 minutos y un mecanismo de renovación. Además, la capacidad vuelve a validarse dentro de la transacción de creación del pedido. 
+
+### Lo que NO existe
+
+No existe inventario real de materias primas:
+
+* té;
+* tapioca;
+* jarabes;
+* vasos;
+* ingredientes;
+* compras;
+* recepción;
+* merma;
+* proveedores;
+* costo unitario;
+* margen.
+
+Esto está explícitamente documentado. 
+
+### Diagnóstico
+
+El sistema tiene **control de disponibilidad comercial**, pero no un **sistema de inventario empresarial**.
+
+Es decir:
+
+> `LunchQuota` controla cuántos platos se pueden vender, pero no cuánto inventario físico existe para producirlos.
+
+Para una cafetería, esta diferencia es enorme.
+
+---
+
+# 2.4 Gestión de caja
+
+Es uno de los módulos mejor diseñados.
+
+Soporta:
+
+* arqueo por denominación;
+* efectivo;
+* QR;
+* tarjeta;
+* pensionados;
+* recargas;
+* múltiples cierres por día;
+* historial;
+* reimpresión.
+
+Las denominaciones incluyen Bs 200 hasta Bs 0,50. 
+
+Una fortaleza importante es que el servidor **recalcula el arqueo** y no confía en el total enviado desde el frontend. 
+
+### Modelo
+
+```text
+Efectivo físico
+       │
+       ▼
+countedCash
+       │
+       ├── systemCash ──► esperado
+       │
+       └── diffCash ────► sobrante/faltante
+```
+
+Además, los cierres pueden existir múltiples veces durante el día, con usuario y denominaciones independientes. 
+
+**Evaluación:** diseño sólido para un negocio de una sola unidad.
+
+---
+
+# 2.5 Clientes y fidelización
+
+El modelo `Customer` combina:
+
+* cliente frecuente;
+* pensionado;
+* saldo;
+* límite de crédito;
+* visitas;
+* gasto;
+* puntos.
+
+
+
+La decisión de **no crear automáticamente un cliente cuando no existe coincidencia** es buena desde el punto de vista de calidad de datos. La venta queda como invitado y el alta requiere acción explícita. 
+
+La fidelización soporta tres métricas:
+
+* gasto mensual;
+* visitas mensuales;
+* puntos acumulados.
+
+Y el canje ocurre dentro de transacción. 
+
+### Limitación
+
+El sistema aún tiene evidencia de que el flujo de canje **no ha sido realmente ejercitado**: existen clientes y pedidos con métricas, pero cero canjes registrados. También quedan verificaciones manuales pendientes de cambios recientes. 
+
+Esto debe considerarse riesgo de calidad, no solamente deuda documental.
+
+---
+
+# 3. Seguridad, Cumplimiento y Robustez
+
+## 3.1 Autenticación
+
+Utiliza:
+
+* NextAuth v4;
+* Credentials Provider;
+* JWT;
+* bcrypt;
+* cookies separadas por aplicación;
+* sesiones eliminadas al cerrar navegador.
+
+
+
+Es una base razonable.
+
+---
+
+## 3.2 Roles
+
+Los roles son:
+
+```text
+SUPER_ADMIN
+ADMIN
+CAJERO
+MESERO
+```
+
+y existen controles específicos para:
+
+* cobro;
+* caja;
+* clientes;
+* descuentos;
+* usuarios;
+* catálogo;
+* administración.
+
+
+
+El modelo de autorización es adecuado conceptualmente, pero presenta una debilidad arquitectónica: parte de los permisos están implementados mediante checks específicos repetidos en cada acción.
+
+El propio documento señala que `hasBillingAccess()` existe pero no se utiliza, mientras que se repite `role !== "MESERO"`. 
+
+### Recomendación
+
+Crear una capa única:
+
+```ts
+requirePermission(session, Permission.CASH_CLOSE)
+requirePermission(session, Permission.CHARGE_ORDER)
+requirePermission(session, Permission.MANAGE_CUSTOMERS)
+```
+
+Así el sistema pasa de **autorización dispersa** a **RBAC/permission-based authorization centralizado**.
+
+---
+
+# 3.3 Vulnerabilidad de reportes
+
+Este es el segundo problema crítico.
+
+Las APIs `/api/reports/*` no validan el rol correctamente. El middleware las excluye y `requireSession()` comprueba sesión pero no privilegio. Además, el login de admin puede generar sesión para cualquier rol activo. 
+
+Consecuencia:
+
+> un CAJERO puede acceder a información administrativa de ventas, pagos y rendimiento.
+
+Esto es un **problema de autorización**, no simplemente de UX.
+
+Debe corregirse inmediatamente.
+
+---
+
+# 3.4 Secretos
+
+Existe un `NEXTAUTH_SECRET` de ejemplo/default en configuración. El documento lo clasifica como riesgo alto. 
+
+Para producción debe existir:
+
+* secreto generado aleatoriamente;
+* gestión externa de secretos;
+* rotación;
+* separación de secretos por entorno.
+
+---
+
+# 3.5 Rate limiting
+
+No existe rate limit en la tienda ni endpoints públicos. 
+
+Esto es especialmente grave combinado con:
+
+* store público;
+* creación de pedidos sin autenticación;
+* vulnerabilidad de precio.
+
+Debe existir protección como mínimo por:
+
+* IP;
+* fingerprint/sesión de kiosk;
+* ventana temporal;
+* cantidad máxima de pedidos.
+
+---
+
+# 3.6 Auditoría
+
+Hay elementos auditables:
+
+* `CashClose`;
+* `LunchAdjust`;
+* `CustomerLedger`;
+* `CustomerReward`;
+* usuario creador;
+* usuario anulador;
+* usuario que aplica descuentos.
+
+Pero **no se documenta un audit log general de seguridad**.
+
+No aparece, por ejemplo:
+
+```text
+UserLogin
+UserLogout
+PermissionDenied
+PriceChanged
+RoleChanged
+CustomerModified
+ConfigurationChanged
+QRChanged
+PrinterChanged
+```
+
+Por tanto, hay trazabilidad de negocio, pero no un **audit trail de seguridad integral**.
+
+---
+
+# 3.7 Facturación electrónica / fiscal
+
+El documento **no describe integración con facturación electrónica**, CUF/CUFD, SIN, emisión de factura electrónica, firma digital ni envío fiscal.
+
+Por lo tanto, no debe asumirse que BBSPOS sea un sistema fiscalmente integrado.
+
+Tampoco existe un módulo de impuestos explícito; el documento indica que no se modelan impuestos. 
+
+Si el negocio requiere facturación fiscal electrónica, debe considerarse una integración separada.
+
+---
+
+# 3.8 Cifrado y protección de datos
+
+El documento menciona bcrypt para contraseñas, pero no documenta:
+
+* cifrado de base de datos;
+* cifrado de backups;
+* cifrado de campos sensibles;
+* gestión de claves;
+* TLS terminado en reverse proxy;
+* masking de datos personales;
+* políticas de retención.
+
+Por tanto, esas capacidades deben considerarse **no demostradas por la documentación**.
+
+---
+
+# 4. Análisis FODA
+
+## Fortalezas
+
+### 1. Excelente modelado de reglas específicas de negocio
+
+El sistema no es simplemente CRUD + ventas. Tiene reglas sofisticadas para:
+
+* reservas;
+* cupos;
+* apartados;
+* pensionados;
+* pagos divididos;
+* caja;
+* fidelización.
+
+Especialmente destacable es `LunchHold`, con TTL, renovación y conciliación. 
+
+### 2. Buena disciplina transaccional
+
+Precio, cupos, lealtad y cuenta corriente se apoyan en transacciones. 
+
+### 3. Historial de pedidos robusto
+
+Guardar snapshots de nombre/precio en `OrderItem` protege la integridad histórica cuando cambia el catálogo. 
+
+### 4. Caja especialmente bien resuelta
+
+El arqueo servidor-side y los múltiples cierres constituyen una base sólida. 
+
+### 5. Arquitectura monorepo coherente
+
+La separación:
+
+```text
+apps/*
+packages/db
+packages/types
+packages/ui
+packages/config
+```
+
+es apropiada y facilita compartir reglas sin convertir todo en una aplicación monolítica desordenada. 
+
+---
+
+## Debilidades
+
+### 1. Inconsistencia de seguridad entre POS y Store
+
+El cajero calcula precios de servidor; el store no.
+
+Esta es probablemente la inconsistencia arquitectónica más importante del sistema. 
+
+### 2. Autorización de reportes incorrecta
+
+Es un problema directo de confidencialidad.
+
+### 3. SQLite como límite de crecimiento
+
+La arquitectura está optimizada para una instalación local, no para crecimiento distribuido.
+
+### 4. No existe inventario de materias primas
+
+El sistema no puede responder realmente:
+
+> "¿Cuántas tapiocas, vasos, jarabes o kilos de pollo quedan?"
+
+Solo puede responder cuánto de determinados productos comerciales está disponible.
+
+### 5. Deuda técnica considerable
+
+El documento identifica:
+
+* componentes de 1.400–2.200 líneas;
+* warnings de lint;
+* SQL raw;
+* cero tests automatizados;
+* cero CI/CD;
+* dependencia Windows para impresión. 
+
+---
+
+# 4.3 Oportunidades
+
+## A. Motor de inventario real
+
+Añadir:
+
+```text
+Product
+Ingredient
+Recipe
+InventoryLot
+StockMovement
+Purchase
+PurchaseLine
+Supplier
+Waste
+CostHistory
+```
+
+permitiría conectar:
+
+```text
+Venta
+  ↓
+Receta
+  ↓
+Consumo de ingredientes
+  ↓
+Stock
+  ↓
+Costo
+  ↓
+Margen
+```
+
+Esto transformaría el POS en una plataforma de gestión operativa.
+
+---
+
+## B. PostgreSQL
+
+La evolución natural sería:
+
+```text
+SQLite
+  ↓
+PostgreSQL
+  ↓
+Redis (opcional)
+  ↓
+workers/queue
+```
+
+No recomendaría introducir microservicios inmediatamente. Primero resolvería la persistencia y las fronteras de dominio.
+
+---
+
+## C. IA
+
+La IA tendría utilidad real si se conecta con los datos existentes:
+
+* predicción de demanda;
+* recomendación de producción de almuerzos;
+* predicción de horas pico;
+* detección de anomalías de caja;
+* sugerencias de compras;
+* detección de productos de baja rotación;
+* recomendación de promociones;
+* análisis de clientes.
+
+El sistema ya tiene una base de datos suficientemente rica para alimentar esos modelos: ventas, horarios, categorías, clientes, puntos, reservas y producción.
+
+---
+
+## D. Pagos
+
+El QR actualmente está modelado como configuración de imagen. 
+
+Una evolución sería:
+
+```text
+QR estático
+   ↓
+QR dinámico
+   ↓
+payment intent
+   ↓
+webhook
+   ↓
+reconciliación automática
+```
+
+Esto permitiría confirmar pagos automáticamente en lugar de depender de un proceso manual.
+
+---
+
+# 4.4 Amenazas
+
+### 1. Concurrencia
+
+`max + 1` para `seq` y `daySeq` puede colisionar con escrituras concurrentes. El documento reconoce el problema. 
+
+### 2. Escalabilidad de SQLite
+
+Mayor concurrencia de escritura y reportes puede producir contención.
+
+### 3. Fallo del host
+
+Al depender de una base SQLite en archivo, la estrategia de backup se vuelve crítica.
+
+No se documenta una estrategia robusta de backup/restore.
+
+### 4. Dependencia de Windows
+
+La impresión física usa PowerShell `Out-Printer`; el propio documento señala que el driver no es portable a Linux/Docker. 
+
+### 5. Ausencia de tests
+
+La ausencia de tests automatizados incrementa el riesgo de regresiones en funcionalidades transaccionales complejas. 
+
+### 6. Docker roto actualmente
+
+El Dockerfile referencia todavía `@bubba/db` aunque el paquete actual es `@bbspos/db`, provocando fallo del build. 
+
+Esto debe corregirse antes de considerar Docker como mecanismo confiable de despliegue.
+
+---
+
+# 5. Recomendaciones Priorizadas
+
+## P0 — Bloqueantes de seguridad
+
+### 1. Unificar el cálculo de precios
+
+Crear:
+
+```text
+packages/db/src/pricing/
+    price-engine.ts
+```
+
+y hacer que:
+
+```text
+store
+cajero
+mesero
+API futuras
+```
+
+llamen al mismo motor.
+
+**Nunca aceptar `unitPrice` como autoridad del cliente.**
+
+---
+
+### 2. Corregir autorización de `/api/reports`
+
+Implementar:
+
+```ts
+requireRole(["ADMIN", "SUPER_ADMIN"])
+```
+
+directamente en cada endpoint o, mejor:
+
+```ts
+requirePermission(Permission.VIEW_REPORTS)
+```
+
+No depender exclusivamente del middleware.
+
+---
+
+### 3. Rate limiting
+
+Agregar protección al store público.
+
+Especialmente:
+
+```text
+POST createOrder
+GET catalog
+GET payment QR
+```
+
+---
+
+### 4. Eliminar secretos/defaults de producción
+
+Forzar:
+
+```text
+NEXTAUTH_SECRET
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+DATABASE_URL
+```
+
+desde secret manager/environment seguro.
+
+---
+
+# P1 — Integridad transaccional
+
+### 5. Sustituir `max + 1`
+
+Para `seq/daySeq`, usar una estrategia segura de generación de secuencia:
+
+* tabla de secuencias;
+* contador transaccional;
+* o mecanismo soportado por el motor elegido.
+
+No dejar que una constraint única sea el mecanismo normal de resolución de concurrencia.
+
+---
+
+### 6. Migrar SQLite → PostgreSQL cuando aparezca cualquiera de estas condiciones
+
+* segunda sucursal;
+* acceso remoto;
+* > 4–6 terminales concurrentes;
+* integración con delivery;
+* reportes pesados durante operación;
+* necesidad de alta disponibilidad.
+
+No migraría simplemente "porque PostgreSQL es mejor"; lo haría cuando la necesidad operativa lo justifique.
+
+---
+
+# P1 — Calidad de software
+
+### 7. Introducir testing automatizado
+
+Prioridad:
+
+```text
+1. Pricing
+2. LunchHold
+3. CashClose
+4. Pension
+5. Loyalty
+6. Payment split
+7. Reservations
+8. Permissions
+```
+
+Especialmente tests de propiedades:
+
+```text
+sold + remaining + holds <= planned + adjustments
+```
+
+y:
+
+```text
+pago idempotente ⇒ loyalty incrementa exactamente una vez
+```
+
+---
+
+### 8. CI/CD
+
+Pipeline mínimo:
+
+```text
+commit
+  ↓
+lint
+  ↓
+typecheck
+  ↓
+unit tests
+  ↓
+integration tests
+  ↓
+build Docker
+  ↓
+migration check
+  ↓
+deploy
+```
+
+El documento confirma que actualmente typecheck/lint se ejecutan manualmente y no existe CI/CD. 
+
+---
+
+### 9. Dividir componentes gigantes
+
+Priorizar:
+
+```text
+menu-manager.tsx
+queue-view.tsx
+reports-client.tsx
+pos-terminal.tsx
+pos-ticket-panel.tsx
+```
+
+Separar:
+
+* state;
+* queries;
+* mutations;
+* UI;
+* dialogs;
+* tables;
+* domain hooks.
+
+No es necesario cambiar el comportamiento; es una refactorización estructural.
+
+---
+
+# P2 — Evolución del producto
+
+### 10. Inventario real
+
+Esta sería probablemente la siguiente gran funcionalidad de negocio:
+
+```text
+Proveedor
+    ↓
+Compra
+    ↓
+Recepción
+    ↓
+Lote
+    ↓
+Inventario
+    ↓
+Receta
+    ↓
+Venta
+    ↓
+Consumo
+    ↓
+Costo / margen
+```
+
+---
+
+### 11. Recetas
+
+Ejemplo:
+
+```text
+Taro 500 ml
+ ├─ té: 250 ml
+ ├─ leche: 150 ml
+ ├─ jarabe: 30 ml
+ ├─ boba: 80 g
+ └─ vaso: 1 unidad
+```
+
+Así el POS podría calcular automáticamente el costo real de la venta.
+
+---
+
+### 12. Dashboard de rentabilidad
+
+Actualmente hay excelentes reportes comerciales, pero falta conectar:
+
+```text
+Revenue
+- Discounts
+- Cost of Goods
+- Waste
+= Gross Margin
+```
+
+Esto llevaría al sistema de POS a una herramienta de decisión empresarial.
+
+---
+
+### 13. Auditoría central
+
+Crear:
+
+```text
+AuditEvent
+-------------
+id
+timestamp
+userId
+action
+entity
+entityId
+before
+after
+ip
+userAgent
+```
+
+Eventos mínimos:
+
+* login;
+* logout;
+* cambio de precio;
+* descuento;
+* anulación;
+* modificación de usuarios;
+* cambio de permisos;
+* recarga de pensionado;
+* canje;
+* modificación de menú;
+* cierre de caja.
+
+---
+
+### 14. Observabilidad
+
+Añadir:
+
+* logs estructurados;
+* correlation ID;
+* métricas;
+* health checks;
+* error tracking;
+* métricas de latencia;
+* métricas de impresión;
+* métricas de workers.
+
+---
+
+# Matriz de prioridad ejecutiva
+
+| Prioridad | Iniciativa                        |     Impacto |          Urgencia |
+| --------- | --------------------------------- | ----------: | ----------------: |
+| **P0**    | Corregir precios del Store        |     Crítico |         Inmediata |
+| **P0**    | Corregir autorización de reportes |     Crítico |         Inmediata |
+| **P0**    | Rate limiting                     |        Alto |         Inmediata |
+| **P0**    | Secretos de producción            |        Alto |         Inmediata |
+| **P1**    | Resolver `max + 1`                |        Alto |              Alta |
+| **P1**    | Tests automatizados               |        Alto |              Alta |
+| **P1**    | CI/CD                             |        Alto |              Alta |
+| **P1**    | Centralizar autorización          |        Alto |              Alta |
+| **P1**    | Corregir Docker                   |        Alto |              Alta |
+| **P2**    | Inventario de insumos             |    Muy alto |             Media |
+| **P2**    | Recetas + costeo                  |    Muy alto |             Media |
+| **P2**    | Auditoría central                 |        Alto |             Media |
+| **P2**    | Observabilidad                    |        Alto |             Media |
+| **P3**    | PostgreSQL                        | Estratégico | Según crecimiento |
+| **P3**    | IA predictiva                     | Estratégico |         Posterior |
+| **P3**    | Pagos QR dinámicos                | Estratégico |         Posterior |
+
+---
+
+# Dictamen arquitectónico
+
+**BBSPOS tiene una arquitectura de aplicación bastante más madura de lo que aparenta su tamaño.** La parte más destacable no es la cantidad de pantallas, sino la cantidad de reglas de negocio que están correctamente encapsuladas: cupos, holds, reservas, pagos divididos, pensionados, fidelización y arqueo.
+
+La utilización de transacciones para las reglas críticas y la existencia de un `packages/db` como *shared kernel* son decisiones arquitectónicas acertadas. 
+
+Sin embargo, el sistema todavía está en una etapa de **"POS monolítico local fuertemente especializado"**, no de plataforma POS empresarial. Sus principales limitaciones no son de funcionalidad visible sino de **seguridad, calidad operacional, persistencia, testing y escalabilidad**.
+
+Los tres problemas que trataría antes de agregar nuevas funcionalidades son:
+
+1. **Eliminar la confianza en precios provenientes del Store.**
+2. **Cerrar la brecha de autorización de los reportes.**
+3. **Establecer una disciplina de producción: tests + CI/CD + secretos + backups + observabilidad.**
+
+Después de eso, el siguiente salto importante no sería microservicios: sería **inventario real + recetas + costeo + margen**, y posteriormente una migración controlada de SQLite a PostgreSQL si el crecimiento operativo lo exige.
+
+En otras palabras, **el núcleo transaccional de BBSPOS está bien encaminado; la prioridad ahora debería ser convertirlo de un sistema funcional y especializado en un sistema operacionalmente robusto y auditable.**

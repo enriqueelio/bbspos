@@ -1,0 +1,1315 @@
+# BBSPOS — Contexto Base del Sistema
+
+> Documento de referencia técnica generado a partir del código fuente del repositorio `bbspos`.
+> Sirve como *base knowledge* para alimentar un modelo de IA con el contexto completo del sistema.
+> Todas las afirmaciones de este documento fueron verificadas leyendo el código; las referencias
+> `archivo:línea` apuntan a la implementación real.
+
+---
+
+## 1. Descripción General
+
+### 1.1 Propósito
+
+BBSPOS es un **sistema Point of Sale (POS) orientado a una cafetería de bubble tea** (negocio "BIBOSI").
+Cubre la operación completa del local: catálogo y matriz de precios, toma de pedidos desde salón y
+mostrador, cobro con múltiples métodos, cuenta corriente de pensionados, fidelización de clientes,
+control de producción de almuerzos por jornada, arqueo de caja e impresión de comandas en
+impresora térmica.
+
+No es un e-commerce: la tienda web pública es un **kiosco de autoservicio** que arma bebidas y deja
+el pedido en la cola de cocina para que el personal lo cobre en mostrador.
+
+### 1.2 Alcance
+
+El sistema cubre 4 terminales con permisos distintos, todo sobre **una única base de datos SQLite
+compartida** por los 4 procesos Next.js. No hay microservicios, ni cola de mensajes, ni base de datos
+por app.
+
+### 1.3 Casos de uso principales
+
+| # | Caso de uso | Actor | Terminal |
+|---|---|---|---|
+| CU-01 | Armar una bebida por pasos (tamaño → sabor → boba → toppings) y cobrarla en mostrador | Cliente + Cajero | store (3000) + cajero (3002) |
+| CU-02 | Venta directa en mostrador con cálculo de precio autoritativo desde BD | Cajero | cajero (3002) |
+| CU-03 | Tomar pedidos de salón (solo `MESA` / `LLEVAR`, sin cobro) | Mesero | mesero (3003) |
+| CU-04 | Cobrar un pedido con pago dividido (2 métodos) | Cajero | cajero (3002) |
+| CU-05 | Cobrar contra la cuenta corriente de un pensionado (Prepago/Postpago) | Cajero | cajero (3002) |
+| CU-06 | Aceptar un pedido de la cola, marcarlo entregado | Cajero | cajero (3002) |
+| CU-07 | Reservar un pedido para una hora pactada, editarlo y confirmarlo con cobro | Cajero | cajero (3002) |
+| CU-08 | Programar y ajustar la cantidad diaria de un plato de almuerzo y apartar unidades por caja | Cajero | cajero (3002) |
+| CU-09 | Arqueo de caja por denominación, con contraste de sobrante/faltante | Cajero/Admin | cajero (3002) |
+| CU-10 | Recargar saldo o pagar deuda de un pensionado (entra dinero real a caja) | Admin | admin (3001) |
+| CU-11 | Administrar catálogo: tamaños, sabores, boba, toppings, matriz de precios, carta, salsas | Admin | admin (3001) |
+| CU-12 | Activar/desactivar platos del Menú del Día de la jornada | Admin | admin (3001) |
+| CU-13 | Consultar reportes de ventas, pagos, performance, horas pico, baja rotación (JSON o CSV) | Admin | admin (3001) |
+| CU-14 | Imprimir o configurar la impresora de comandas (Windows o PNG virtual) | Admin | admin (3001) |
+| CU-15 | Consultar ranking de clientes frecuentes y canjear puntos de lealtad | Admin | admin (3001) |
+| CU-16 | Gestionar usuarios, roles y turnos | Admin/SUPER_ADMIN | admin (3001) |
+| CU-17 | Recibir alertas por Telegram (pedidos retrasados, stock bajo de almuerzo) | Sistema | Telegram |
+| CU-18 | Enviar el cierre de caja diario a Telegram | Sistema | Telegram |
+
+### 1.4 Terminología del negocio
+
+| Término | Significado en el sistema |
+|---|---|
+| **Boba / toppings** | Insumos y extras de la bebida (tapioca, popping, shots de café, etc.) |
+| **Menú del Día** | Plato de almuerzo con cantidad limitada por jornada (`LunchQuota`) |
+| **Carta** | Platillos de venta libre, sin control de cantidad |
+| **Ticket / comanda** | Impreso de 34 columnas que va a cocina; el ticket `#001` es el `daySeq` |
+| **Caja (cartId)** | Identidad de una terminal durante la sesión, para apartar cupo de almuerzo |
+| **Apartado (hold)** | Reserva temporal de unidades de almuerzo mientras están en el ticket |
+| **Pensionado** | Cliente con cuenta corriente Prepago o Postpago |
+| **Puntaje / puntos** | Unidad de lealtad: 1 Bs = 1 punto |
+
+---
+
+## 2. Stack Tecnológico
+
+### 2.1 Lenguajes y runtimes
+
+| Elemento | Versión / valor |
+|---|---|
+| Lenguaje principal | TypeScript `^5.6.0` (strict) |
+| Runtime | Node.js `>=20.9.0` (contenedor: `node:22-slim`) |
+| Gestor de paquetes | pnpm `11.21.0` con workspaces + `corepack` |
+| Orquestador de tareas | Turborepo `^2.5.0` |
+| Base de datos | **SQLite** vía Prisma `^6.1.0` (instalado 6.19.3) |
+| Archivos | DB única `packages/db/prisma/dev.db` (≈500 KB) |
+
+### 2.2 Frameworks y librerías por capa
+
+| Capa | Tecnología |
+|---|---|
+| Framework web | **Next.js `15.5.23`** con **App Router** en las 4 apps |
+| UI | React `19.2.8`, React DOM `19.2.8` |
+| Estilos | Tailwind CSS `^3.4.14` + PostCSS + autoprefixer |
+| Estado cliente | **Zustand** (carrito POS y carrito del store) |
+| Autenticación | **NextAuth v4**, estrategia `jwt`, provider `Credentials`, cookies por app |
+| Hash de contraseñas | `bcryptjs` (coste 10) |
+| Validación | `zod` (solo en `apps/admin/lib/reports/params.ts`) |
+| Componentes UI | Radix UI primitives + **shadcn/ui** pattern en `packages/ui` |
+| Iconos | `lucide-react` + `@iconify/react` |
+| Imágenes | `sharp` (recorte WebP q80) |
+| Exportaciones | `xlsx` (Excel), `html2canvas` + `jspdf` (PDF) |
+| PWA | `@ducanh2912/next-pwa` (store y mesero) |
+| Impresión física | PowerShell `Out-Printer` con escalado de fuente (solo Windows) |
+| Impresión virtual | Render a PNG vía `formatComanda` + escritura en disco |
+| Notificaciones | Telegram Bot API (workers en `packages/db/scripts/`) |
+
+### 2.3 Paquetes del monorepo
+
+| Paquete | Nombre npm | Responsabilidad |
+|---|---|---|
+| `packages/db` | `@bbspos/db` | Esquema Prisma, cliente singleton, lógica de dominio compartida: menú del día, cupos y apartados, impresión, reportes diarios, alertas Telegram |
+| `packages/types` | `@bbspos/types` | Cero dependencias. Enums, labels, cálculos puros (`cartItemUnitTotal`, `shortCustomerName`), tipos compartidos |
+| `packages/ui` | `@bbspos/ui` | Componentes React reutilizables (builder, cart, shadcn/ui) |
+| `packages/config` | `@bbspos/config` | Configuración compartida de Tailwind |
+| `apps/store` | `@bbspos/store` | Kiosco web público (puerto 3000) |
+| `apps/admin` | `@bbspos/admin` | Panel administrativo (puerto 3001) |
+| `apps/cajero` | `@bbspos/cajero` | POS de mostrador (puerto 3002) |
+| `apps/mesero` | `@bbspos/mesero` | POS de salón, PWA (puerto 3003) |
+
+### 2.4 Variables de entorno
+
+```bash
+# packages/db/prisma/.env
+DATABASE_URL="file:./dev.db"
+
+# apps/admin/.env  (puerto 3001)
+DATABASE_URL="file:./dev.db"
+NEXTAUTH_URL="http://localhost:3001"
+NEXTAUTH_SECRET="change-me-en-produccion"
+TELEGRAM_BOT_TOKEN=""
+TELEGRAM_CHAT_ID=""
+DAILY_REPORT_HOUR="23:20"
+MANUAL_REPORT_HOUR="23:10"
+
+# apps/cajero/.env  (puerto 3002)  -> mismas variables, NEXTAUTH_URL=...3002
+# apps/mesero/.env  (puerto 3003)  -> mismas variables, NEXTAUTH_URL=...3003
+# apps/store/.env                 -> solo DATABASE_URL (sin autenticación)
+```
+
+En Docker (`docker-compose.yml`) todas apuntan al mismo volumen:
+`DATABASE_URL="file:/app/packages/db/prisma/dev.db"`.
+
+### 2.5 Migraciones
+
+- Ubicación: `packages/db/prisma/migrations/` — **42 migraciones** aplicadas.
+- Convención del proyecto: **escribir el SQL a mano** y aplicar con
+  `npx prisma migrate deploy`. **Nunca** `prisma migrate dev` (es interactivo y falla en este entorno).
+- `prisma generate` requiere matar todos los procesos Node que tengan el motor cargado
+  (dev servers, workers) o falla con `EPERM` al renombrar `query_engine-windows.dll.node`.
+
+### 2.6 Comandos operativos
+
+```bash
+# Levantar una terminal (libera el puerto, abre ventana minimizada, log en %TEMP%)
+scripts\dev-store.bat     # 3000
+scripts\dev-admin.bat     # 3001
+scripts\dev-cajero.bat    # 3002
+scripts\dev-mesero.bat    # 3003
+scripts\dev-all.bat       # las cuatro
+tools\start-workers.bat   # workers de Telegram y limpieza de menú
+
+# Calidad
+pnpm -r typecheck
+pnpm -r lint
+
+# Base de datos
+pnpm db:generate      # prisma generate
+pnpm db:migrate       # prisma migrate dev  (NO usar en este entorno)
+pnpm db:seed          # tsx prisma/seed.ts
+
+# Verificación de cupos de almuerzo (crean un plato propio y lo borran al terminar)
+pnpm --filter @bbspos/db verify:lunch          # stock + holds
+pnpm --filter @bbspos/db verify:lunch-stock
+pnpm --filter @bbspos/db verify:lunch-holds
+```
+
+---
+
+## 3. Arquitectura y Estructura
+
+### 3.1 Patrón de diseño
+
+El sistema usa una **arquitectura modular monolítica con patrón Next.js App Router + Server Actions**,
+es decir, una variante de **MVC** adaptada al framework:
+
+| Capa MVC | Implementación en el proyecto |
+|---|---|
+| **Model** | Esquema Prisma (`packages/db/prisma/schema.prisma`) + lógica de dominio pura en `packages/db/src/` y `packages/types/src/` |
+| **View** | Componentes React cliente (`components/*-client.tsx`, `components/pos/*.tsx`) y Server Components que solo orquestan datos |
+| **Controller** | **Server Actions** (`"use server"`) y **Route Handlers** (`app/api/**/route.ts`) |
+
+Characteristics adicionales del patrón:
+
+1. **Capas transversales tipo *shared kernel*.** `packages/db/src/menu-day.ts` (483 líneas) y
+   `packages/db/src/lunch-holds.ts` (297 líneas) contienen la lógica de negocio más delicada
+   (cupos de almuerzo y apartados) y son **importadas tanto por el POS del cajero como por
+   utilidades de verificación**, garantizando una única definición de la regla.
+2. **Cálculos puros en `packages/types`.** `cartItemUnitTotal`, `shortCustomerName`, formatters de
+   precio y labels viven fuera de los módulos `"use server"` (que solo pueden exportar funciones
+   `async`, por eso los helpers client-safe están en `@bbspos/types`).
+3. **UI "headless" + presentacional.** Los Server Components de cada página solo hacen el
+   `fetch` de datos y renderizan un `*-client.tsx` que concentra el estado y las mutaciones.
+4. **Transacciones como frontera de consistencia.** Las reglas que no pueden romperse
+   (precio autoritativo, cupo de almuerzo, acumulación de lealtad, cobro de pensionado) se validan
+   **dentro** de `prisma.$transaction`, no antes.
+
+### 3.2 Árbol de directorios
+
+```text
+bbspos/
+├── apps/
+│   ├── store/                     # 3000 · kiosco web público, sin auth
+│   │   ├── app/
+│   │   │   ├── page.tsx           # Home: carrusel + CTA
+│   │   │   ├── build/             # Constructor de bebida por pasos
+│   │   │   ├── cart/              # Carrito + checkout + QR de pago
+│   │   │   ├── actions/           # order.ts, payment.ts ("use server")
+│   │   │   └── api/catalog/       # GET catálogo público (s-maxage=3600)
+│   │   ├── components/            # site-header, photo-carousel, kiosk-timeout
+│   │   └── public/                # images/, slideshow.json, manifest
+│   │
+│   ├── admin/                     # 3001 · panel (ADMIN / SUPER_ADMIN)
+│   │   ├── app/
+│   │   │   ├── (dashboard)/       # grupo de rutas (no añade segmento)
+│   │   │   │   ├── page.tsx       # Dashboard
+│   │   │   │   ├── menu/          # Catálogo + Menú del Día
+│   │   │   │   ├── orders/        # Pedidos (aceptar, entregar, anular, descontar)
+│   │   │   │   ├── customers/     # Pensionados y cuenta corriente
+│   │   │   │   ├── customers-ranking/  # Ranking + canje + reglas de lealtad
+│   │   │   │   ├── payments/      # QR de pago
+│   │   │   │   ├── reports/       # 11 reportes
+│   │   │   │   ├── printer/       # Configuración de impresora
+│   │   │   │   ├── slideshow/     # Carrusel del store
+│   │   │   │   └── users/         # Usuarios, roles, turnos
+│   │   │   ├── actions/           # 10 archivos "use server"
+│   │   │   ├── api/               # 18 route handlers
+│   │   │   └── login/
+│   │   ├── lib/
+│   │   │   ├── auth.ts            # NextAuth options
+│   │   │   ├── printing.ts        # formatComanda, printText (PowerShell)
+│   │   │   └── reports/           # guard, params (zod), range, csv, excel
+│   │   └── middleware.ts          # withAuth: exige ADMIN|SUPER_ADMIN
+│   │
+│   ├── cajero/                    # 3002 · POS de mostrador
+│   │   ├── app/
+│   │   │   ├── page.tsx           # Multitab: venta | reporte | cierre
+│   │   │   ├── actions/           # orders, cash-close, customers, printing, report, auth
+│   │   │   └── api/alita-sauces/  # Catálogo de salsas (público por diseño)
+│   │   ├── actions/               # pos.ts, lunch-stock.ts  (server actions fuera de app/)
+│   │   ├── components/
+│   │   │   ├── pos/               # pos-terminal, pos-cart-store, pos-ticket-panel,
+│   │   │   │                      # pos-bubas-builder, lunch-stock-badge, pos-carta-grid...
+│   │   │   ├── orders/statusVariants.ts  # CVA de estilos por estado
+│   │   │   ├── queue-view.tsx     # 59 KB · cola de cocina + reservas
+│   │   │   └── cash-close-view.tsx
+│   │   ├── lib/                   # session, cash-close, lunch-stock, cart-id, printing, report
+│   │   ├── stores/pos-cart-store.ts
+│   │   └── middleware.ts
+│   │
+│   └── mesero/                    # 3003 · POS de salón (PWA)
+│       ├── app/
+│       ├── actions/pos.ts         # Versión reducida del POS del cajero
+│       └── middleware.ts
+│
+├── packages/
+│   ├── db/
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma      # 499 líneas · 22 modelos · 13 enums
+│   │   │   ├── migrations/        # 42 migraciones SQL
+│   │   │   ├── seed.ts            # Catálogo, usuarios, 4 reglas de lealtad
+│   │   │   └── seed-*.ts|*.mjs    # Datos de prueba
+│   │   ├── scripts/               # 3 workers + 2 verificadores + utilidades
+│   │   └── src/                   # Singleton Prisma + lógica de dominio
+│   │       ├── index.ts           # prisma singleton + re-exports
+│   │       ├── day.ts             # TIME_ZONE, localDayKey, dayBounds
+│   │       ├── daily-report.ts    # Métricas del cierre + Telegram
+│   │       ├── menu-day.ts        # Menú del Día + cálculo de cupos
+│   │       ├── lunch-holds.ts     # Apartados por caja (TTL 20 min)
+│   │       ├── printer.ts         # Drivers windows / virtual-png
+│   │       └── telegram-alert.ts  # Alertas de retraso y stock bajo
+│   ├── types/src/index.ts         # 1.004 líneas · enums, cálculos, tipos
+│   ├── ui/src/                    # components/{builder,cart,ui}, hooks/use-toast
+│   └── config/src/tailwind.ts
+│
+├── scripts/                       # dev-*.bat, db-sync.bat, setup-env.mjs, https-proxy/
+├── data/productos-tiempo.json     # Tiempos de producción por producto
+├── openspec/                      # Specs de cambios (SDD)
+├── tools/start-workers.bat
+├── Dockerfile / docker-compose.yml / docker-entrypoint.sh
+└── turbo.json / pnpm-workspace.yaml
+```
+
+### 3.3 Convenciones estructurales del proyecto
+
+| Convención | Detalle |
+|---|---|
+| **Zona horaria** | Fija `America/La_Paz` (UTC−4). En SQLite crudo: `date("createdAt"/1000,'unixepoch','-4 hours')` |
+| **Numeración de pedidos** | `seq` = global y único; `daySeq` = diario (`@@unique([orderDate, daySeq])`). Visible: `daySeq ?? seq` |
+| **Estados de pedido** | `RECIBIDO` → `ACEPTADO` → `ENTREGADO`, y `ANULADO` como estado final alternativo |
+| **Cobro vs entrega** | Ortogonales: `paidAt` y `deliveredAt` son campos independientes |
+| **Montos** | Siempre `Int` en **bolivianos (Bs)**, sin decimales. En arqueo se usa `Float` solo por herencia del modelo |
+| **Nombres en tickets** | Se guardan en mayúsculas; el nombre visible es el corto (primer nombre + apellido paterno) |
+| **Impresión** | Todo camino automático es *best-effort*: un fallo de impresora nunca invalida un pedido |
+| **Idiomas** | Comentarios, UI y documentación en español; identificadores en inglés (`snake_case` en BD, `camelCase` en TS) |
+
+---
+
+## 4. Modelo de Datos (Esquema de BD)
+
+**Motor:** SQLite · **ORM:** Prisma · **Archivo:** `packages/db/prisma/schema.prisma` (499 líneas)
+**Total:** 24 modelos, 11 enums.
+
+### 4.1 Entidades de usuario y acceso
+
+| Modelo | Propósito | Campos clave |
+|---|---|---|
+| `User` | Personal con credenciales | `id`, `username` (unique), `name`, `password` (bcrypt), `role` (Role), `shift` (Shift), `active` |
+
+Relaciones: `orders` (quien creó), `cancelledOrders`, `discountedOrders`, `redeemedRewards`, `cashCloses`.
+
+### 4.2 Entidades de catálogo (bebidas)
+
+| Modelo | Propósito | Campos clave | Restricciones |
+|---|---|---|---|
+| `Size` | Tamaño de vaso | `name` (unique), `oz`, `available`, `isDefault`, `imageUrl` | — |
+| `Flavor` | Sabor de té | `name` (unique), `available`, `imageUrl` | — |
+| `FlavorCategoryLink` | N:N sabor ↔ categoría de bebida | `flavorId`, `category` (FlavorCategory) | `@@unique([flavorId, category])` |
+| `BobaType` | Tipo de perla | `name` (unique), `kind` (BobaKind), `available`, `isDefault`, `imageUrl` | — |
+| `DrinkPrice` | **Matriz de precios** | `category`, `sizeId`, `bobaTypeId`, `price` | `@@unique([category, sizeId, bobaTypeId])` |
+| `Topping` | Extras de bebida | `name` (unique), `price`, `available`, `imageUrl` | — |
+| `AlitaSauce` | Salsas de Alitas Mixtas | `name` (unique), `available` | — |
+
+> **Punto clave:** el precio de una bebida **no** se guarda en el producto sino en la matriz
+> `DrinkPrice` (combinación categoría × tamaño × boba). El topping se suma por ítem.
+
+### 4.3 Entidades de catálogo (platillos)
+
+| Modelo | Propósito | Campos clave | Restricciones |
+|---|---|---|---|
+| `MenuItem` | Platillo de carta o almuerzo | `name`, `category` (MenuCategory), `price`, `description`, `available`, `enMenuDelDia`, `menuDelDiaDate`, `isMixtas`, `requiredSauces` | `@@index([category, available])` |
+| `MenuItemOption` | Variante de precio obligatoria (p. ej. Milanesa Pollo/Res) | `menuItemId`, `name`, `price`, `requiredSauces` | `@@unique([menuItemId, name])` |
+
+`MenuCategory` (17 valores): `ALMUERZO`, `SANDWICH`, `PANINI`, `ENSALADA`, `PIQUEO`, `COMPARTIR`,
+`ALITA`, `HAMBURGUESA`, `MILANESA`, `LOMO`, `POLLO`, `KIDS`, `POSTRE`, `WAFFLE`, `PANCAKE`,
+`EXTRAS`, `BEBIDA`.
+
+### 4.4 Entidades de cliente y lealtad
+
+| Modelo | Propósito | Campos clave |
+|---|---|---|
+| `Customer` | Cliente frecuente **y** pensionado (misma fila) | `name`, `ci`, `phone` (**unique, nullable**), `pensionType`, `balance`, `creditLimit`, `totalVisits`, `totalSpent`, `lastVisitAt`, `points` |
+| `CustomerBenefitRule` | Regla de nivel configurable | `name`, `description`, `metric` (BenefitMetric), `threshold`, `active` |
+| `CustomerReward` | Bitácora de otorgos y canjes | `customerId`, `ruleId?`, `type` (OTORGADO/CANJE), `pointsUsed`, `description`, `redeemedById?`, `orderId?` |
+| `CustomerLedger` | Movimientos de la cuenta corriente | `customerId`, `type` (RECARGA/PAGO_DEUDA/CONSUMO), `amount`, `paymentMethod?`, `orderId?` |
+
+**Semántica de saldo:** `balance > 0` = saldo a favor (Prepago); `balance < 0` = deuda (Postpago).
+`creditLimit` limita la deuda (0 = sin límite).
+
+**Índice único en `phone`:** en SQLite los `NULL` no chocan entre sí, así que puede haber
+varios clientes sin teléfono. La validación de duplicado se hace en la capa de aplicación
+(`assertPhoneAvailable`) para dar un error de negocio legible en vez del `P2002` crudo de Prisma.
+
+### 4.5 Entidades de venta
+
+| Modelo | Propósito | Campos clave |
+|---|---|---|
+| `Order` | Cabecera de pedido | `seq` (unique, global), `orderDate`, `daySeq`, `status`, `customerName`, `customerId?`, `deliveryType?`, `notes`, `total`, `discountAmount`, `discountReason`, `paymentMethod?`, `paymentMethod2?`, `paymentAmount2?`, `createdAt`, `acceptedAt`, `paidAt`, `deliveredAt`, `cancelledAt`, `cancelReason`, `deliveredAt`, `tiempoEstimado`, `scheduledFor?`, `reservationConfirmed`, `reserveLeadMin`, `delayNotified` |
+| `OrderItem` | Línea de pedido (bebida **o** platillo) | `orderId`, `sizeName?`, `flavorName?`, `flavorCategory?`, `bobaTypeName?`, `menuItemName?`, `menuItemCategory?`, `menuItemOptionName?`, `menuItemDetail?`, `unitPrice`, `quantity`, `tiempoProduccion` |
+| `OrderItemTopping` | Topping de una línea | `orderItemId`, `toppingName`, `unitPrice` |
+
+> **Diseño clave:** `OrderItem` guarda una **instantánea de nombres y precios**
+> (`sizeName`, `flavorName`, `unitPrice`, …), no los `id`. El historial de pedidos es inmutable
+> aunque el catálogo cambie después. La contrapartida es que el conteo de almuerzos vendidos
+> se hace por **nombre de plato** (`menuItemName`), no por `menuItemId`.
+
+Restricciones de `Order`:
+
+```prisma
+seq   Int? @unique                 // numeración global
+@@unique([orderDate, daySeq])      // ticket visible único por día
+@@index([createdAt])
+@@index([createdAt, status])
+@@index([status, createdAt])
+@@index([deliveredAt])
+@@index([userId])
+@@index([userId, status])
+@@index([customerId])
+```
+
+### 4.6 Entidades de producción (almuerzos)
+
+| Modelo | Propósito | Campos clave |
+|---|---|---|
+| `LunchQuota` | Cantidad diaria de un plato del Menú del Día | `menuItemId`, `date` (YYYY-MM-DD local), `planned` (**nullable** = no programado), `lowThreshold` (default 5) |
+| `LunchAdjust` | Bitácora de correcciones manuales | `quotaId`, `delta`, `note`, `userId` |
+| `LunchHold` | Apartado de cupo por caja | `menuItemId`, `date`, `cartId`, `quantity`, `expiresAt` |
+
+Restricciones: `@@unique([menuItemId, date])` en `LunchQuota`;
+`@@unique([menuItemId, date, cartId])` en `LunchHold`.
+
+> **El vendido NO se guarda.** Se deriva de los pedidos no anulados de la jornada, de modo que
+> `remaining = planned + Σ LunchAdjust.delta − sold − holdsAjenos` nunca se desincroniza y
+> **anular un pedido restituye las unidades solo**.
+
+### 4.7 Entidades de caja y configuración
+
+| Modelo | Propósito | Campos clave |
+|---|---|---|
+| `CashClose` | Arqueo con historial (varios por día, uno por turno) | `date`, `closedAt`, `userId?`, `denominations` (JSON), `countedCash`, `systemCash`, `systemQr`, `systemCard`, `pensionSales`, `rechargeCash`, `rechargeQr`, `diffCash`, `notes` |
+| `DailyReportLog` | Idempotencia del cierre diario a Telegram | `date` (@id), `sentAt` |
+| `PaymentConfig` | QR de pago (registro único `id = "default"`) | `qrImage` (data-URL base64), `mimeType` |
+| `PrinterConfig` | Impresora (registro único `id = "default"`) | `driver` (`windows` \| `virtual-png`), `printerName`, `outputPath`, `paperWidthMm` |
+
+### 4.8 Enumeraciones
+
+| Enum | Valores |
+|---|---|
+| `Role` | `SUPER_ADMIN`, `ADMIN`, `CAJERO`, `MESERO` |
+| `Shift` | `MANANA`, `TARDE`, `SIN_TURNO` |
+| `OrderStatus` | `RECIBIDO`, `ACEPTADO`, `ENTREGADO`, `ANULADO` |
+| `PaymentMethod` | `EFECTIVO`, `QR`, `TARJETA`, `PENSION` |
+| `PensionType` | `PREPAGO`, `POSTPAGO` |
+| `DeliveryType` | `MESA`, `LLEVAR`, `DELIVERY` |
+| `FlavorCategory` | `MILK`, `WATER`, `SPECIAL` |
+| `BobaKind` | `TAPIOCA`, `POPPING` |
+| `MenuCategory` | 17 valores (ver 4.3) |
+| `BenefitMetric` | `SPEND_MONTH`, `VISITS_MONTH`, `POINTS` |
+| `CustomerRewardType` | `OTORGADO`, `CANJE` |
+
+### 4.9 Diagrama de relaciones (resumen)
+
+```text
+User ─┬─< Order (userId) ──────────┐
+      ├─< Order (canceledById)     │
+      ├─< Order (discountedById)   │
+      ├─< CashClose                 │
+      └─< CustomerReward (redeemedById)
+
+Customer ─┬─< Order (customerId)
+          ├─< CustomerLedger ──> Order (orderId)
+          └─< CustomerReward ─┬─> CustomerBenefitRule (ruleId)
+                               └─> Order (orderId)
+
+Order ──< OrderItem ──< OrderItemTopping        (Cascade delete)
+
+Size ──< DrinkPrice >── BobaType                (@@unique[category,sizeId,bobaTypeId])
+Flavor ──< FlavorCategoryLink >── FlavorCategory
+
+MenuItem ──< MenuItemOption
+MenuItem ──< LunchQuota ──< LunchAdjust
+MenuItem ──< LunchHold
+```
+
+---
+
+## 5. Módulos y Lógica de Negocio
+
+### 5.1 Inventario y control de stock
+
+#### 5.1.1 Qué existe y qué NO existe
+
+| Nivel de control | Implementado | Mecanismo |
+|---|---|---|
+| Disponibilidad de catálogo | Sí | Flags booleanos `available` en `Size`, `Flavor`, `BobaType`, `Topping`, `MenuItem` |
+| Cantidad diaria de almuerzos | Sí | `LunchQuota` + `LunchAdjust` + `LunchHold` |
+| Stock de insumos (té, perlas, jarabes) | **No** | No existen modelos de compras, entradas, merma ni proveedores |
+| Costeo de insumos / margen | **No** | No hay `cost` en ningún modelo |
+| Proveedores / compras | **No** | — |
+
+#### 5.1.2 Cálculo del cupo disponible
+
+`packages/db/src/menu-day.ts:185-253` — `lunchStockRows()`:
+
+```ts
+// planned + Σ ajustes − sold − heldOthers
+const delta = quota.adjusts.reduce((acc, a) => acc + a.delta, 0);
+const available = (quota.planned ?? 0) + delta - sold - heldOthers;
+
+rows.set(target.id, {
+  planned: quota.planned,
+  sold,
+  held: heldTotal,
+  heldByMe: heldMine,
+  // Sin cantidad asignada no hay control: `remaining` queda null y el terminal
+  // bloquea la tarjeta hasta que alguien asigne unidades.
+  remaining: quota.planned == null ? null : available,
+  lowThreshold: quota.lowThreshold,
+});
+```
+
+Conceptos:
+
+| Concepto | Definición |
+|---|---|
+| `sold` | Unidades en `OrderItem` de pedidos **no anulados** de la jornada. Reservas cuentan en `scheduledFor`, el resto en `createdAt` |
+| `held` | Total de apartados vigentes de la jornada |
+| `heldByMe` | Apartados vigentes de la caja que consulta (`excludeCartId`) |
+| `heldOthers` | `held − heldByMe`: lo que **sí** te quita disponibilidad |
+| `remaining` | `planned + Σ delta − sold − heldOthers`, o `null` si no hay cantidad programada |
+
+> **Regla clave:** el `remaining` de una caja **excluye sus propios apartados**, así que el número
+> no baja cuando el cajero suma líneas a su propio ticket, pero baja en el acto en que otra caja
+> se lleva unidades. En `apps/cajero/lib/lunch-stock.ts:12-18` la UI muestra
+> `addableUnits = remaining − heldByMe`.
+
+#### 5.1.3 Apartado por caja (`LunchHold`)
+
+`packages/db/src/lunch-holds.ts` implementa la regla **"el primero que agarró el plato gana"**.
+El carrito vive en el navegador, así que el clic en la tarjeta debe dejar una reserva en la BD.
+
+| Constante | Valor | Ubicación |
+|---|---|---|
+| `HOLD_TTL_MIN` | 20 minutos | `menu-day.ts:34` |
+| `RENEW_WINDOW_MIN` | 6 minutos (umbral de renovación) | `lunch-holds.ts:24` |
+
+| Función | Propósito |
+|---|---|
+| `acquireLunchHold(cartId, menuItemId, qty)` | Puerta de entrada al agregar al ticket. Transacción: calcula `free = remaining − myHeld` y falla con **3 mensajes distintos** según el motivo (todo apartado propio / se lo llevó otra caja / alcanza para algunas) |
+| `releaseLunchHold(cartId, menuItemId, qty)` | Devuelve unidades al común; borra la fila si llega a 0 |
+| `releaseCartLunchHolds(cartId)` | Libera todos los apartados de la caja (limpiar ticket) |
+| `touchCartLunchHolds(cartId)` | Renueva los apartados propios. La ejecuta el poll del catálogo (cada 15 s) |
+| `reconcileCartLunchHolds(cartId, lines)` | Al reabrir el POS: ajusta los apartados a las líneas reales del carrito y devuelve `lost[]` con los platos que otra caja se llevó |
+| `consumeCartLunchHolds(db, cartId)` | Al guardar el pedido: borra los apartados (las unidades pasan a `sold`). **Se llama dentro de la transacción del pedido** |
+| `assertLunchCapacity(db, cartId, demand, date, excludeOrderId?)` | Última barrera antes de guardar. Lanza `LunchCapacityError` con mensaje para el cajero |
+
+**Identidad de caja:** `cartId` se genera en el navegador
+(`localStorage` key `bbspos-pos-cart-id`) y se refleja en una cookie espejo
+(`bbspos_pos_cart_id`, `apps/cajero/lib/cart-id.ts`) para poder leerla desde el servidor.
+
+#### 5.1.4 Ajustes y bitácora
+
+`adjustLunchStockForDay()` (`menu-day.ts:315-356`):
+- Si el plato **no tiene** cuota y el delta es **positivo** → la reposición **es** la base
+  (`planned = delta`, sin fila de ajuste), para no contarla dos veces.
+- Si el delta es **negativo** sin cuota → error `"Primero suma unidades para poder restar."`
+- Con cuota existente → crea fila en `LunchAdjust` con `delta`, `note`, `userId`.
+
+`requireTodayMenuItem()` (`menu-day.ts:266-278`) **rechaza** cualquier plato que no sea del
+Menú del Día de hoy, para que nadie toque el cupo de otra jornada.
+
+#### 5.1.5 Alertas de stock bajo y retraso
+
+`packages/db/src/telegram-alert.ts` + `scripts/telegram-alert-worker.ts` (poll cada 15 s):
+
+| Alerta | Condición | Anti-duplicado |
+|---|---|---|
+| Pedido retrasado | Tiempo real > `tiempoEstimado` + margen | `Order.delayNotified` (se libera al cobrar) |
+| Stock bajo de almuerzo | `remaining <= lowThreshold` | Marca en el propio pedido/notificación |
+
+### 5.2 Flujo de Ventas
+
+#### 5.2.1 Carrito (Zustand)
+
+`apps/cajero/components/pos/pos-cart-store.ts` (11.7 KB). Estado persistido:
+
+```ts
+interface CartState {
+  items: CartItem[];              // líneas DRINK | MENU_ITEM
+  customerName: string;           // texto del input NOMBRE (mayúsculas)
+  customerId: string | null;      // cliente vinculado (null = invitado)
+  customerPhone: string | null;
+  customerLevelName: string | null;
+  deliveryType: DeliveryType;
+  notes: string;
+  scheduledFor: string;           // reserva (ISO)
+  reserveLeadMin: number;         // default 30
+}
+```
+
+Tipos de línea (`CartItem` en `@bbspos/types`):
+
+| Tipo | Campos |
+|---|---|
+| `DRINK` | `size`, `flavor`, `category` (FlavorCategory), `bobaType`, `toppings[]`, `quantity` |
+| `MENU_ITEM` | `menuItemId`, `name`, `category` (MenuCategory), `optionId?`, `optionName?`, `detail?`, `quantity` |
+
+#### 5.2.2 Cálculo de precio: **autoritativo en POS, confiado en el store**
+
+Este es el punto más importante del flujo y la diferencia crítica entre apps.
+
+**POS del cajero — precio recalculado desde BD** (`apps/cajero/actions/pos.ts:141-243`,
+`pricePosItems`). Ignora por completo `item.unitPrice` del cliente:
+
+```ts
+// Bebida: precio de la matriz DrinkPrice por combinación
+const base = drinkPriceByCombo.get(`${item.category}|${item.size.id}|${item.bobaType.id}`);
+if (base === undefined) throw new Error("COMBINACION_NO_DISPONIBLE");
+
+// Toppings: precio leído de BD, nunca el que envía el cliente
+const dbTopping = toppingById.get(t.id);
+if (!dbTopping || dbTopping.price <= 0) throw new Error("PRECIO_INVALIDO");
+
+// Platillo: precio de la variante (MenuItemOption) o del producto base
+const unitPrice = item.optionId
+  ? optionById.get(item.optionId)?.price
+  : menuItemById.get(item.menuItemId)?.price;
+
+// Tiempo estimado = el del producto que MÁS tarda (no la suma)
+const tiempoEstimado = items.reduce((max, item) => Math.max(max, productionMinutesFor(item)), 0);
+```
+
+**Tienda web — precio confiado al cliente** (`apps/store/app/actions/order.ts:34,41,49-52`):
+usa `item.unitPrice` y `t.price` enviados por el navegador y calcula el total con ellos.
+Sin sesión, sin rate limit. **Es una vulnerabilidad conocida** (ver §7.3).
+
+#### 5.2.3 Cálculo de impuestos y descuentos
+
+| Concepto | Implementación |
+|---|---|
+| **Impuestos** | **No existen.** Bolivia no aplica IVA a este tipo de operación y el sistema no modela impuestos |
+| **Descuentos** | Solo a nivel de pedido y **exclusivo del Admin**: `Order.discountAmount`, `discountReason`, `discountedAt`, `discountedById` (`apps/admin/app/actions/orders.ts:174`). Acumula: `applyDiscount` suma al `discountAmount` existente |
+| **Total** | `Order.total` es el total bruto del carrito. El descuento **no** se resta del `total`, se reporta aparte y se descuenta al computar el neto en reportes |
+
+#### 5.2.4 Creación del pedido POS — `createPosOrder`
+
+`apps/cajero/actions/pos.ts:297-469`. Secuencia:
+
+1. **Validaciones de sesión y entrada** (`pos.ts:307-319`): carrito no vacío, nombre obligatorio, `deliveryType` válido.
+2. **Reserva normalizada** (`pos.ts:247-263`): ISO → `Date`; `reserveLeadMin >= 1`, default 30.
+3. **Cliente** (`pos.ts:329-337`): si hay `customerId` debe existir; texto libre sin coincidencia → **invitado** (`customerId: null`).
+4. **Usuario de sesión verificado** (`pos.ts:341-344`): si fue borrado tras el login, el pedido queda sin `userId` (evita violación de FK `P2003`).
+5. **Transacción única** (`pos.ts:354-404`):
+   - `assertLunchCapacity` **dentro** de la transacción (sin ventana entre control y guardado)
+   - Asignación de `seq` y `daySeq` con `max + 1`
+   - `order.create` con items anidados
+   - `consumeCartLunchHolds`: lo apartado pasa a vendido
+6. **Fuera de la transacción:** `revalidatePath("/")` e impresión *best-effort*.
+
+```ts
+// Numeración dentro de la transacción
+const order = await prisma.$transaction(async (tx) => {
+  await assertLunchCapacity(tx, cartId, lunchDemand, date);
+
+  const first = await tx.order.findFirst({ orderBy: { seq: "desc" }, select: { seq: true } });
+  const seq = (first?.seq ?? 0) + 1;
+  const last = await tx.order.findFirst({
+    where: { orderDate }, orderBy: { daySeq: "desc" }, select: { daySeq: true },
+  });
+  const daySeq = (last?.daySeq ?? 0) + 1;
+
+  const created = await tx.order.create({ data: { /* ... */ } });
+  await consumeCartLunchHolds(tx, cartId);   // lo apartado pasa a vendido
+  return created;
+});
+```
+
+> **Riesgo conocido:** `max + 1` sin bloqueo explícito puede colisionar con dos escrituras
+> concurrentes. En ese caso salta la restricción única y el error se traduce a
+> `"No se pudo crear el pedido"` (`pos.ts:405-411`).
+
+`updatePosOrder` (`pos.ts:477-604`) edita **solo reservas sin confirmar**. Rechaza si no hay
+`scheduledFor`, si está confirmada, cobrada, anulada o entregada (`pos.ts:517-527`). Excluye el
+propio pedido del `sold` para no contarlo dos veces y **no imprime** (la comanda sale al cobrar).
+
+#### 5.2.5 Ciclo de vida del pedido
+
+```text
+   store/web                POS cajero / POS mesero
+       │                            │
+       ▼                            ▼
+   RECIBIDO ──────► (acceptQueueOrder) ──► ACEPTADO ──► ENTREGADO
+       │                            │           (deliveredAt)
+       │                            │
+       └──────────── ANULADO ◄──────┴───────────┘
+                  (cancelledAt + cancelReason + canceledById)
+```
+
+| Transición | Acción | Notas |
+|---|---|---|
+| `null → RECIBIDO` | `createOrder` (store) | Default del schema |
+| `null → ACEPTADO` | `createPosOrder` / mesero | El POS crea directo "pendiente de cobro" |
+| `RECIBIDO → ACEPTADO` | `acceptQueueOrder` (cajero) | Arranca `acceptedAt` = timer de producción |
+| `RECIBIDO/ACEPTADO/ENTREGADO → cobro` | `acceptOrder` | **Cobro y entrega son ortogonales:** si venía de `RECIBIDO` cambia a `ACEPTADO`; si ya estaba `ACEPTADO`/`ENTREGADO` conserva estado y solo registra el pago |
+| `ACEPTADO → ENTREGADO` | `deliverOrder` | `deliveredAt` se escribe una sola vez |
+| `→ ANULADO` | `cancelReservation` / `cancelOrder` | Desde la cola solo si **no** está cobrado; si ya se cobró, delega en Admin |
+
+#### 5.2.6 Procesamiento de pago
+
+`apps/cajero/app/actions/orders.ts`:
+
+| Método | Descripción |
+|---|---|
+| `acceptOrder(orderId, method, method2?, amount2?)` | Pago normal. Soporta **pago dividido**: `total − paymentAmount2` con el primer método, `paymentAmount2` con el segundo. Idempotente: `paidAt` solo se escribe una vez |
+| `acceptPensionOrder(orderId, customerId)` | Cobra contra la cuenta del pensionado con `paymentMethod = PENSION` |
+
+Ambos **bloquean el rol `MESERO`** y **acumulan lealtad en la misma transacción** que registra `paidAt`:
+
+```ts
+// apps/cajero/app/actions/orders.ts:265-267
+if (order.customerId) {
+  await accumulateCustomerLoyalty(tx, order.customerId, order.total, paidAt);
+}
+```
+
+```ts
+// apps/cajero/app/actions/customers.ts:203-218
+export async function accumulateCustomerLoyalty(
+  tx: Prisma.TransactionClient, customerId: string, total: number, when: Date,
+): Promise<void> {
+  await tx.customer.update({
+    where: { id: customerId },
+    data: {
+      totalVisits: { increment: 1 },
+      totalSpent:  { increment: total },
+      points:      { increment: total },   // 1 Bs = 1 punto
+      lastVisitAt: when,
+    },
+  });
+}
+```
+
+> **Idempotencia:** al escribirse `paidAt` una sola vez, la lealtad se acumula exactamente
+> una vez por pedido.
+
+#### 5.2.7 Cobra contra cuenta de pensionado
+
+`acceptPensionOrder` (`orders.ts:285-400`):
+
+| Modalidad | Regla |
+|---|---|
+| **Prepago** | Exige `balance >= total`; si no, sugiere la recarga exacta que falta (`orders.ts:324-330`) |
+| **Postpago** | Permite deuda, pero rechaza si `nextBalance < −creditLimit` cuando hay límite configurado (`orders.ts:331-338`) |
+
+En transacción: actualiza `balance`, crea `CustomerLedger` tipo `CONSUMO` con `orderId`,
+registra el cobro y acumula lealtad. **El dinero no entra a la caja de ese turno.**
+
+#### 5.2.8 Reservas
+
+Modelo: `scheduledFor`, `reservationConfirmed`, `reserveLeadMin` (default 30).
+
+| Característica | Comportamiento |
+|---|---|
+| Cola | Vive en la pestaña **RESERVAS** sin arrancar el reloj de producción |
+| Impresión | **No** imprime al crearse; imprime al confirmar (cobro) o con `confirmReservation` |
+| Aviso | La card se ilumina `reserveLeadMin` minutos antes de la hora pactada |
+| Edición | Solo mientras no esté confirmada, cobrada, anulada ni entregada |
+| Confirmación sin cobro | `confirmReservation(orderId)` → `ACEPTADO` + `reservationConfirmed = true` + comanda diferida |
+| Cupo de almuerzo | Cuenta en la fecha pactada (`scheduledFor`), no en la de creación |
+
+### 5.3 Cierres de Caja
+
+#### 5.3.1 Denominaciones soportadas
+
+`200, 100, 50, 20, 10, 5, 2, 1, 0.5` Bs (`packages/types/src/index.ts:817-827`).
+
+#### 5.3.2 arqueo: flujo
+
+1. **`getCashCloseStats(date)`** (`apps/cajero/lib/cash-close.ts:10-37`) contrasta
+   los pedidos **entregados** del día + los movimientos del ledger de pensionados.
+2. **`confirmCashClose({denominations, notes})`** (`app/actions/cash-close.ts:21-50`):
+   - Bloquea rol `MESERO`
+   - **Recalcula el total en el servidor**, nunca confía en el formulario
+   - Valida que las denominaciones sean válidas, no repetidas y con cantidades enteras ≥ 0
+   - Nota limitada a 300 caracteres
+3. **`printCashClose(closeId)`** reimprime el ticket del cierre con `formatCashCloseText()`.
+
+#### 5.3.3 Modelo contable del arqueo
+
+| Campo | Significado |
+|---|---|
+| `denominations` | JSON `[["200",2],["100",3],…]` — desglose del efectivo contado |
+| `countedCash` | `Σ valor × cantidad` (físico) |
+| `systemCash` | Efectivo esperado por el sistema (**ya incluye** `rechargeCash`) |
+| `systemQr` / `systemCard` | Esperado por QR y por tarjeta |
+| `pensionSales` | Consumos del día cobrados a cuenta de pensionados → **NO entran a la caja** |
+| `rechargeCash` / `rechargeQr` | Recargas y pagos de deuda del día → **SÍ entran a la caja** |
+| `diffCash` | `countedCash − systemCash` → sobrante (+) / faltante (−) |
+
+> Los pagos divididos ya vienen **prorrateados** entre sus métodos antes de contrastar
+> (`total − paymentAmount2` / `paymentAmount2`).
+
+#### 5.3.4 Turnos y múltiples cierres
+
+El enum `Shift` (`MANANA`, `TARDE`, `SIN_TURNO`) se guarda en `User`, pero
+`CashClose` admite **varios cierres por día** (p. ej. turno de mañana y de tarde), cada uno
+con `closedAt`, `userId` y `denominations` propios → historial auditable y reimprimible.
+
+#### 5.3.5 Cierre diario a Telegram
+
+| Pieza | Detalle |
+|---|---|
+| Envío manual | `sendDailyReportToBot()` — **bloqueado antes de las 23:10** (`MANUAL_REPORT_HOUR`) |
+| Worker automático | `scripts/daily-report-worker.ts` — corre a las **23:20** (`DAILY_REPORT_HOUR`) con poll de 60 s |
+| Idempotencia | `DailyReportLog.date` como `@id` |
+| Métricas | Ingresos, pedidos, ticket promedio, artículos, ingreso por toppings, desglose por categoría y método de pago, descuentos, anulaciones |
+
+### 5.4 Roles y Permisos
+
+#### 5.4.1 Autenticación
+
+NextAuth v4, estrategia **JWT**, provider `Credentials` contra `User` con bcrypt
+(`apps/*/lib/auth.ts`). El login normaliza el `username` a minúsculas y rechaza
+cuentas `active = false`.
+
+**Cookies separadas por app, mismo motor:**
+
+| App | Cookie de sesión |
+|---|---|
+| admin | `next-auth.session-token` (default) |
+| cajero | `cajero.session-token` (`.dev` en desarrollo) |
+| mesero | `mesero.session-token` (`.dev` en desarrollo) |
+
+Todas usan `makeSessionOnly()`, que **reescribe el `Set-Cookie` quitando `Expires`/`Max-Age`**:
+la sesión es de navegador (cerrar el navegador = logout automático).
+
+#### 5.4.2 Matriz de permisos
+
+| Capacidad | SUPER_ADMIN | ADMIN | CAJERO | MESERO | store |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Ver panel / reportes | ✅ | ✅ | ❌ | ❌ | — |
+| Gestionar catálogo (tamaños, sabores, boba, toppings, precios) | ✅ | ✅ | ❌ | ❌ | — |
+| Activar Menú del Día | ✅ | ✅ | ❌ | ❌ | — |
+| Ver todos los pedidos | ✅ | ✅ | cola del día | — | — |
+| Aceptar pedido de la cola | ✅ | ✅ | ✅ | — | — |
+| **Cobrar** (`acceptOrder`, `acceptPensionOrder`) | ✅ | ✅ | ✅ | ❌ | — |
+| **Arquear caja** | ✅ | ✅ | ✅ | ❌ | — |
+| Crear/editar **reservas** | ✅ | ✅ | ✅ | ❌ | — |
+| Cambiar `deliveryType` | ✅ | ✅ | ✅ | ❌ | — |
+| Tomar pedidos (`MESA`/`LLEVAR`) | ✅ | ✅ | ✅ | ✅ | — |
+| **Registrar clientes** | ✅ | ✅ | ✅ | ❌ | — |
+| Anular pedido **cobrado** | ✅ | ✅ | ❌ | ❌ | — |
+| Aplicar descuentos | ✅ | ✅ | ❌ | ❌ | — |
+| Recargar saldo de pensionado | ✅ | ✅ | ❌ | ❌ | — |
+| Ver / canjear lealtad, editar reglas | ✅ | ✅ | ❌ | ❌ | — |
+| Crear usuarios | ✅ | ✅ (`CAJERO`/`MESERO` solo) | ❌ | ❌ | — |
+| Crear otro `ADMIN` | ✅ | ❌ | ❌ | ❌ | — |
+| Desactivar `SUPER_ADMIN` | ❌ | ❌ | ❌ | ❌ | — |
+| Acceder sin sesión | — | — | — | — | ✅ (público) |
+
+#### 5.4.3 Barreras de implementación
+
+| Barrera | Ubicación | Regla |
+|---|---|---|
+| Middleware admin | `apps/admin/middleware.ts:4-15` | `withAuth` exige `ADMIN` \| `SUPER_ADMIN` |
+| Middleware cajero | `apps/cajero/middleware.ts:19-38` | Permite `CAJERO`, `ADMIN`, `SUPER_ADMIN`, `MESERO` |
+| Billing access | `apps/cajero/lib/session.ts:23-29` | `hasBillingAccess()` → solo `CAJERO`/`ADMIN`/`SUPER_ADMIN` |
+| Orden access (mesero) | `apps/mesero/lib/session.ts:13-20` | Permite los 4 roles |
+| Protección del rol en acciones | `orders.ts:172-174`, `orders.ts:288-290`, `cash-close.ts` | Check explícito `role === "MESERO"` → throw |
+| Gestión de usuarios | `apps/admin/app/actions/users.ts:44-53` | Protege al `SUPER_ADMIN`, impide autobaja y que un `ADMIN` toque a otro `ADMIN` |
+| Mensaje de cuenta inactiva | `apps/*/app/actions/auth.ts` | Solo se revela si la contraseña es correcta (anti enumeración) |
+
+> **Nota técnica:** `hasBillingAccess` está definido pero **no se usa**; el control real es un
+> check explícito contra `MESERO` repetido en cada acción de cobro. Es la capa correcta, pero
+> duplicada y susceptible a olvidos en nuevas acciones (ver §7).
+
+### 5.5 Clientes, lealtad y cuenta corriente
+
+#### 5.5.1 Resolución del cliente en el POS
+
+`apps/cajero/app/actions/customers.ts`:
+
+| Acción | Comportamiento |
+|---|---|
+| `getCustomerSuggestions(term)` | Autocompletado: `contains` por `name` o `phone`, tope 8, `lastVisitAt` desc |
+| `linkCustomerByText(text)` | **Vincula sin crear.** Si el texto parece teléfono (`PHONE_RE`) busca `phone` exacto; si no, `name` exacto case-insensitive. Devuelve `null` → **venta invitado** |
+| `registerCustomerAtPos({name, phone?})` | Alta explícita. **Prohíbe `MESERO`.** Nombre obligatorio en mayúsculas, teléfono opcional y único, con error claro ante duplicado |
+| `getCustomerLoyalty(customerId)` | Vista de lealtad + `levelName` según reglas activas |
+| `shortCustomerName(customer)` | Helper **derivado** en `@bbspos/types`: primer nombre + apellido paterno (`"MARIA FERNANDEZ LOPEZ"` → `"MARIA FERNANDEZ"`) |
+
+> **Decisión de diseño:** el POS **nunca crea clientes automáticamente**. Sin coincidencia, la
+> venta queda como invitado (`customerId: null`). El alta es una acción explícita del cajero.
+> Esto evita llenar la base con duplicados de nombres tecleados rápido en hora punta.
+
+#### 5.5.2 Niveles de lealtad
+
+`levelNameOf()` (`customers.ts:20-56`) evalúa las reglas activas contra:
+
+| Métrica | Valor comparado |
+|---|---|
+| `SPEND_MONTH` | `Σ Order.total` del mes actual (pagados, no anulados) |
+| `VISITS_MONTH` | `count` de pedidos del mes actual |
+| `POINTS` | `Customer.points` acumulado histórico |
+
+Inicio de mes local = medianoche La Paz = `04:00 UTC`
+(`new Date(Date.UTC(y, m-1, 1, 4, 0, 0))`, `customers.ts:32`).
+
+#### 5.5.3 Admin: ranking y canje
+
+`apps/admin/app/actions/loyalty.ts`:
+
+| Acción | Detalle |
+|---|---|
+| `getCustomerRanking(periodo, search?)` | Top 10 por `Σ total` sobre `Order.paidAt` no nulo. Periodos: `MONTH`, `DAYS_30`, histórico. `search` filtra por nombre/teléfono |
+| `redeemCustomerPoints({customerId, points, ...})` | Valida saldo (`"Saldo insuficiente: X tiene N puntos y solicitaste M."`), decrementa `points` y crea `CustomerReward` tipo `CANJE` en la **misma transacción** |
+| `listBenefitRules()` / `saveBenefitRule(...)` | CRUD de reglas de nivel |
+
+> **Guardas de robustez** en `redeemCustomerPoints`: verifica que el usuario de sesión exista
+> en BD antes de escribir `redeemedById` (evita violación de FK `P2003` si la cuenta fue
+> eliminada tras el login).
+
+### 5.6 Impresión
+
+#### 5.6.1 Configuración y drivers
+
+`PrinterConfig` (registro único `id = "default"`), con respaldo al JSON legado
+`apps/store/printing.json`.
+
+| Driver | Comportamiento |
+|---|---|
+| `windows` | Imprime en una impresora instalada en Windows vía PowerShell `Out-Printer`, con timeout y **escalado de fuente** para que la línea más larga quepa en el ancho de rollo |
+| `virtual-png` | Renderiza el ticket a **PNG** y lo guarda en `outputPath` (desarrollo y auditoría) |
+
+#### 5.6.2 Formato de comanda
+
+`apps/admin/lib/printing.ts:295-365` — `formatComanda()`:
+
+- 34 columnas, cabecera `BIBOSI`
+- Ticket `#daySeq` con 5 dígitos
+- Precio en la **misma línea** del ítem, con puntos de relleno
+- Toppings agrupados (`2x + Tapioca`)
+- Notas envueltas, total al pie
+- `toAscii()` (`printing.ts:172-190`) degrada acentos y símbolos porque las térmicas no los manejan
+
+#### 5.6.3 Cuándo se imprime
+
+| Momento | Ruta |
+|---|---|
+| Al crear el pedido POS (no reserva) | `apps/cajero/actions/pos.ts:415-466` |
+| Al crear el pedido del mesero | `apps/mesero/actions/pos.ts:297-324` |
+| Al crear el pedido web (vía `after()`) | `apps/store/app/actions/order.ts:86-133` |
+| Al confirmar una reserva (sin cobro) | `apps/cajero/app/actions/orders.ts:155-157` |
+| Al cobrar una reserva (impresión diferida) | `apps/cajero/app/actions/orders.ts:270-274` |
+| Reimpresión manual (cajero) — solo `RECIBIDO`/`ACEPTADO` | `apps/cajero/app/actions/printing.ts:13-41` |
+| Reimpresión (admin) | `apps/admin/app/actions/orders.ts:225` |
+| Ticket de arqueo | `printCashClose()` → `formatCashCloseText()` |
+
+> **Todos los caminos automáticos son *best-effort*:** un fallo de impresora se registra en
+> consola y **el pedido sigue válido**.
+
+### 5.7 Workers en segundo plano
+
+| Worker | Frecuencia | Función |
+|---|---|---|
+| `scripts/telegram-alert-worker.ts` | poll 15 s | Alertas de pedidos retrasados y stock bajo de almuerzo |
+| `scripts/daily-report-worker.ts` | poll 60 s, activo desde 23:20 | Envío del cierre de caja a Telegram (idempotente por `DailyReportLog`) |
+| `scripts/menu-day-cleanup-worker.ts` | — | Limpieza de la selección de Menú del Día al cambiar la jornada |
+
+Verificación bajo demanda (crean un plato propio y lo borran al terminar, nunca tocan platos reales):
+
+```bash
+pnpm --filter @bbspos/db verify:lunch        # stock + holds
+pnpm --filter @bbspos/db verify:lunch-stock
+pnpm --filter @bbspos/db verify:lunch-holds
+```
+
+### 5.8 Reportes
+
+11 endpoints en `apps/admin/app/api/reports/*`, todos `GET`, **todos aceptan `?format=csv`**.
+
+Infraestructura compartida en `apps/admin/lib/reports/`:
+
+| Módulo | Responsabilidad |
+|---|---|
+| `params.ts` | Validación con **zod**: `assertRange`, `parseSearchParams`, un schema por reporte |
+| `guard.ts` | `requireSession()`, `hasAuditSchema()` |
+| `range.ts` | `REPORT_TIMEZONE = "America/La_Paz"`, `MAX_RANGE_DAYS = 366`, `dayBounds`, `rangeBounds`, `previousPeriodRange`, claves de semana ISO |
+| `response.ts` | `handleReportRoute`, `jsonOk`, `reportEnvelope`, `ApiError` |
+| `sales.ts` | `notCancelled` compartido: las ventas excluyen `ANULADO` |
+| `csv.ts` / `excel.ts` | Salida CSV y Excel |
+
+### 5.9 Flujo del mesero (diferencias con el cajero)
+
+`apps/mesero/actions/pos.ts` es una **versión reducida**:
+
+| Aspecto | Cajero | Mesero |
+|---|---|---|
+| `deliveryType` | `MESA`/`LLEVAR`/`DELIVERY` | Solo `MESA`/`LLEVAR` (default `MESA`) |
+| Cliente vinculado | Sí | No |
+| Notas | Sí | No |
+| Reservas | Sí | No |
+| Editar pedido (`updatePosOrder`) | Sí | No |
+| Apartar cupo (`LunchHold`) | Sí | **No** — valida con `cartId = ""`, así que `remaining` descuenta **todos** los apartados: el mesero solo puede vender lo que nadie tiene tomado |
+| Cola y cobro | Sí | No |
+
+---
+
+## 6. Endpoints / API / Rutas
+
+### 6.1 Resumen
+
+| App | Puerto | Páginas | Route handlers | Handlers | Server action files |
+|---|:---:|:---:|:---:|:---:|:---:|
+| store | 3000 | 3 | 1 | 1 | 2 |
+| admin | 3001 | 10 (+login) | 19 | 23 | 10 |
+| cajero | 3002 | 1 (+2 tabs `?tab=`) + login | 2 | 3 | 6 + 2 fuera de `app/` |
+| mesero | 3003 | 1 (+login) | 2 | 3 | 1 + 1 fuera de `app/` |
+
+### 6.2 `apps/store` (3000) — sin autenticación
+
+| Ruta | Método | Propósito |
+|---|---|---|
+| `/` | GET | Home: carrusel (`slideshow.json`) + CTA al builder |
+| `/build` | GET | Constructor de bebida por pasos (`dynamic = "force-dynamic"`) |
+| `/cart` | GET | Carrito + checkout; muestra nº de ticket, total y **QR de pago** |
+| `/api/catalog` | GET | Catálogo público JSON. `Cache-Control: public, s-maxage=3600` |
+
+Server actions:
+
+| Acción | Propósito |
+|---|---|
+| `createOrder(items, customerName?, deliveryType?)` | Crea el pedido. Rechaza ítems que no sean `DRINK`, carrito vacío o nombre faltante. Impresión vía `after()` |
+| `getPaymentQr()` | Devuelve el QR de pago (data-URL) o `null` |
+
+### 6.3 `apps/cajero` (3002)
+
+| Ruta | Método | Propósito |
+|---|---|---|
+| `/` | GET | Terminal POS, pestaña `venta`: catálogo, cola del día, clientes pensionados |
+| `/?tab=reporte` | GET | Reporte del día del cajero (`getCashierDailyData`) |
+| `/?tab=cierre` | GET | Cierre de caja (`getCashCloseStats` + `getCashCloses`); `canClose = role !== MESERO` |
+| `/api/alita-sauces` | GET | Salsas disponibles (**público por diseño**, excluido del middleware) |
+| `/api/auth/[...nextauth]` | GET, POST | NextAuth |
+
+Server actions:
+
+| Acción | Propósito |
+|---|---|
+| `createPosOrder(items, ...)` | Crea la venta manual con precio autoritativo, cupos e impresión |
+| `updatePosOrder(orderId, items, ...)` | Edita reservas no confirmadas |
+| `getPosCatalog(cartIdArg?)` | Catálogo + menú del día + carta + estado de cupos, y renueva los holds |
+| `adjustLunchStock(menuItemId, delta, note?, cartId?)` | Corrige la cantidad de la jornada con bitácora |
+| `holdLunchUnits / unholdLunchUnits / syncLunchHolds` | Gestión de apartados desde el ticket |
+| `acceptOrder(orderId, method, method2?, amount2?)` | Cobra (bloquea `MESERO`) |
+| `acceptPensionOrder(orderId, customerId)` | Cobra contra cuenta de pensionado |
+| `acceptQueueOrder(orderId)` | Acepta un pedido de la cola sin cobrar |
+| `confirmReservation(orderId)` | Confirma reserva sin cobro e imprime comanda diferida |
+| `cancelReservation(orderId, reason?)` | Anula una reserva no cobrada |
+| `deliverOrder(orderId)` / `updateOrderDeliveryType(orderId, type)` | Entrega y tipo de entrega |
+| `confirmCashClose({denominations, notes?})` | Arqueo (bloquea `MESERO`) |
+| `printCashClose(closeId)` | Reimprime el ticket de arqueo |
+| `getCustomerSuggestions / linkCustomerByText / registerCustomerAtPos / getCustomerLoyalty` | Clientes y lealtad |
+| `reprintOrder(orderId)` | Reimprime comanda (rechaza si `ENTREGADO`/`ANULADO`) |
+| `printDailyReport()` / `sendDailyReportToBot()` | Reporte del día y envío a Telegram |
+
+### 6.4 `apps/mesero` (3003)
+
+| Ruta | Método | Propósito |
+|---|---|---|
+| `/` | GET | Terminal de toma de pedidos (PWA, solo `MESA`/`LLEVAR`) |
+| `/api/alita-sauces` | GET | Salsas disponibles (público) |
+| `/api/auth/[...nextauth]` | GET, POST | NextAuth |
+
+Server actions: `getPosCatalog()`, `createPosOrder(items, customerName?, deliveryType?)`,
+`ensureOrderAccess()`, `isAccountInactive()`.
+
+### 6.5 `apps/admin` (3001)
+
+#### Páginas
+
+| Ruta | Propósito |
+|---|---|
+| `/` | Dashboard: pedidos de hoy, `RECIBIDO`, suma del día, 5 más recientes |
+| `/orders` | Pedidos (aceptar, entregar, anular, descontar, reimprimir) |
+| `/menu` | Catálogo completo + Menú del Día |
+| `/customers` | Pensionados, cuenta corriente, recargas |
+| `/customers-ranking` | Ranking de clientes, canje de puntos, reglas de lealtad |
+| `/payments` | QR de pago |
+| `/reports` | Consola de 11 reportes (JSON/CSV) |
+| `/printer` | Configuración de impresora (driver, ancho, carpeta, conexión UNC) |
+| `/slideshow` | Carrusel de la home del store |
+| `/users` | Usuarios, roles, turnos |
+| `/login` | Ingreso |
+
+#### API routes
+
+| Ruta | Método | Propósito |
+|---|---|---|
+| `/api/auth/[...nextauth]` | GET, POST | NextAuth (con `makeSessionOnly()`) |
+| `/api/menu-image/[name]` | GET | Sirve imagen del menú desde `../store/public/images/menu/[name]` (valida `[A-Za-z0-9.-]+`) |
+| `/api/printer` | GET, PUT | Lista impresoras + config; guarda driver y valida que la impresora siga instalada |
+| `/api/printer/connect` | POST | Conecta impresora compartida por UNC (`\\EQUIPO\Impresora`) |
+| `/api/printer/test` | POST | Página de prueba (PNG o física) |
+| `/api/reports/dashboard-summary` | GET | Hoy vs ayer con `deltaPct`, 7 días, ticket prom., horas pico, performance, cancelaciones, rotación de menú |
+| `/api/reports/daily` | GET | Cierre diario de `?date=` (default hoy en La Paz) |
+| `/api/reports/sales-range` | GET | Evolución por `granularity` = `day`/`week`/`month` |
+| `/api/reports/peak-hours` | GET | 24 horas con filtros `weekday`, `hourFrom`, `hourTo` |
+| `/api/reports/category-sales` | GET | Por categoría de bebida (`unitsSold`, `revenue`, `sharePct`) |
+| `/api/reports/top-products` | GET | Top por `groupBy` = `drink`/`flavor`/`size`/`boba`/`topping` |
+| `/api/reports/slow-movers` | GET | Baja rotación (matriz vigente vs vendido, o `?toppings`) |
+| `/api/reports/staff-performance` | GET | Por `userId`: órdenes, recaudado, ticket prom., `%` del total |
+| `/api/reports/adjustments` | GET | Anulaciones y descuentos, paginado (50 por página) |
+| `/api/reports/payments` | GET | Reparto por método (con prorrateo del pago dividido) |
+| `/api/reports/day-total` | GET | Ventas totales del rango, incluidos anulados |
+| `/api/slideshow` | GET, PUT, DELETE | Lee/escribe `../store/public/slideshow.json` |
+| `/api/slideshow/media/[name]` | GET | Sirve media del carrusel (whitelist de MIME) |
+| `/api/slideshow/upload` | POST | `multipart/form-data` → guarda imagen y la registra |
+
+#### Server actions (10 archivos)
+
+| Archivo | Exports principales |
+|---|---|
+| `auth.ts` | `isAccountInactive` |
+| `catalog.ts` | 21 CRUD: `createSize/updateSize/deleteSize`, `createFlavor/…`, `createBoba/…`, `createTopping/…`, `createAlitaSauce/…`, `saveDrinkPrices` (upsert transaccional de la matriz), `createMenuItem/updateMenuItem/deleteMenuItem`, `setMenuItemMenuDelDia` |
+| `customers.ts` | `createCustomer`, `updateCustomer`, `addCustomerFunds` |
+| `daily-report.ts` | `sendDailyReportToBot` |
+| `loyalty.ts` | `getCustomerRanking`, `redeemCustomerPoints`, `listBenefitRules`, `saveBenefitRule` |
+| `orders.ts` | `acceptOrder`, `deliverOrder`, `cancelOrder`, `applyDiscount`, `reprintOrder` |
+| `payment.ts` | `savePaymentQr`, `removePaymentQr`, `getPaymentQr` |
+| `print-report.ts` | `printSummaryReport`, `printDailyReport` |
+| `product-image.ts` | `saveProductImage` (sharp → WebP q80), `removeProductImage` |
+| `users.ts` | `createUser`, `updateUser`, `setUserActive` |
+
+### 6.6 Despliegue (Docker)
+
+```yaml
+# docker-compose.yml (extracto)
+services:
+  bubba:
+    build: .
+    ports: ["3000:3000", "3001:3001", "3002:3002", "3003:3003"]
+    environment:
+      DATABASE_URL: "file:/app/packages/db/prisma/dev.db"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+    volumes:
+      - bubba-data:/app/packages/db/prisma
+      - bubba-menu-images:/app/apps/store/public/images/menu
+    restart: unless-stopped
+```
+
+`docker-entrypoint.sh` arranca, en este orden:
+
+```sh
+cd /app/packages/db && prisma migrate deploy      # 1. migraciones
+# 2. las 4 apps: next start -p 3000 / 3001 / 3002 / 3003  (en background)
+# 3. los 3 workers: daily-report, telegram-alert, menu-day-cleanup (tsx)
+wait
+```
+
+> **Bug conocido:** el `Dockerfile` y el `docker-compose.yml` todavía referencian el nombre
+> antiguo del paquete (`pnpm --filter @bubba/db generate`) y del servicio (`bubba`), mientras
+> que los paquetes se llaman `@bbspos/*`. El build de la imagen falla en ese paso (ver §7.4).
+
+---
+
+## 7. Estado Actual
+
+### 7.1 Implementado en código (verificado por typecheck, lint y lectura)
+
+| Funcionalidad | Evidencia |
+|---|---|
+| Catálogo completo: tamaños, sabores por categoría, tipos de boba, toppings, salsas de Alita | `packages/db/src/menu-day.ts`, `apps/admin/app/actions/catalog.ts` |
+| Matriz de precios por combinación categoría × tamaño × boba | `DrinkPrice`, `saveDrinkPrices()` |
+| Menú del Día por jornada con activación y limpieza automática | `setMenuDelDiaForToday`, `resetStaleMenuDelDia` |
+| Carta con variantes de precio obligatorias | `MenuItemOption` |
+| Venta POS con **precio autoritativo desde BD** | `pricePosItems()` (`apps/cajero/actions/pos.ts:141-243`) |
+| Numeración de tickets: `seq` global + `daySeq` diario | `@@unique([orderDate, daySeq])` |
+| Cola de cocina con estados y temporizadores | `apps/cajero/components/queue-view.tsx` (59 KB) |
+| Cobro con pago dividido y prorrateo | `acceptOrder(orderId, method, method2, amount2)` |
+| Cobro contra cuenta de pensionado (Prepago/Postpago con `creditLimit`) | `acceptPensionOrder()` |
+| Recargas y pagos de deuda con entrada de dinero a caja | `addCustomerFunds()` |
+| Arqueo de caja por denominación con contraste en servidor | `confirmCashClose()` |
+| Múltiples cierres por día con historial | `CashClose` |
+| Cierre diario a Telegram (23:20) con idempotencia | `daily-report-worker.ts`, `DailyReportLog` |
+| Control de cupo de almuerzos con bitácora de ajustes | `LunchQuota`, `LunchAdjust`, `adjustLunchStockForDay()` |
+| Apartado de cupo por caja con TTL y "primero que gana" | `LunchHold`, `lunch-holds.ts` |
+| **Reservas** con hora pactada, edición y confirmación diferida | `scheduledFor`, `updatePosOrder`, `confirmReservation` |
+| Impresión en impresora térmica y en PNG virtual | `PrinterConfig`, `formatComanda`, PowerShell |
+| Reimpresión de comandas, reportes y tickets de arqueo | `reprintOrder`, `printDailyReport`, `printCashClose` |
+| Alertas por Telegram (retraso y stock bajo) | `telegram-alert.ts` |
+| Kiosco web público con QR de pago | `apps/store` |
+| 11 reportes con salida JSON y CSV | `apps/admin/app/api/reports/*` |
+| **Fidelización**: acumulación de visitas/gasto/puntos, niveles, ranking Top 10, canje | `accumulateCustomerLoyalty`, `CustomerBenefitRule`, `redeemCustomerPoints` |
+| Clientes: autocompletado, vínculo sin creación, registro explícito, invitado | `linkCustomerByText`, `registerCustomerAtPos` |
+| Gestión de usuarios con roles, turnos y protecciones | `apps/admin/app/actions/users.ts` |
+| PWA en store y mesero | `@ducanh2912/next-pwa` |
+
+### 7.2 En desarrollo / verification pendiente
+
+| Ítem | Estado |
+|---|---|
+| **Change `2026-09-22-add-customer-loyalty`** | Código 100 % implementado y commiteado (`90e1f8d`). Faltan los pasos de verificación manual (5.2–5.4 del `tasks.md`) |
+| **Change `controlar-creacion-clientes`** | Código 100 % implementado y commiteado (`94e045c`). Faltan los pasos de verificación manual (5.1, 6.2, 6.3) |
+| Datos de lealtad en BD | 4 clientes con métricas acumuladas, 12 pedidos pagados con cliente, 0 canjes registrados → el flujo de canje **nunca se ha ejercitado** |
+
+> Nota: los clientes `ANDRES` y `MARIA FERNANDEZ LOPEZ` en BD son residuos de la estrategia
+> anterior (`upsertCustomerForOrder`), lo que confirma que el flujo invitado/vínculo **aún no se
+> ha probado en pantalla**.
+
+### 7.3 Deuda técnica y riesgos
+
+Ordenados por severidad.
+
+#### 🔴 Críticos
+
+| # | Problema | Ubicación | Impacto |
+|---|---|---|---|
+| 1 | **La tienda web confía en los precios del cliente.** `createOrder` no tiene sesión ni consulta precios: usa `item.unitPrice` y `t.price` del navegador y calcula el total con ellos | `apps/store/app/actions/order.ts:34,41,49-52` | Cualquiera puede crear un pedido con **total manipulado** (pedido de Bs 1) |
+| 2 | **`/api/reports/*` no valida rol.** El matcher del middleware excluye `api/reports`, y `requireSession()` solo comprueba que exista sesión, sin mirar el rol. Además el login de admin emite cookie válida para **cualquier** rol activo | `apps/admin/middleware.ts:19`, `apps/admin/lib/reports/guard.ts:7-16`, `apps/admin/lib/auth.ts:35-43` | Un `CAJERO` que entre a `/login` del admin puede leer las 11 APIs de reportes (ventas, pagos, performance) aunque no pueda abrir ninguna página del panel |
+
+#### 🟠 Altos
+
+| # | Problema | Ubicación | Impacto |
+|---|---|---|---|
+| 3 | **No hay rate limit** en la tienda web ni en los endpoints públicos | `apps/store` | Abuso de creación de pedidos |
+| 4 | **`Dockerfile` desactualizado:** ejecuta `pnpm --filter @bubba/db generate` pero el paquete es `@bbspos/db`. `docker-compose.yml` conserva el nombre de servicio `bubba` | `Dockerfile`, `docker-compose.yml` | **El build de la imagen falla** |
+| 5 | **`seq`/`daySeq` con `max + 1` sin bloqueo** | `apps/cajero/actions/pos.ts:363-375`, `apps/store/app/actions/order.ts:56-68` | Dos escrituras concurrentes pueden leer el mismo máximo; salta la restricción única y el error se traduce a un mensaje genérico |
+| 6 | **No hay `loading.tsx` / `error.tsx` / `not-found.tsx`** en ninguna de las 4 apps | todas | Sin estados de carga ni páginas de error propias; los errores de render caen en el error boundary global de Next |
+| 7 | **Passwords y secretos JWT** con defaults débiles en el compose | `docker-compose.yml` | `"cambia-este-secreto-por-uno-seguro"` |
+
+#### 🟡 Medios
+
+| # | Problema | Ubicación | Impacto |
+|---|---|---|---|
+| 8 | `hasBillingAccess()` definido pero **no usado**; el control real es un check `!== "MESERO"` repetido en cada acción de cobro | `apps/cajero/lib/session.ts:23-29` | Capa de seguridad duplicada, susceptible a olvidos |
+| 9 | **No hay UI para programar `LunchQuota.planned` ni `lowThreshold`.** Las funciones existen (`setLunchPlannedForDay`, `setLunchLowThresholdForDay`, `lunchStockHistory`) pero sin pantalla; el flujo vivo es el ajuste manual desde el cajero | `packages/db/src/menu-day.ts:283,360,399` | El admin programa el Menú del Día pero **no la cantidad**; hay que ajustarla a mano desde cada caja |
+| 10 | **Componentes gigantes**: `queue-view.tsx` 1665 líneas (59 KB), `pos-terminal.tsx` 39 KB, `pos-ticket-panel.tsx` 28 KB, `menu-manager.tsx` 2226 líneas, `reports-client.tsx` 1415 líneas | `apps/cajero`, `apps/admin` | Mantenibilidad |
+| 11 | **Warnings de lint activos**: `closeDialogs` y `onError` sin usar en `customers-client.tsx`; `Link` sin usar y `useEffect` con deps faltantes en `store/app/build`; `setCustomerName` sin usar en `store/app/cart`; `<img>` en vez de `next/image` | varias | Ruido que oculta problemas reales |
+| 12 | **SQL crudo con `$queryRawUnsafe`** en reportes y conteo de almuerzos | `apps/admin/app/api/reports/*`, `menu-day.ts` | Correcto porque los parámetros se interpolan desde código, pero es una superficie a vigilar |
+| 13 | **Cero tests automatizados.** Las "verificaciones" son scripts de tsx que crean y borran un plato propio | `packages/db/scripts/verify-lunch-*.ts` | Regresiones se detectan en pantalla, no en CI |
+| 14 | Sin CI/CD. `pnpm -r typecheck` y `pnpm -r lint` se ejecutan a mano | — | — |
+
+#### 🟢 Bajos /Technique debt
+
+| # | Problema | Detalle |
+|---|---|---|
+| 15 | Archivos raíz ruidosos | `admin.txt`, `cajero4.txt`, `error 1.png`, `cambios.md`, `FIXES_APLICADOS.md`, varios `informe-*.md` |
+| 16 | `.gitignore` y `scripts/_dev-launch.bat` modificados sin commit | Pendiente de commit |
+| 17 | Prisma 7 deprecará `package.json#prisma` | `warn` en cada comando de Prisma |
+| 18 | Impresión física depende de Windows + PowerShell | No portable a Linux; en Docker el driver `windows` no funciona |
+
+### 7.4 Cumplimiento de OpenSpec (SDD)
+
+El proyecto usa **OpenSpec** para specs/changes antes de codificar:
+
+```text
+openspec/
+├── config.yaml
+├── changes/                       # cambios en curso
+│   ├── 2026-09-22-add-customer-loyalty/     # implementado, falta verificar
+│   └── controlar-creacion-clientes/         # implementado, falta verificar
+└── archive/                       # cambios archivados
+```
+
+Cada change tiene `proposal.md`, `design.md`, `tasks.md` y `specs/<capability>/spec.md`
+(especificaciones en formato SHALL/MUST). Un change se archiva al completarse la implementación
+y la verificación.
+
+---
+
+## 8. Apéndices
+
+### 8.1 Glosario técnico
+
+| Término | Significado en este proyecto |
+|---|---|
+| **Server Action** | Función `async` marcada con `"use server"`; se ejecuta en el servidor pero se invoca como una RPC desde el cliente |
+| **Route Handler** | `app/api/**/route.ts` con `export async function GET/POST/PUT/DELETE` |
+| **Server Component** | Componente React que corre en el servidor; puede ser `async` y consultar la BD directamente |
+| **`after()`** | API de Next.js 15 para ejecutar código **después** de enviar la respuesta (usada para impresión) |
+| **`prisma.$transaction(async (tx) => …)`** | Transacción interactiva; recibe `tx` con el mismo API que `prisma` |
+| **CVA** | Class Variance Authority: variantes de estilo tipadas (p. ej. `statusVariants.ts` para estados de pedido) |
+| **TTL** | Time To Live; aquí, la vida de un `LunchHold` (20 min) |
+| **`@unique` en SQLite** | Los valores `NULL` **no** se consideran duplicados entre sí → varios clientes sin teléfono pueden convivir |
+| **`P2003` / `P2002`** | Códigos de error de Prisma: violación de foreign key / violación de constraint único |
+
+### 8.2 Ejemplo de payload: venta POS con cliente
+
+```jsonc
+// Entrada conceptual de createPosOrder (el POS ignora unitPrice del cliente)
+{
+  "customerName": "MARIA FERNANDEZ",     // → order.customerName (nombre corto, MAYÚSCULAS)
+  "customerId": "cmucw05x0002...",        // null = venta invitada
+  "deliveryType": "MESA",
+  "notes": "sin hielo en la grande",
+  "scheduledFor": null,                   // ISO string si es reserva
+  "reserveLeadMin": 30,
+  "cartId": "cart-8f2a…",                 // cookie espejo bbspos_pos_cart_id
+  "items": [
+    {
+      "kind": "DRINK",
+      "size":     { "id": "size-12", "name": "Mediano" },
+      "flavor":   { "id": "fl-03", "name": "Taro" },
+      "category": "MILK",                 // FlavorCategory → clave de DrinkPrice
+      "bobaType": { "id": "bt-01", "name": "Tapioca" },
+      "toppings": [{ "id": "tp-05", "name": "Coco" }],
+      "quantity": 2
+      // unitPrice del cliente es IGNORADO: se resuelve en la matriz DrinkPrice
+    },
+    {
+      "kind": "MENU_ITEM",
+      "menuItemId": "mi-77", "name": "Milanesa de pollo",
+      "category": "MILANESA",
+      "optionId": "opt-poll0", "optionName": "Pollo",  // precio de la variante
+      "detail": "con arroz y papas",
+      "quantity": 1
+    }
+  ]
+}
+
+// Resultado
+{
+  "id": "clxyz…",
+  "seq": 412,           // global
+  "daySeq": 37,         // visible como "#037"
+  "status": "ACEPTADO", // pendiente de cobro
+  "total": 63,          // Bs, calculado en servidor
+  "tiempoEstimado": 12  // minutos, el del producto que más tarda
+}
+```
+
+### 8.3 Comandos de referencia rápida
+
+```bash
+# Diagnóstico
+pnpm -r typecheck
+pnpm -r lint
+
+# BD
+pnpm db:generate                                   # prisma generate (matar node antes)
+pnpm --filter @bbspos/db exec prisma migrate status # "Database schema is up to date!"
+pnpm db:seed
+
+# Verificación de cupos de almuerzo
+pnpm --filter @bbspos/db verify:lunch
+
+# Terminales
+scripts\dev-all.bat
+
+# Workers
+tools\start-workers.bat
+```

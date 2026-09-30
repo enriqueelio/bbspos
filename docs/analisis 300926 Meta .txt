@@ -1,0 +1,95 @@
+## Reporte de Arquitectura - BBSPOS | Restaurante BIBOSI
+
+Analicé el documento completo verificado contra código. Es un sistema sólido para operación de 1 local, pero con riesgos críticos que debes corregir antes de escalar.
+
+### 1. Resumen Ejecutivo y Arquitectura
+
+*Propósito Principal:* BBSPOS no es un POS genérico. Es un *POS especializado para cafetería de Bubble Tea + Almuerzos* - Restaurante Bibosi. Resuelve 3 problemas de negocio muy específicos de tu modelo:
+1.  Matriz de precios compleja de bebidas: Tamaño x Sabor x Boba
+2.  Control de producción limitada de Menú del Día por jornada con lógica de "el primero que agarra, gana"
+3.  Cuenta corriente de pensionados Prepago/Postpago + Fidelización
+
+*Público Objetivo y Negocio Ideal:* Se adapta perfecto a *1 solo local, 2-4 terminales, alto volumen de tickets de bajo monto, con productos perecederos limitados por día*. NO está diseñado para multi-sucursal, franquicia, o e-commerce real.
+
+*Arquitectura Técnica Inferida:*
+
+Es un *Monolito Modular con Shared Kernel*, no microservicios.
+Capa | Tecnología Real
+**Frontend** | 4 Apps Next.js 15 App Router + React 19. `store:3000` kiosco público sin auth, `admin:3001`, `cajero:3002`, `mesero:3003` PWA. Estado con Zustand + shadcn/ui
+**Backend** | **Server Actions** `"use server"` como controllers. No hay API REST tradicional. Lógica de dominio crítica centralizada en `packages/db/src/menu-day.ts` 483 líneas y `lunch-holds.ts` 297 líneas
+**Base de Datos** | **SQLite único** compartido por 4 procesos Next.js vía Prisma 6.19.3. Archivo `dev.db` ~500KB. 22 modelos, 13 enums, 42 migraciones manuales
+**Infraestructura** | pnpm + Turborepo. Docker con volumen compartido pero **roto** - el Dockerfile referencia `@bubba/db` y tu paquete es `@bbspos/db`. Build falla
+**Integraciones** | Impresión térmica Windows vía PowerShell `Out-Printer` + PNG virtual. Telegram Bot API para alertas de retraso, stock bajo y cierre diario a las 23:20. `after()` de Next.js 15 para impresión best-effort
+*Patrón Clave:* Todo lo importante pasa *DENTRO de `prisma.$transaction`*. Precio autoritativo, cupo de almuerzo, lealtad. Eso está bien hecho.
+
+### 2. Análisis de Módulos Core - Flujos Críticos
+
+#### A. Ventas / Facturación - Offline / Online
+
+*Fortalezas:*
+- *Precio Autoritativo en POS:* El punto más fuerte del sistema. `apps/cajero/actions/pos.ts:141-243` IGNORA el `unitPrice` del cliente y recalcula desde `DrinkPrice` y `Topping` en BD. Inmune a manipulación.
+- Numeración `seq` global + `daySeq` diario `@@unique([orderDate, daySeq])` con ticket visible `#001`. 
+- Ciclo de vida bien modelado: `RECIBIDO` -> `ACEPTADO` -> `ENTREGADO` y `ANULADO`. Cobro y entrega son ortogonales `paidAt` / `deliveredAt`.
+- Pago dividido nativo `total - paymentAmount2` y prorrateo correcto en reportes.
+
+*Cuellos de Botella / Riesgos CRÍTICOS:*
+
+1.  *VULNERABILIDAD CRÍTICA - Tienda Web:* `apps/store/app/actions/order.ts:34,41` usa `item.unitPrice` y `t.price` ENVIADO POR EL NAVEGADOR. Cualquiera puede crear un pedido de Bs 1 desde la consola. No tiene sesión ni rate limit. *Debes igualar al flujo del cajero inmediatamente.*
+2.  *Race Condition `max + 1`:* La asignación de `seq` y `daySeq` lee el `max` y suma 1 sin bloqueo. Con 2 cajeros cobrando al mismo segundo, choca contra constraint único y devuelve error genérico "No se pudo crear el pedido". En SQLite con WAL es poco probable pero real en hora pico. Solución: tabla de secuencias o retry transaccional.
+3.  *SQLite para 4 escritores:* SQLite funciona para 1 local, pero con 4 procesos Next.js escribiendo, el lock de escritura bloquea todo. No es offline-first, es online contra un archivo. Si se cae el archivo, se caen las 4 terminales.
+4.  No hay impuestos modelados. Correcto para Bolivia hoy, pero te bloquea si facturación electrónica.
+
+#### B. Gestión de Inventario
+
+*Qué existe y qué NO:*
+Control | Estado
+Disponibilidad `available` boolean | Sí
+Cantidad diaria almuerzos `LunchQuota + LunchAdjust + LunchHold` | Sí, muy bien hecho
+Stock de insumos té, perlas, jarabes | **NO EXISTE**
+Costeo, margen, proveedores, compras, merma | **NO EXISTE**
+*Fortalezas:* El control de almuerzos es brillante. No guarda el `vendido`, lo deriva de pedidos no anulados `remaining = planned + Σ delta - sold - holdsAjenos`. Anular restituye solo. Implementa patrón de reserva por caja con TTL 20min, `HOLD_TTL_MIN`, renovación cada 6min, `acquireLunchHold` con 3 mensajes distintos según si te lo quitó otra caja o es tu propio hold.
+
+*Cuello de Botella Grave:*
+- *No hay UI para planificar.* Existen `setLunchPlannedForDay` y `setLunchLowThresholdForDay` pero no hay pantalla en admin. El admin activa qué plato va hoy, pero la cantidad se ajusta a mano desde cada caja. Caos operativo.
+- El mesero no aparta cupo `cartId = ""`, entonces ve `remaining - todos los holds`. Solo puede vender lo que nadie tiene en su carrito. Frustra ventas de salón.
+- Conteo por `menuItemName` no por `menuItemId`. Si cambias el nombre del plato, rompes el histórico de vendidos.
+
+#### C. Gestión de Caja
+
+*Fortalezas:*
+- Arqueo por denominaciones 200,100,50,20,10,5,2,1,0.5. Recalcula total en servidor, nunca confía en formulario.
+- Modelo contable correcto: `systemCash` incluye `rechargeCash`, `pensionSales` NO entra a caja, `diffCash = countedCash - systemCash`. Pagos divididos prorrateados.
+- Múltiples cierres por día por turno, historial auditable, reimprimible con `formatCashCloseText()`.
+- Cierre a Telegram idempotente con `DailyReportLog` a las 23:20.
+
+*Cuellos de Botella:*
+- No hay control de caja ciega vs parcial, ni validación de que un turno no cierre dos veces.
+- `CashClose.denominations` es JSON sin schema. Vulnerable a corrupción.
+- Impresión depende 100% de Windows + PowerShell. En Docker driver `windows` no funciona. Te ata a una PC con Windows en caja.
+
+#### D. Clientes / Proveedores
+
+*Proveedores: NO EXISTE.*
+
+*Clientes:*
+Fortalezas: Diseño anti-duplicados excelente. El POS *nunca crea clientes automáticamente*. `linkCustomerByText` busca por teléfono exacto o nombre exacto case-insensitive, si no hay match queda como invitado `customerId: null`. Alta explícita `registerCustomerAtPos` con validación de teléfono único. Evita base sucia en hora pico.
+
+Lealtad bien implementada: `accumulateCustomerLoyalty` dentro de misma transacción de `paidAt` - 1 Bs = 1 punto, idempotente. Niveles por `SPEND_MONTH`, `VISITS_MONTH`, `POINTS` con inicio de mes en La Paz `04:00 UTC`. Ranking Top 10 por `Σ total` y canje transaccional `redeemCustomerPoints`.
+
+Cuellos de Botella:
+- Índice único en `phone` permite varios NULL en SQLite, pero la validación es en app `assertPhoneAvailable`, no en BD. Race condition posible.
+- Flujo de canje nunca probado: 0 canjes en BD, 4 clientes con puntos. Datos residuales `ANDRES` y `MARIA FERNANDEZ` de estrategia anterior `upsertCustomerForOrder`.
+- `Balance > 0` = saldo a favor Prepago, `< 0` = deuda Postpago. Semántica invertida a lo contable tradicional, confunde.
+
+---
+
+*Veredicto de Arquitecto:*
+
+BBSPOS es *un excelente MVP para 1 restaurante*. Su lógica de dominio más difícil - almuerzos limitados y pensionados - está mejor resuelta que en muchos POS comerciales.
+
+Pero tienes *2 bloqueadores críticos para producción*:
+1.  Corregir `store/actions/order.ts` para recalcular precios desde BD como hace cajero.
+2.  Corregir middleware `apps/admin/middleware.ts:19` - `/api/reports/*` está excluido y `requireSession()` no valida rol. Un CAJERO puede leer todos tus reportes de ventas entrando al login de admin.
+3.  Arreglar Dockerfile.
+
+Si quieres, en el siguiente paso te hago el reporte de *Seguridad, Escalabilidad y Roadmap de refactorización* para convertirlo en SaaS multi-tenant.

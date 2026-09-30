@@ -99,7 +99,7 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *  del estado inicial lleva `w-full`, o sea `width: 100%`: un porcentaje que se
  *  resuelve distinto según el bloque contenedor. Al abrir una categoría el
  *  contenedor pasa de `display: grid` a `display: flex` en el mismo frame en que
- *  la tarjeta cambia de `w-full` a `w-14`, así que ese `100%` pasa a resolver
+ *  la tarjeta cambia de `w-full` a `w-12`, así que ese `100%` pasa a resolver
  *  contra el flex completo (807px en lugar de los 155px de la celda) y la
  *  transición arrancaba desde ahí. Lo medido: los 15 íconos salían ocupando
  *  807px, uno por fila (17 filas, barra de 1041px) y se encogían en 300ms,
@@ -115,14 +115,21 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *  mismo tratamiento que ya reciben los campos de texto del POS. */
 const CATEGORY_CARD = {
   base: "inline-flex items-center justify-center gap-2 rounded-xl border text-xs font-bold capitalize tracking-wide transition-colors duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
+  // Todas las tarjetas miden 48px de alto en los tres estados (inicial, abierta
+  // y encogida) a propósito. Con la abierta en 56px, abrir una categoría hacía
+  // crecer la barra 8px y empujaba los productos hacia abajo; con la fila fija
+  // el alto, abrir y cerrar no mueve nada y el cambio de tamaño se lee como un
+  // estado más, no como un empujón.
+  //
   // Cuadrícula (estado inicial): la tarjeta ocupa su celda y queda uniforme.
   expandedIdle: "h-12 w-full px-2",
-  // Flex (con categoría abierta): la abierta se ajusta al texto y las demás son
+  // Flex (con categoría abierta): la abierta se mide por su texto y las demás son
   // cuadrados fijos. `w-full` y `justify-self-center` sobran aquí: en flex el
-  // ancho lo fija el propio cuadrado.
-  expandedActive: "min-h-14 shrink-0 px-6 py-3",
-  collapsed: "h-14 w-14 shrink-0 px-0",
-  back: "h-14 w-14 shrink-0 px-0",
+  // ancho lo fija el propio cuadrado. `h-12` en vez de `min-h-12` para que el
+  // texto largo no estire la tarjeta y desalinee la fila.
+  expandedActive: "h-12 shrink-0 px-6",
+  collapsed: "h-12 w-12 shrink-0 px-0",
+  back: "h-12 w-12 shrink-0 px-0",
   selected:
     "border-success bg-success/15 text-white shadow-md shadow-success/25",
   idle: "border-slate-700 bg-slate-900/60 text-slate-200 hover:border-slate-600 hover:bg-slate-800/80 hover:text-white",
@@ -145,7 +152,7 @@ export function PosCategoryBar({
   return (
     <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
       {/* El contenedor cambia de layout con el estado: la retícula de 5 columnas
-          deja huecos enormes en cuanto las tarjetas se encogen a 56px, así que
+          deja huecos enormes en cuanto las tarjetas se encogen a 48px, así que
           en el estado activo se agrupan en flex, que las junta sin huecos. */}
       <div
         className={
@@ -159,13 +166,16 @@ export function PosCategoryBar({
           const Icon = PANE_ICON[pane.key];
           // Con una categoría abierta solo esa tarjeta conserva el texto; el
           // título sigue en `title`/`aria-label` para que el ícono encogido se
-          // pueda identificar al pasar el mouse o con lector de pantalla.
+          // pueda identificar al pasar el mouse o con lector de pantalla. Un
+          // clic sobre la que ya está abierta la cierra, igual que el botón
+          // "Volver", así que el `onClick` no cambia: la barra no distingue
+          // abrir de cerrar, el estado decide.
           const showLabel = isIdle || selected;
           return (
             <button
               key={pane.key}
               type="button"
-              title={pane.label}
+              title={selected ? `${pane.label} (clic para volver)` : pane.label}
               aria-label={pane.label}
               aria-pressed={selected}
               onClick={() => onSwitch(pane.key)}

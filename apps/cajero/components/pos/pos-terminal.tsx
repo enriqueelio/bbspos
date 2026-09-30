@@ -432,8 +432,20 @@ export function PosTerminal({
 
   /** Abrir una categoría, o cerrarla con null (botón "Volver"): en cualquiera de
    *  los dos casos se sueltan las variantes para no dejar un selector de plato
-   *  apuntando a algo que ya no está en pantalla. */
-  function switchPane(pane: CatalogPane | null) {
+   *  apuntando a algo que ya no está en pantalla.
+   *
+   *  Un clic sobre la categoría que ya está abierta la cierra, con el mismo
+   *  efecto que el botón "Volver": el cajero no tiene que apuntar a la flecha
+   *  roja para volver a la lectura de todas las categorías. Como `activePane` es
+   *  `CatalogPane | null` y las claves de `catalogPanes` son del mismo tipo,
+   *  comparar contra el estado actual alcanza y no hace falta pasar el valor. */
+  function togglePane(pane: CatalogPane) {
+    switchPane((current) => (current === pane ? null : pane));
+  }
+
+  function switchPane(
+    pane: CatalogPane | null | ((current: CatalogPane | null) => CatalogPane | null),
+  ) {
     setActivePane(pane);
     setVariantItem(null);
     setVariantSize(null);
@@ -958,7 +970,7 @@ export function PosTerminal({
           <PosCategoryBar
             panes={catalogPanes}
             activeKey={activePane}
-            onSwitch={(key) => switchPane(key as CatalogPane)}
+            onSwitch={(key) => togglePane(key as CatalogPane)}
             onBack={() => switchPane(null)}
           />
 

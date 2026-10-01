@@ -4,7 +4,7 @@
 
 ### Requirement: Nombre del cliente obligatorio
 
-El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa del cliente en el momento del envío. El campo se convierte a MAYÚSCULAS automáticamente y, si está vacío habiendo ítems en el ticket, el envío se bloquea y el campo se resalta indicando el dato faltante. Escribir solo el nombre o mesa SHALL crear el pedido como **invitado**: se guarda `customerName` en la orden pero NO se crea ni se vincula ningún cliente en la base de clientes (no acumula lealtad ni puntúa en el ranking).
+El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa del cliente en el momento del envío. El campo se convierte a MAYÚSCULAS automáticamente y mantiene el autocompletado en tiempo real que consulta clientes existentes por nombre o teléfono (hasta 8 coincidencias): al elegir una coincidencia se vincula su `customerId` al pedido. Si no hay coincidencia, el envío NO crea el cliente y el pedido queda como **invitado**: se guarda `customerName` en la orden pero ningún cliente se crea ni se vincula en la base de clientes (no acumula lealtad ni puntúa en el ranking). El campo sigue siendo obligatorio: si está vacío habiendo ítems en el ticket, el envío se bloquea y el campo se resalta indicando el dato faltante.
 
 #### Scenario: Envío sin nombre o mesa
 
@@ -16,7 +16,12 @@ El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa de
 - **WHEN** el usuario escribe el nombre o mesa
 - **THEN** el texto se muestra y se envía en mayúsculas, sin importar cómo se tecleó
 
-#### Scenario: Venta invitado sin registro
+#### Scenario: Autocompletado de clientes existentes
+
+- **WHEN** el usuario escribe un texto que coincide con clientes registrados (por nombre o teléfono)
+- **THEN** aparece el listado de coincidencias y, al elegir una, el pedido queda vinculado a ese `customerId` con el campo completado
+
+#### Scenario: Cliente nuevo sin coincidencia
 
 - **WHEN** el usuario escribe un nombre rápido (p. ej. "MARIA") que no coincide con ningún cliente registrado y envía el pedido
 - **THEN** el pedido se crea con `customerName` "MARIA", la base de clientes no recibe ningún registro nuevo y ningún cliente queda vinculado al pedido

@@ -1,0 +1,526 @@
+PROPUESTA DE OPTIMIZACIÓN UX — CLIENTES / PENSIONADOS
+===========================================================
+
+Base: INFORME-CLIENTES-PENSIONADOS(1).txt
+Pantalla analizada: /customers (ADMIN)
+
+1. DIAGNÓSTICO DE PROBLEMAS
+===========================
+
+1.1 Problema estructural: una sola pantalla intenta resolver tres negocios distintos
+
+La pantalla /customers presenta juntos:
+- Mostrador: cliente que paga al momento y debe ser fidelizado.
+- Prepago: tiene saldo previamente abonado.
+- Postpago: tiene una deuda que el negocio espera cobrar.
+
+El problema de diseño es que los tres perfiles pueden terminar tratados de forma demasiado similar, aunque la lógica comercial sea distinta.
+
+Impacto UX:
+El administrador debe interpretar preguntas como:
+- ¿Este saldo positivo es dinero mío o del cliente?
+- ¿Este cliente acumula puntos?
+- ¿Puede usar sus puntos?
+- ¿Este monto es ingreso o deuda?
+
+La interfaz debería responder estas preguntas visualmente sin exigir conocimiento del modelo de datos.
+
+1.2 La tabla actual obliga a inferir información crítica
+
+La tabla actual muestra:
+Nombre | CI | Teléfono | Modalidad | Saldo | Límite | Acciones
+
+No muestra directamente:
+- puntos;
+- nivel;
+- última visita;
+- total gastado;
+- estado de fidelización.
+
+Esa información está en otra pantalla de ranking, lo que obliga a cambiar de contexto para comprender al cliente.
+
+Fricción actual:
+Clientes -> buscar -> abrir ranking -> localizar cliente -> volver a clientes
+
+La información clave debería estar disponible desde la ficha del cliente.
+
+1.3 El significado del saldo depende del signo
+
+Actualmente:
+- balance > 0: saldo a favor (prepago, dinero del cliente)
+- balance < 0: deuda (postpago, dinero que el cliente debe)
+- balance = 0: saldo neutro
+
+Mostrar solamente:
+"Saldo: -290 Bs"
+
+obliga al usuario a interpretar el dato.
+
+Mejor:
+- Prepago: "Saldo a favor: 120 Bs"
+- Postpago: "Deuda: 290 Bs"
+
+El nombre del concepto debe expresar el significado financiero.
+
+1.4 Crear un Postpago no comunica una consecuencia fundamental
+
+El formulario permite:
+Es pensionado -> POSTPAGO
+
+pero no comunica que, bajo la regla de negocio, el cliente Postpago no genera puntos ni nivel.
+
+La consecuencia debe mostrarse inmediatamente al elegir Postpago.
+
+Ejemplo:
+
+POSTPAGO
+Este cliente no acumula puntos ni nivel.
+Su beneficio es el pago diferido.
+
+1.5 Las acciones disponibles no están suficientemente contextualizadas
+
+La UI debería organizar acciones según el estado del cliente.
+
+Mostrador:
+- Editar
+- Ver historial
+- Ver fidelización
+
+Prepago:
+- Recargar saldo
+- Ver movimientos
+- Ver fidelización
+
+Postpago:
+- Registrar pago
+- Ver deuda
+- Ver movimientos
+
+No tiene sentido presentar el mismo conjunto de acciones a todos los perfiles.
+
+1.6 El Ledger tiene información útil, pero no está diseñado para conciliación rápida
+
+El diálogo de movimientos:
+- muestra hasta 100 movimientos;
+- no tiene paginación;
+- no indica que pueda haber más;
+- no muestra el ticket asociado;
+- no muestra el saldo resultante después de cada movimiento.
+
+Para Postpago debería ser posible responder rápidamente:
+"¿De dónde salen estos 290 Bs?"
+
+Mejor representación:
+#037 | 01/10 | Almuerzo | -45 Bs | Saldo 245 Bs
+
+Y permitir:
+[Ver pedido]
+
+1.7 El ranking responde actualmente una pregunta equivocada
+
+Un ranking llamado "Clientes frecuentes" no debería mezclar:
+- dinero efectivamente cobrado;
+- consumo financiado.
+
+El Postpago debe quedar fuera del ranking de facturación/fidelización o aparecer en una sección separada de cuentas por cobrar.
+
+Propuesta:
+- Clientes que facturan
+- Fidelización
+- Cuentas por cobrar
+
+Para Postpago, las métricas relevantes son:
+- deuda actual;
+- límite;
+- porcentaje del límite utilizado;
+- antigüedad/mora.
+
+1.8 customerName genera una identidad fragmentada
+
+Los pedidos históricos pueden contener distintas representaciones del mismo cliente, aunque la FK real sea customerId.
+
+La UI debería presentar siempre el nombre canónico del Customer y utilizar el ticket/ID como identificador técnico secundario.
+
+1.9 Escalabilidad de la pantalla
+
+Actualmente /customers carga:
+- todos los clientes;
+- hasta 100 movimientos por cliente.
+
+Esto significa que el historial se está precargando aunque el usuario no lo necesite.
+
+La solución correcta es:
+- paginar clientes;
+- cargar movimientos bajo demanda;
+- paginar el ledger.
+
+2. PROPUESTA DE FLUJO OPTIMIZADO
+================================
+
+Principio rector:
+
+Pasar de:
+"Administrar una tabla de clientes"
+
+a:
+"Administrar relaciones financieras y de fidelización según el tipo de cliente."
+
+2.1 Paso 1 — Dashboard de clientes
+
+Mostrar segmentos principales:
+
+CLIENTES
+
+[ Todos ] [ Mostrador ] [ Prepago ] [ Postpago ]
+
+Buscar nombre, CI o teléfono...
+
+Filtros:
+[Con deuda] [Con saldo] [Con puntos] [Sin fidelización]
+
+Objetivo:
+Reducir carga cognitiva y permitir entrar directamente al subconjunto relevante.
+
+2.2 Paso 2 — Tabla contextual
+
+Para Mostrador:
+Nombre | Teléfono | Visitas | Gasto | Puntos | Nivel | Acciones
+
+Para Prepago:
+Nombre | Teléfono | Saldo a favor | Último consumo | Puntos | Nivel | Acciones
+
+Para Postpago:
+Nombre | Teléfono | Deuda | Límite | Días desde último pago | Acciones
+
+La tabla cambia sus columnas según el segmento.
+
+2.3 Paso 3 — Crear cliente
+
+En lugar de comenzar con "Es pensionado", comenzar con:
+
+Tipo de cliente
+- Mostrador
+- Pensionado
+
+Si se elige Pensionado:
+Modalidad
+- Prepago
+- Postpago
+
+Sólo entonces mostrar los campos específicos de cada modalidad.
+
+2.4 Paso 4 — Mostrar la consecuencia inmediatamente
+
+Al seleccionar Postpago:
+
++---------------------------------------------+
+| POSTPAGO                                    |
+|                                             |
+| Este cliente no acumula puntos ni nivel.    |
+| Su beneficio es el pago diferido.           |
+|                                             |
+| Límite de crédito: __________ Bs             |
++---------------------------------------------+
+
+Debe ser feedback inline, no una interrupción modal.
+
+2.5 Paso 5 — Vista de detalle del cliente
+
+Ejemplo Postpago:
+
+RONALD PAZ
+POSTPAGO
+
++----------------------+
+| DEUDA                |
+| 290 Bs               |
++----------------------+
+
+Límite       500 Bs
+Disponible  210 Bs
+
+[Registrar pago]
+
+MOVIMIENTOS
+
+Ticket | Fecha | Concepto | Importe | Saldo
+#037   | 01/10 | Almuerzo | -45 Bs  | 245 Bs
+#035   | 30/09 | Almuerzo | -95 Bs  | 290 Bs
+
+[Ver más]
+
+No mostrar módulo de puntos a Postpago.
+
+2.6 Paso 6 — Acciones contextuales
+
+Mostrador:
+[Editar] [Ver historial] [Ver fidelización]
+
+Prepago:
+[Recargar saldo] [Ver movimientos] [Ver fidelización]
+
+Postpago:
+[Registrar pago] [Ver deuda] [Ver movimientos]
+
+2.7 Paso 7 — Ranking separado
+
+Reemplazar una única pantalla de ranking por:
+
+[Facturación] [Fidelización] [Cuentas por cobrar]
+
+Facturación:
+Sólo dinero efectivamente cobrado.
+
+Fidelización:
+Sólo clientes elegibles según la regla definida.
+
+Cuentas por cobrar:
+Cliente | Deuda | Límite | % utilizado | Antigüedad
+
+2.8 Paso 8 — Ledger orientado a conciliación
+
+Cada movimiento debería mostrar:
+- número de ticket;
+- fecha/hora;
+- tipo;
+- importe;
+- saldo resultante;
+- método de pago.
+
+Y permitir:
+[Ver pedido]
+
+Flujo:
+Deuda actual -> Movimientos -> Pedido concreto -> Detalle de consumo
+
+3. WIREFRAME EN TEXTO / USER FLOW
+=================================
+
+3.1 Entrada principal
+
++--------------------------------------------------------+
+| CLIENTES                                               |
+|                                                        |
+| [Todos] [Mostrador] [Prepago] [Postpago]             |
+|                                                        |
+| Buscar: [_______________________________]              |
+|                                                        |
+| [Con deuda] [Con saldo] [Con puntos]                 |
++--------------------------------------------------------+
+| Nombre        Tipo          Estado          Acción     |
+|                                                        |
+| ANDRES        Mostrador     45 Bs / 45 pt  [Ver]      |
+| MARIA         Mostrador     150 Bs / 150pt [Ver]      |
+| NATALIA       Mostrador     25 Bs / 25 pt  [Ver]      |
+| RONALD        Postpago      DEUDA 290 Bs   [Ver]      |
++--------------------------------------------------------+
+
+3.2 Alta
+
+[Nuevo cliente]
+      ->
+[Tipo de cliente]
+      -> Mostrador
+      -> Pensionado
+             ->
+       [Prepago / Postpago]
+             ->
+      +--------------+
+      |              |
+   [Prepago]      [Postpago]
+      |              |
+ saldo +            deuda +
+ fidelización       límite
+      |              |
+      +-------> [Guardar]
+
+3.3 Postpago
+
+[RONALD PAZ]
+      ->
+[Perfil]
+      ->
++----------------------+
+| POSTPAGO             |
+| DEUDA: 290 Bs        |
+| LÍMITE: 500 Bs       |
+| DISPONIBLE: 210 Bs   |
++----------------------+
+      ->
+[Registrar pago]
+      ->
+[Seleccionar efectivo / QR]
+      ->
+[Confirmar]
+      ->
+Deuda: 290 Bs -> 190 Bs
+      ->
+[Movimiento registrado]
+
+3.4 Mostrador
+
+[MARIA FERNANDEZ]
+      ->
+[Perfil]
+      ->
++-----------------------------+
+| 4 visitas                   |
+| 150 Bs                      |
+| 150 puntos                  |
+| Nivel: Frecuente            |
++-----------------------------+
+      ->
+[Ver movimientos]
+      ->
+[Ver / canjear recompensa]
+
+3.5 Navegación de rankings
+
+CLIENTES
+   ->
+[Facturación] [Fidelización] [Cuentas por cobrar]
+   ->
+Seleccionar sección
+   ->
+Métrica específica
+   ->
+Decisión empresarial
+
+Regla de diseño:
+Facturación != Deuda
+Fidelización != Crédito
+Saldo a favor != Dinero del negocio
+
+4. MÉTRICAS DE ÉXITO
+====================
+
+4.1 Eficiencia operativa
+
+Medir:
+- tiempo para encontrar un cliente;
+- tiempo para abrir su información;
+- clicks para registrar pago;
+- clicks para recargar;
+- clicks para consultar movimientos;
+- clicks para consultar fidelización.
+
+Especial atención:
+acciones frecuentes deberían resolverse en 1–2 interacciones desde el perfil.
+
+4.2 Éxito de tareas
+
+Medir el porcentaje de usuarios que completan sin abandonar:
+1. Crear Postpago.
+2. Registrar pago.
+3. Encontrar cuánto debe un cliente.
+4. Encontrar el ticket que originó una deuda.
+5. Identificar clientes fidelizables.
+6. Encontrar clientes con deuda.
+
+4.3 Errores de operación
+
+Medir:
+- recargas a no pensionados;
+- intentos de canje en Postpago;
+- selección incorrecta de modalidad;
+- errores de interpretación de saldo;
+- clientes duplicados;
+- movimientos sin ticket visible;
+- clientes sin identificación canónica.
+
+4.4 Adopción del modelo mental
+
+Medir:
+- porcentaje de consultas de deuda realizadas desde la ficha;
+- porcentaje de consultas que requieren navegar por rankings/reportes;
+- porcentaje de Postpago visualizado sin interfaz de fidelización;
+- frecuencia con que se utilizan filtros por segmento.
+
+4.5 Calidad de datos
+
+KPIs:
+- % de clientes con nombre canónico consistente;
+- % de movimientos asociados a customerId válido;
+- % de movimientos con ticket visible;
+- % de clientes con teléfono válido;
+- % de clientes duplicados;
+- % de clientes con modalidad coherente.
+
+4.6 Métrica de negocio principal
+
+La métrica principal propuesta:
+
+"Tiempo necesario para ejecutar correctamente una tarea financiera o administrativa sobre un cliente."
+
+Ejemplo:
+Tarea: cobrar deuda de un Postpago.
+
+Flujo actual:
+buscar -> interpretar saldo -> abrir diálogo -> revisar movimientos
+-> decidir monto -> registrar pago -> verificar
+
+Flujo propuesto:
+buscar -> abrir perfil -> Registrar pago -> confirmar
+
+Comparar:
+- tiempo medio;
+- número de clics;
+- errores;
+- abandonos.
+
+5. RECOMENDACIÓN DE DISEÑO FINAL
+================================
+
+El cambio más importante no es visual; es semántico.
+
+La experiencia debería responder siempre:
+
+¿Quién es este cliente?
+      ->
+¿Qué relación financiera tengo con él?
+      ->
+¿Qué acción corresponde hacer ahora?
+
+Mostrador:
+La respuesta principal es fidelización.
+
+Prepago:
+La respuesta es saldo + consumo + fidelización, sujeto a la decisión de negocio pendiente.
+
+Postpago:
+La respuesta es deuda + límite + cobranza, sin interfaz de fidelización, conforme a la regla de negocio documentada.
+
+DECISIONES DE PRODUCTO QUE QUEDAN PENDIENTES
+=============================================
+
+Antes de convertir esta propuesta en una especificación definitiva deben resolverse:
+
+1. ¿El pensionado PREPAGO mantiene fidelización o no?
+   - Opción A: Mostrador + Prepago tienen fidelización; Postpago no.
+   - Opción B: sólo Mostrador tiene fidelización.
+
+2. ¿Qué hacer con los puntos históricos de Postpago?
+   - Eliminarlos/corregirlos.
+   - O conservarlos como una compensación explícita.
+
+3. ¿El canje de puntos reduce automáticamente el ticket o representa un premio físico/manual?
+
+4. ¿La fidelización para Postpago debe no existir visualmente, en vez de mostrar simplemente 0 puntos?
+
+5. Si un cliente Mostrador pasa a Postpago:
+   - ¿pierde sus puntos históricos?
+   - ¿los conserva?
+   - ¿se congela su fidelización?
+
+CONCLUSIÓN
+==========
+
+La optimización debe priorizar claridad semántica antes que simple reducción de clicks.
+
+La nueva experiencia debe hacer imposible o muy difícil confundir:
+- deuda con gasto;
+- crédito con fidelización;
+- saldo del cliente con ingreso del negocio;
+- Postpago con cliente fidelizable.
+
+El objetivo no es solamente que /customers sea más rápida, sino que cada dato financiero y cada acción tenga un significado inequívoco según el tipo de cliente.

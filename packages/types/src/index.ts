@@ -401,6 +401,72 @@ export const PensionTypeList: PensionType[] = [
   PensionType.POSTPAGO,
 ];
 
+/** Datos mínimos del cliente que decide su elegibilidad a la fidelización.
+ *  Deliberadamente estructural (no un `Customer` de Prisma) para que el
+ *  predicado sea client-safe y usable desde server actions y desde la UI.
+ *
+ *  OJO con `pensionType`: viene con default `PREPAGO` en el esquema, así que
+ *  TODO cliente no pensionado lo tiene guardado como PREPAGO. No significa que
+ *  sea pensionado: eso lo dice `isPension`. La elegibilidad siempre se decide
+ *  por `isPension` primero y `pensionType` solo se mira si es pensionado. */
+export type FidelizableCliente = {
+  isPension: boolean;
+  pensionType?: PensionType | null;
+};
+
+/** Regla central de elegibilidad a la lealtad.
+ *
+ *  Lo que NO puntúa es el consumo a cuenta del pensionado POSTPAGO: su deuda
+ *  diferida ya es su propio beneficio, así que sumarle puntos duplicaría la
+ *  recompensa. Todo lo demás sí puntúa, incluido ese mismo POSTPAGO cuando
+ *  compra y paga en efectivo o QR.
+ *
+ *  Los puntos se ganan al COMPRAR, nunca al mover la cuenta corriente: recargar
+ *  saldo (PREPAGO) o pagar deuda (POSTPAGO) no generan nada, aunque haya plata
+ *  real de por medio. */
+export function isFidelizable(
+  cliente: FidelizableCliente,
+  metodo?: PaymentMethod | null,
+): boolean {
+  if (!cliente.isPension) return true;
+  if (cliente.pensionType !== PensionType.POSTPAGO) return true;
+  // POSTPAGO: fideliza solo si esta vez pagó de verdad en el local.
+  return metodo != null && metodo !== PaymentMethod.PENSION;
+}
+
+/** Clientes que pueden tener lealtad: todo el que no sea un pensionado
+ *  POSTPAGO. OJO: un POSTPAGO sí puede tener puntos (comprando en efectivo/QR),
+ *  así que esto NO lo excluye del ranking; para eso está `fidelizableOrderWhere`.
+ *  Sirve para consultas sobre `Customer` donde no importa el método de pago. */
+export function fidelizableCustomerWhere(): {
+  NOT: { isPension: true; pensionType: PensionType };
+} {
+  return { NOT: { isPension: true, pensionType: PensionType.POSTPAGO } };
+}
+
+/** Filtro de Prisma para los pedidos que SÍ generaron lealtad: todo lo que no
+ *  sea un consumo a cuenta de un pensionado POSTPAGO.
+ *
+ *  El POSTPAGO sigue entrando (tiene puntos y ranking), pero únicamente con
+ *  los pedidos que pagó en efectivo/QR: los cargados a su cuenta no cuentan ni
+ *  como visita, ni como gasto, ni como puntos.
+ *
+ *  Se deriva del mismo enum que `isFidelizable` para que ambas formas no puedan
+ *  divergir. */
+export function fidelizableOrderWhere(): {
+  OR: [
+    { customer: { is: { NOT: { isPension: true; pensionType: PensionType } } } },
+    { paymentMethod: { not: PaymentMethod } },
+  ];
+} {
+  return {
+    OR: [
+      { customer: { is: fidelizableCustomerWhere() } },
+      { paymentMethod: { not: PaymentMethod.PENSION } },
+    ],
+  };
+}
+
 /** Tipos de movimiento de la cuenta corriente (CustomerLedger). */
 export const CustomerLedgerType = {
   RECARGA: "RECARGA",

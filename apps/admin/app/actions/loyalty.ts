@@ -6,6 +6,7 @@ import {
   BenefitMetric,
   CustomerRewardType,
   LoyaltyPeriod,
+  fidelizableOrderWhere,
   type BenefitMetric as BenefitMetricType,
   type CustomerBenefitRuleView,
   type CustomerRankingRow,
@@ -66,6 +67,10 @@ export async function getCustomerRanking(
   let customerIds: string[] | undefined;
   const q = search?.trim();
   if (q) {
+    // El buscador NO filtra por tipo de cuenta: un POSTPAGO puede tener puntos
+    // por sus compras en efectivo/QR, así que tiene que poder buscarse. Si solo
+    // consumió a cuenta, el groupBy de abajo no le devolverá ninguna fila y no
+    // aparecerá en el resultado.
     const matches = await prisma.customer.findMany({
       where: {
         OR: [{ name: { contains: q } }, { phone: { contains: q } }],
@@ -80,6 +85,12 @@ export async function getCustomerRanking(
   const where: Prisma.OrderWhereInput = {
     customerId: { not: null },
     paidAt: gte ? { gte } : { not: null },
+    status: { not: "ANULADO" },
+    // Solo los pedidos que generaron lealtad: el consumo a cuenta de un
+    // pensionado POSTPAGO no computa, ni como visita, ni como gasto, ni como
+    // puntos. Sus compras en efectivo/QR sí. Al ir antes del groupBy, el
+    // `take: 10` arma el top sobre lo que realmente generó lealtad.
+    ...fidelizableOrderWhere(),
     ...(customerIds ? { customerId: { in: customerIds } } : {}),
   };
 

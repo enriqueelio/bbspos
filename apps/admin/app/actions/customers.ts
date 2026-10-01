@@ -161,7 +161,16 @@ export async function updateCustomer(input: {
 /** Abona a la cuenta de un cliente: "Recargar Saldo" si es Prepago o
  *  "Pagar Deuda" si es Postpago. El monto siempre sube el saldo (hacia positivo
  *  o de vuelta hacia 0) y se registra en CustomerLedger para que cuadre como
- *  ingreso real (Efectivo/QR) en el cierre diario. */
+ *  ingreso real (Efectivo/QR) en el cierre diario.
+ *
+ *  El tipo de movimiento se decide por `isPension`, NO solo por `pensionType`:
+ *  el esquema le pone `PREPAGO` por defecto a todos, así que mirar solo
+ *  `pensionType` trataría a un cliente de mostrador como pensionado prepago y le
+ *  marcaría su abono como "recarga de saldo" cuando en realidad está pagando por
+ *  adelantado una cuenta corriente.
+ *
+ *  Ningún abono genera lealtad: los puntos se ganan al comprar, no al mover la
+ *  cuenta. Esto no cambia ningún acumulado de `Customer`. */
 export async function addCustomerFunds(input: {
   customerId: string;
   amount: number;
@@ -180,9 +189,9 @@ export async function addCustomerFunds(input: {
   }
 
   const type =
-    customer.pensionType === PensionType.PREPAGO
-      ? CustomerLedgerType.RECARGA
-      : CustomerLedgerType.PAGO_DEUDA;
+    customer.isPension && customer.pensionType === PensionType.POSTPAGO
+      ? CustomerLedgerType.PAGO_DEUDA
+      : CustomerLedgerType.RECARGA;
 
   await prisma.$transaction([
     prisma.customer.update({

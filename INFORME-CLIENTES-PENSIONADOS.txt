@@ -1,0 +1,550 @@
+================================================================================
+INFORME DE ANALISIS (v3) - PANTALLA /customers (ADMIN)
+Clientes / Pensionados - Flujo de uso y oportunidades de mejora
+================================================================================
+
+Fecha            : 2026-10-01
+Pantalla         : http://localhost:3001/customers
+Base analizada   : packages/db/prisma/dev.db (datos reales, no teoricos)
+Commits base     : 4f3ec59 (local) + ee4bb84 (fix PENSIONADO)
+Spec vigente     : openspec/specs/customer-loyalty/spec.md
+Change           : openspec/changes/excluir-postpago-de-fidelizacion
+
+REGLA DE NEGOCIO VIGENTE (corregida respecto de la v2):
+
+  "La lealtad se gana AL COMPRAR, no al mover la cuenta corriente."
+
+  Aplicada movimiento por movimiento (ver seccion 2.4):
+
+  - Cliente de MOSTRADOR (isPension=false)
+      Puntua con cualquier metodo de pago. Es la poblacion que DEBE
+      fidelizarse.
+
+  - Pensionado PREPAGO (isPension=true, pensionType=PREPAGO)
+      Puntua con cualquier metodo, incluido el consumo de su saldo adelantado.
+      La RECARGA no da puntos: da puntos cuando consume, al comprar.
+
+  - Pensionado POSTPAGO (isPension=true, pensionType=POSTPAGO)
+      NO puntua por lo que consume a cuenta (paymentMethod=PENSION): ese pago
+      diferido ya es su beneficio, y sumarle lealtad seria pagar dos veces.
+      SI puntua cuando compra y paga en efectivo, QR o tarjeta: en ese caso la
+      plata si entra al local.
+
+  - NINGUN abono a la cuenta corriente puntua. Recargar saldo (prepago) y
+      pagar deuda (postpago) mueven plata real pero no son compras: no
+      generan visitas, gasto ni puntos.
+
+  TRAMPA A EVITAR: `pensionType` tiene default "PREPAGO" en el esquema, asi que
+  los clientes de mostrador TAMBIEN lo tienen almacenado. `isPension` va
+  primero, siempre. Un cliente no pensionado NO es un pensionado prepago.
+
+  QUE CAMBIO RESPECTO DE LA v2: la v2 asumia que el POSTPAGO no fideliza en
+  absoluto. Eso era incorrecto: lo excluia de compras que si son venta real.
+
+
+================================================================================
+0. CORRECCION IMPORTANTE RESPECTO AL INFORME v1
+================================================================================
+
+En el informe v1 reporte como BUG-1 (severidad ALTA) que la fidelidad de
+lealtad estaba "desincronizada": Ronald Paz tiene 6 consumos (290 Bs) pero solo
+2 visitas y 70 Bs acumulados. **Ese hallazgo era INCORRECTO y lo retiro.**
+
+LO QUE REALMENTE PASA (verificado contra el historial de Git):
+  - La funcionalidad de lealtad (contadores, puntos, ranking) se introdujo en el
+    commit 90e1f8d del 2026-09-22 a las 13:44 (-0400).
+  - Los 4 primeros pedidos de Ronald (35+95+45+45 = 220 Bs) se cobraron ANTES
+    de que existiera esa logica, asi que nunca pudieron sumar a los contadores.
+  - Los 2 ultimos (45 + 25 = 70 Bs) se cobraron DESPUES, y son exactamente los
+    que si estan en los contadores (2 visitas / 70 Bs / 70 pts).
+  - Conclusion: los contadores estan CORRECTOS para la ventana de tiempo en la
+    que la funcionalidad existe. No hay corrupcion ni desincronizacion.
+
+Por que me equivoque: conte solo que el ledger tenia 6 movimientos y que el
+contador marcaba 2, sin cruzar la fecha de los pedidos contra la fecha del
+commit que introdujo la funcion. El numero "290 vs 70" era una comparacion
+invalida porque mezclaba historico pre-funcional con post-funcional.
+
+Lo que si queda como observacion menor (NO es un bug):
+  Los contadores de lealtad no son retroactivos: un cliente que consuma antes
+  de la fecha del sistema no suma. Es el comportamiento esperado de una funcion
+  nueva. El script de recalculo (A2 en seccion 5) si puede SUBIR contadores,
+  porque los re-evalua contra todos los pedidos pagados y no solo los
+  posteriores a la fecha del sistema.
+
+DESCARTE de otra conclusion del v1 que tampoco se sostiene:
+  - v1 decia "BUG-3: los puntos no tienen efecto economico". Sigue siendo
+    cierto que canjear puntos no descuenta del ticket, pero puede ser
+    intencional si el canje es un premio fisico que entrega el admin. Se
+    reformula como pregunta de negocio, no como bug (ver seccion 6).
+
+
+================================================================================
+1. RESUMEN EJECUTIVO
+================================================================================
+
+La pantalla funciona y el fix de PENSIONADO esta bien aplicado. El problema de
+fondo es de DISENO, y la regla de negocio correcta lo clarifies.
+
+La tabla `Customer` mezcla tres poblaciones que deben comportarse distinto:
+
+  A) MOSTRADOR (isPension=false)
+     Solo lealtad. Pagan efectivo/QR en el momento. Ganan puntos y nivel.
+     Es la poblacion que DEBE fidelizarse.
+
+  B) PENSIONADO PREPAGO (isPension=true, pensionType=PREPAGO)
+     Tiene saldo a favor. Recarga en admin, consume en caja. La recarga NO da
+     puntos (es mover plata, no comprar), pero el consumo SI: al pagar con su
+     saldo esta haciendo una compra en el local, y la plata ya entro cuando
+     recargo.
+
+  C) PENSIONADO POSTPAGO (isPension=true, pensionType=POSTPAGO)
+     Tiene deuda. El negocio le financia el consumo y espera el pago. Por eso
+     el consumo a cuenta NO le da puntos: el postpago es su premio. Pero si
+     compra y paga en efectivo/QR, esa plata entra al local y SI le da puntos.
+
+EL DEFECTO QUE SE ESTABA midiendo EN DATOS REALES:
+  El sistema de lealtad (contadores, puntos, niveles, ranking, canje) no
+  distingue "cuanto compro" de "cuanto me deben". La consecuencia medida era
+  que el unico postpago (Ronald Paz) estaba PRIMERO en el ranking de "Clientes
+  frecuentes" con 290 Bs de "gasto": plata que NO pago, es deuda que el negocio
+  tiene que cobrar. El ranking inflaba al cliente que mas le cuesta a la
+  empresa. Y la regla de la v2 (excluir al postpago entero) era el extremo
+  opuesto: escondia a un postpago que si compro pagando de verdad.
+
+HALLAZGOS DE ESTA v3:
+
+  RESUELTOS en el change `excluir-postpago-de-fidelizacion`:
+  - HALLAZGO-A: la acumulacion decide por movimiento (cliente + metodo), no
+    solo por cliente. El guard esta dentro de la propia funcion.
+  - HALLAZGO-B: el ranking cuenta solo pedidos que generaron lealtad, y excluye
+    anulados.
+  - HALLAZGO-C: el nivel se calcula sobre los mismos pedidos.
+  - HALLAZGO-D: el canje valida solo el saldo, sin restringir por modalidad.
+
+  ABIERTOS:
+  - TRAMPA-1 (ALTO): `pensionType` tiene default PREPAGO y no puede
+    representar la realidad. Ver seccion 4.
+  - HALLAZGO-E (MEDIO): el admin no ve la consecuencia de crear un POSTPAGO.
+  - HALLAZGO-F (MEDIO): semantica de saldo confusa entre prepago y postpago.
+  - BUG-2 (MEDIO): customerName desincronizado en pedidos.
+  - BUG-4 (MEDIO, PARCIALMENTE mitigado): plata de mostrador sin poder cobrar.
+  - BUG-5/6/7 (BAJO): escala, archivado, normalizacion de nombre.
+
+
+================================================================================
+2. QUE HACE LA PANTALLA HOY
+================================================================================
+
+2.1 CARGA DE DATOS
+--------------------------------------------------------------------------------
+Archivo: apps/admin/app/(dashboard)/customers/page.tsx (linea 13-18)
+  - `prisma.customer.findMany()` con orderBy name asc.
+  - SIN where: trae pensionados y mostrador juntos, sin distingoer.
+  - SIN paginacion.
+  - `include: { ledger: { take: 100 } }` por cliente (linea 16): carga hasta
+    100 movimientos de cada cliente aunque no se veran hasta abrir el dialogo.
+    A 200 clientes son hasta 20.000 filas en la carga inicial.
+
+2.2 COLUMNAS DE LA TABLA (customers-client.tsx, linea 110-210)
+  Nombre | CI | Telefono | Modalidad | Saldo | Limite (Postpago) | Acciones
+
+  - La columna "Modalidad" usa el Badge pensionType si isPension, o el texto
+    gris "Mostrador" si no (linea 144-156). Distincion visual sutil.
+  - La columna "Saldo" pinta verde si >0 (a favor), rojo si <0 (deuda), gris si
+    0 (linea 242-258). Correcto visualmente, pero no distingue "plata del
+    cliente" (prepago) de "plata que nos debe" (postpago) en la etiqueta, solo
+    en el signo.
+  - No hay columna de puntos, nivel, ultima visita ni total gastado. Esa
+    informacion vive en la pantalla de ranking, obligando al admin a saltar
+    entre dos paginas para ver el panorama completo de un cliente.
+
+2.3 DIALOGOS
+--------------------------------------------------------------------------------
+  CustomerFormDialog (linea 260)
+    - Toggle "Es pensionado" (linea 366-385), arranca MARCADO al crear.
+    - Select "Modalidad" (PREPAGO/POSTPAGO) visible solo si isPension.
+    - Input "Limite de credito" visible solo si POSTPAGO.
+    - NO advierte de la consecuencia de la modalidad sobre la lealtad.
+
+  FundDialog (linea 447)
+    - "Recargar Saldo" (PREPAGO) / "Pagar Deuda" (POSTPAGO). El titulo y el
+      tipo de movimiento dependian de `pensionType` SOLO, que por defecto es
+      PREPAGO para todos. Corregido: `addCustomerFunds` decide ahora mirando
+      `isPension` primero (customers.ts:182-185).
+    - Numpad + Efectivo/QR. Transaccion: balance += monto, ledger += RECARGA o
+      PAGO_DEUDA (customers.ts:187-200).
+    - Ningun abono genera puntos ni toca los contadores de lealtad. Correcto
+      bajo la regla vigente: los puntos se ganan al comprar, no al mover la
+      cuenta corriente.
+
+  LedgerDialog (linea 618)
+    - Muestra los movimientos YA CARGADOS en memoria (max 100). Sin paginacion
+      ni indicador de "hay mas".
+    - No muestra el # de pedido (orderId) aunque viene en el tipo. Para un
+      pensionado cada CONSUMO es un pedido; ver solo "Consumo -45 Bs" sin el
+      ticket es menos util.
+    - No muestra saldo acumulado tras cada movimiento.
+
+2.4 EL ROL DE PENSIONADO EN LA LEALTAD (el punto critico)
+--------------------------------------------------------------------------------
+Este es el punto donde la regla se aplica. ANTES de la correccion, al cobrar a
+cuenta en cajero (acceptPensionOrder, orders.ts), la transaccion final incljia:
+
+  await accumulateCustomerLoyalty(tx, customerId, total, paidAt);  // orders.ts:404
+
+Y accumulateCustomerLoyalty hacia, sin mirar nada:
+
+  totalVisits += 1
+  totalSpent  += total
+  points      += total
+  lastVisitAt  = when
+
+Un POSTPAGO acumulaba exactamente igual que un PREPAGO o un mostrador. Este es
+el HALLAZGO-A. La version previa del arreglo (la de la v2) lo resolvia
+excluyendo al POSTPAGO entero, lo cual era incorrecto.
+
+COMO QUEDA AHORA:
+
+  1) Hay UNA regla compartida, en @bbspos/types, que decide si un movimiento
+     genera lealtad mirando cliente Y metodo de pago:
+
+       isFidelizable(cliente, metodo)
+         si !isPension              -> true    (mostrador, con o sin pensionType)
+         si pensionType != POSTPAGO -> true    (prepago)
+         si es POSTPAGO             -> metodo != PENSION
+
+  2) El guard (paso 1) esta DENTRO de accumulateCustomerLoyalty, no en el
+     llamador. Cualquiera que escriba el codigo no puede saltarselo.
+
+  3) Las dos rutas de cobro pasan su metodo: acceptOrder pasa el que eligio el
+     usuario; acceptPensionOrder pasa PENSION (siempre a cuenta).
+
+  4) El ranking y el nivel de lealtad filtran por PEDIDO que puntua, no por
+     tipo de cliente, con el mismo criterio (`fidelizableOrderWhere`). Un
+     POSTPAGO que solo consume a cuenta no aparece; uno que compro pagando si.
+
+  5) El buscador del ranking NO filtra por tipo de cuenta, precisamente para
+     que ese POSTPAGO que si compro pagando se pueda encontrar.
+
+Consecuencia PRACTICA para el admin: un pensionado POSTPAGO ya NO desaparece
+del sistema de lealtad. Tiene saldo, tiene deuda, y puede tener puntos, pero
+esos puntos los gano pagando, no fiando. La UI de /customers todavia no
+distingue esa diferencia (HALLAZGO-E).
+
+
+================================================================================
+3. DATOS REALES (dev.db, 2026-10-01) - AUDITADOS
+================================================================================
+
+3.1 POBLACION
+  Total clientes: 4  |  Mostrador: 3  |  Pensionados: 1 (POSTPAGO)
+  Reglas de lealtad activas (todas):
+    - Cliente Habitual | VISITS_MONTH | >= 5 visitas
+    - Frecuente        | SPEND_MONTH  | >= 150 Bs
+    - VIP              | SPEND_MONTH  | >= 300 Bs
+    - Amante del Te    | POINTS       | >= 500 pts
+
+3.2 AUDITIA DE CONTADORES CONTRA PEDIDOS REALES
+  Estado ANTES de la limpieza (por que los contadores parecian mal):
+  Nombre                  Tipo      Contador BD      Pedidos reales    Cuadra
+  --------------------------------------------------------------------------------
+  ANDRES                  MOSTRADOR  1v / 45Bs / 45p  1 pedido / 45Bs   SI
+  MARIA FERNANDEZ LOPEZ   MOSTRADOR  4v / 150Bs /150p 4 pedidos/ 150Bs  SI
+  NATALIA COSSIO          MOSTRADOR  1v / 25Bs / 25p  1 pedido / 25Bs   SI
+  Ronald Paz              POSTPAGO   2v / 70Bs / 70p  6 pedidos/ 290Bs  (ver nota)
+
+  NOTA Ronald: los 4 pedidos mas antiguos se cobraron antes del commit que
+  introdujo la lealtad (90e1f8d, 2026-09-22 13:44). Los 2 contados son
+  post-feature. La diferencia 290 vs 70 es de ventana temporal, NO un bug
+  (ver seccion 0).
+
+  Estado DESPUES de la limpieza (ya aplicada, con autorizacion del usuario):
+  Nombre                  Tipo      Contador BD      Pedidos que puntuan
+  --------------------------------------------------------------------------------
+  ANDRES                  MOSTRADOR  1v / 45Bs / 45p  1 pedido / 45Bs
+  MARIA FERNANDEZ LOPEZ   MOSTRADOR  4v / 150Bs /150p 4 pedidos/ 150Bs
+  NATALIA COSSIO          MOSTRADOR  1v / 25Bs / 25p  1 pedido / 25Bs
+  Ronald Paz              POSTPAGO   0v /  0Bs /  0p  0 (los 6 son PENSION)
+
+  IMPORTANTE: la limpieza NO discrimina por ser POSTPAGO. Recalcula cada cliente
+  desde los pedidos que generaron lealtad. A Ronald le quedan 0 porque SUS 6
+  pedidos fueron todos a cuenta (PENSION), no porque sea postpago. Si manana
+  compra en efectivo, le suma como a cualquier otro.
+
+3.3 IMPACTO DE LA REGLA EN LOS DATOS ACTUALES
+  - Los 3 mostradores no cambian: ya puntuaban solo por compras.
+  - Ronald Paz (unico POSTPAGO) queda en 0/0/0 y sin ultima visita, porque sus
+    6 pedidos fueron todos PENSION. Correcto bajo la regla vigente.
+  - Su saldo de -290 Bs (deuda) NO se toco: es el saldo de la cuenta corriente,
+    no de lealtad. Sus 6 movimientos CONSUMO siguen en el ledger. Los 85 pedidos
+    y los canjes (0) tampoco se tocaron.
+  - Si su deuda de 290 Bs se pagara con efectivo, ese pago NO generaria puntos
+    (es pagar deuda, no comprar). Solo generaria puntos si Ronald hiciera una
+    compra nueva y la pagara.
+
+3.4 INDICADORES DE SALUD (todo OK salvo lo de lealtad)
+  - Postpago sin limite de credito: 0 (bien)
+  - Mostrador con saldo != 0: 0 (bien)
+  - Telefonos duplicados: 0 (bien)
+  - Mostrador cobrado en PENSION: 0 (bien)
+  - Postpago cobrado en efectivo/QR (deberia ser raro, es legitimo): 0
+  - Clientes con deuda: 1 (Ronald, -290 Bs)
+  - Canjes de puntos: 0
+  - Cliente sin telefono: 1 (ANDRES) -> no se autocompleta en el POS
+
+
+================================================================================
+4. HALLAZGOS (ordenados por severidad)
+================================================================================
+
+--- TRAMPA-1 (ALTO, NUEVO): pensionType no representa la realidad -------------
+  Donde: packages/db/prisma/schema.prisma (Customer.pensionType @default(PREPAGO))
+  Que pasa: el esquema obliga a que TODO cliente tenga pensionType, y el valor
+  por defecto es PREPAGO. Los 3 clientes de mostrador guardan "PREPAGO" aunque
+  no sean pensionados. Cualquier consulta que mire pensionType sin mirar antes
+  isPension va a tratar a un cliente normal como pensionado prepago. No es un
+  bug de una linea: es una invitacion a escribir el bug. Concretamente, asi se
+  confundo antes un mostrador con un prepago al elegir el tipo de movimiento del
+  abono (ver BUG-4).
+  MITIGADO donde mas duele: toda la logica de lealtad mira `isPension` primero,
+  y `addCustomerFunds` ya no decide el tipo de movimiento por `pensionType`.
+  ACCION (futura): hacer `pensionType` nullable, o quitarle el default, en una
+  migracion. Es la unica forma de eliminar la trampa de raiz. Requiere decidir
+  que se hace con los valores "PREPAGO" que ya tienen los clientes de mostrador.
+
+--- HALLAZGO-A (ALTO) [RESUELTO]: la acumulacion no miraba el metodo de pago --
+  Que pasaba: cada vez que se cobraba a cuenta, un POSTPAGO sumaba +1 visita,
+  +total gastado y +total puntos, y su nivel se inflaba por deuda.
+  RESUELTO: la regla es ahora por movimiento (`isFidelizable`), el guard esta
+  dentro de `accumulateCustomerLoyalty`, y las dos rutas de cobro pasan su
+  metodo. Ver seccion 2.4.
+
+--- HALLAZGO-B (ALTO) [RESUELTO]: el ranking contaba DEUDA como "gasto" --------
+  Que pasaba: `getCustomerRanking` sumaba `order.total` de todo pedido pagado,
+  incluyendo PENSION de postpago. Ronald era #1 con 290 Bs "gastados": plata que
+  el negocio aun no habia cobrado. La pantalla "Clientes frecuentes" respondia
+  "quien me debe mas" cuando deberia responder "quien factura mas".
+  RESUELTO: el ranking filtra por pedido que genera lealtad
+  (`fidelizableOrderWhere`) antes del `groupBy`, asi que el top 10 se arma sobre
+  lo que realmente facturo. Los anulados tambien quedan fuera
+  (`status != ANULADO`).
+  PENDIENTE (no resuelto aqui): separar visualmente "Clientes que facturan" de
+  "Cuentas por cobrar". Para un postpago la metrica relevante no es "gasto" sino
+  "deuda actual" y "tiempo de mora", y hoy no hay ninguna pantalla que lo
+  muestre. La regla de lealtad no subsume esto: son dos preguntas distintas.
+
+--- HALLAZGO-C (MEDIO) [RESUELTO]: el nivel se ganaba con deuda -----------------
+  Que pasaba: `levelNameOf` calculaba visitas/gasto del mes sobre todo pedido
+  pagado, incluidos los PENSION del postpago. Ronald quedaba con nivel
+  "Frecuente" por 290 Bs de deuda.
+  RESUELTO: el `aggregate` del mes lleva el mismo filtro que el ranking. El
+  consumo a cuenta ya no le sube de nivel a nadie, porque tampoco le sumo
+  puntos. Sus compras en efectivo si se lo pueden subir.
+
+--- HALLAZGO-D (MEDIO) [RESUELTO por diseno]: canje de puntos --------------------
+  Que pasaba: `redeemCustomerPoints` validaba solo el saldo, sin restriccion de
+  modalidad. La v2 propuso BLOQUEARLO para el postpago.
+  DECIDIDO: no se bloquea. Un POSTPAGO puede tener puntos validos (los que gano
+  pagando), y quitarle el canje seria arbitrario. El canje valida saldo y nada
+  mas.
+  PENDIENTE: que se puede canjear, si caduca, y si descuenta del ticket sigue
+  sin definirse (ver seccion 6).
+
+--- HALLAZGO-E (MEDIO): el admin no ve la consecuencia de crear un POSTPAGO ------
+  Donde: customers-client.tsx:366-420 (formulario)
+  Que pasa: el formulario deja elegir POSTPAGO sin ninguna nota de como afecta a
+  la lealtad. Y la nota que habria que poner ya no es la trivial ("no
+  fideliza"): es matizada (no gana puntos por lo que consume a cuenta, pero si
+  si compra pagando en efectivo/QR).
+  ACCION: al elegir POSTPAGO, nota inline: "El pensionado Postpago no acumula
+  puntos ni nivel por lo que consume a cuenta (su beneficio es el pago
+  diferido). Si compra pagando en efectivo o QR, si suma."
+
+--- HALLAZGO-F (MEDIO): semantica de saldo confusa entre prepago y postpago ----
+  Donde: customers-client.tsx:242-258 (BalanceCell), linea 158-160
+  Que pasa: saldo >0 = "a favor" (prepago, plata del cliente), saldo <0 = "deuda"
+  (postpago, plata que nos deben). La tabla no rotula explicitamente cuyo es
+  cuyo; el admin debe inferirlo de la modalidad y del signo. Y el dialogo de
+  movimientos no muestra "saldo resultante".
+  ACCION: rotular la columna segun modalidad ("Saldo a favor" / "Deuda") y
+  mostrar saldo acumulado en el ledger.
+
+--- BUG-2 (MEDIO): customerName desincronizado ---------------------------------
+  Evidencia: los 6 pedidos de Ronald guardan customerName = "" / "carlos" /
+  "NARDY" / "TOLY" / "RONALD PAZ" / "RONALD". Es texto libre; la FK real es
+  customerId. Reportes por nombre darian 5 "personas" distintas. Ademas el
+  pensionado con deuda es el mas propenso a este desorden (se carga como alias).
+  ACCION: al cobrar a cuenta, copiar el nombre canonico del Customer o no usar
+  customerName en pedidos con customerId.
+
+--- BUG-4 (MEDIO) [PARCIALMENTE mitigado]: plata de mostrador sin poder cobrar --
+  Donde: apps/admin/app/actions/customers.ts:165-203
+  Que pasaba: la recarga/abono no comprobaba `isPension`, y el tipo de movimiento
+  se derivaba de `pensionType` (PREPAGO por default para todos). Un mostrador
+  podia recibir "Recargar Saldo": el saldo sube y entra al reporte diario, pero
+  el cajero nunca lo podra cobrar (su lista de clientes filtra `isPension`).
+  Plata atrapada.
+  MITIGADO: `addCustomerFunds` ahora decide RECARGA vs PAGO_DEUDA mirando
+  `isPension` primero, y el titulo del dialogo ya no se apoya en un valor por
+  defecto enganoso. El mostrador sigue pudiendo recibir un abono (que es lo
+  logico: esta pagando por adelantado), pero su abono se registra como RECARGA
+  de forma explicita, no por accidente del default.
+  PENDIENTE (esto es lo importante): sigue sin resolverse QUIEN puede tener
+  saldo a favor. Si un mostrador puede, el cajero tiene que poder cobrarle de
+  ese saldo (hoy su lista filtra `isPension` y no lo encuentra). Si no puede,
+  el boton de recarga debe ocultarse para mostrador. Es una pregunta de negocio,
+  no un bug de codigo.
+
+--- BUG-5/6/7 (BAJO): escala, archivado, normalizacion -------------------------
+  - Sin buscador ni paginacion en /customers; ledger limitado a 100 sin aviso.
+  - No hay archivado/baja de clientes (la tabla crece sin limite).
+  - `registerCustomerAtPos` guarda el nombre en UPPERCASE; admin lo guarda
+    natural. Un cliente creado en POS vs admin se ve distinto.
+
+--- OBSERVACION (NO bug): canje de puntos sin efecto en el ticket --------------
+  `redeemCustomerPoints` solo decrementa `points` y escribe un `CustomerReward`;
+  no descuenta el total de ningun pedido. Si el canje es "premio fisico que
+  entrega el admin", es correcto y solo falta que la UI lo diga. Si se pretendia
+  descuento automatico, falta implementarlo. Ver seccion 6.
+
+
+================================================================================
+5. PROPUESTAS DE MEJORA
+================================================================================
+
+--- PRIORIDAD ALTA: LA REGLA DE LEALTAD [COMPLETADA] -------------------------
+  A1. [HECHO] Regla unica de elegibilidad por movimiento en @bbspos/types
+      (`isFidelizable`), con el guard dentro de `accumulateCustomerLoyalty` y
+      el metodo de pago pasado desde las dos rutas de cobro.
+  A2. [HECHO] Script de recalculo `pnpm --filter @bbspos/db
+      fix:postpago-loyalty` (dry-run + `--apply`). Recalcula los cuatro campos
+      de lealtad de cada cliente desde los pedidos que generaron lealtad. Dry-run
+      por defecto; la limpieza se aplico con autorizacion del usuario. Es
+      idempotente y puede SUBIR contadores (el programa no es retroactivo).
+  A3. [HECHO] Ranking sobre pedidos fidelizables y sin anulados.
+  A4. [HECHO] Nivel de lealtad sobre los mismos pedidos.
+  A5. [HECHO] Canje desbloqueado: valida solo el saldo.
+  A6. [HECHO] `addCustomerFunds` decide el tipo de movimiento por `isPension`.
+
+--- PRIORIDAD MEDIA: diseno de pantalla y coherencia -------------------------
+  B1. Traducir la regla en la UI (HALLAZGO-E, F).
+      - Formulario: al marcar POSTPAGO, la nota inline matizada de HALLAZGO-E.
+      - Tabla: rotular saldo como "Saldo a favor" (prepago) vs "Deuda"
+        (postpago).
+  B2. [PARCIAL] Decidir y cerrar BUG-4: quien puede tener saldo a favor y como
+      lo consume el cajero.
+  B3. Corregir `customerName` en pedidos a cuenta (BUG-2).
+  B4. Definir el efecto del canje (ver pregunta 3 de la seccion 6).
+  B5. Anadir buscador/paginacion a /customers y mostrar puntos/nivel/ultima
+      visita tambien en esta tabla (hoy solo en el ranking).
+  B6. LedgerDialog: mostrar # de pedido (daySeq ?? seq) y saldo resultante.
+  B7. Pantalla de cuentas por cobrar: deuda y antiguedad por pensionado. El
+      ranking de lealtad ya no la suple.
+
+--- PRIORIDAD BAJA: robustez --------------------------------------------------
+  C1. Archivado de clientes en vez de acumular filas para siempre.
+  C2. Normalizar nombre (mayusculas vs natural) entre POS y admin.
+  C3. Acciones masivas (recargar varios, archivar varios).
+
+
+================================================================================
+6. PREGUNTAS A RESOLVER
+================================================================================
+
+RESUELTAS:
+
+  1. (era CRITICA) El pensionado PREPAGO mantiene fidelizacion?
+     RESPUESTA: SI, y por una razon concreta: la recarga NO da puntos, pero el
+     consumo de su saldo SI. Los puntos se ganan al comprar. Si el prepago
+     consumiera con la regla del postpago, la recompensa seria exclusivamente
+     para quien paga en el momento y el sistema de cuentas no tendria ningun
+     incentivo. Ver seccion 1-B y 2.4.
+
+  2. (era CRITICA) El POSTPAGO no fideliza en absoluto?
+     RESPUESTA: NO, solo por su consumo a cuenta. Si compra y paga en
+     efectivo/QR, puntua como cualquier otro. Excluirlo entero habria escondido
+     venta real y habria roto la logica de "puntos al comprar".
+
+  3. Pagar la deuda con efectivo/QR da puntos?
+     RESPUESTA: NO. Es un abono a la cuenta corriente, no una compra. Mismo
+     criterio que la recarga del prepago.
+
+  4. Un postpago puede canjear los puntos que acumulo?
+     RESPUESTA: SI, si tiene saldo. Tiene puntos validos porque los gano
+     pagando.
+
+ABIERTAS:
+
+  5. ¿El canje de puntos debe rebajar el ticket automaticamente, o es un premio
+     fisico que el admin entrega? Define el modelo antes de tocar canje.
+
+  6. ¿Quien puede tener saldo a favor (es decir, quien puede "recargar")? Si un
+     mostrador puede, el cajero tiene que poder cobrarle de ese saldo; hoy su
+     lista filtra `isPension`. Es la parte que B4 dejo abierta.
+
+  7. ¿Un cliente de mostrador puede "ascender" a pensionado? Si un mostrador
+     muy leal se vuelve postpago, ¿pierde sus puntos historicos? ¿O el ascenso
+     es solo un cambio de cuenta corriente y conserva lealtad? La respuesta
+     probablemente sea "conserva", porque los puntos ya se ganaron comprando,
+     pero hay que decidirlo y hay que decidir que pasa con los puntos FUTUROS.
+
+  8. ¿Que pasa con la loyalty de un pensionado cuando su saldo queda a favor
+     (prepago) o su deuda se cancela? La regla responde "solo por lo que
+     compre pagando", pero la UI y los informes de deuda no lo dicen.
+
+  9. ¿Se quiere una pantalla de cuentas por cobrar aparte? Ver B7.
+
+
+================================================================================
+7. DIAGRAMA DEL FLUJO DE LEALTAD (estado actual)
+================================================================================
+
+COBRO EN CAJERO, con cliente, efectivo/QR (acceptOrder):
+  transaccion:
+    order.paidAt = now; order.paymentMethod = EFECTIVO | QR | TARJETA
+    accumulateCustomerLoyalty(tx, cliente, total, paidAt, metodo)
+      -> isFidelizable: mostrador SI / prepago SI / postpago SI
+      -> suma visitas, gasto y puntos.  [PUNTA]
+
+COBRO EN CAJERO, a cuenta (acceptPensionOrder):
+  transaccion:
+    balance = nextBalance
+    ledger  += CONSUMO
+    order.paidAt = now; order.paymentMethod = PENSION
+    accumulateCustomerLoyalty(tx, cliente, total, paidAt, PENSION)
+      -> isFidelizable: mostrador SI / prepago SI / postpago NO
+      -> el postpago NO suma nada.  [CORTE]
+      (Nota: en la practica acceptPensionOrder solo se usa para pensionados.)
+
+ABONO A LA CUENTA (admin, addCustomerFunds):
+  balance += monto; ledger += RECARGA | PAGO_DEUDA
+  NO toca puntos, visitas, gasto ni ultima visita.  [FUERA por diseno]
+
+PEDIDO SIN CLIENTE:
+  no acumula nada.  (Sin customerId no hay a quien creditar.)
+
+LECTURA DE NIVEL (levelNameOf):
+  visitas/gasto del mes (mes en America/La_Paz) sobre pedidos pagados, no
+  anulados y FIDELIZABLES.  [CORTE aplicado]
+  El consumo a cuenta de un postpago no cuenta; sus compras en efectivo si.
+
+RANKING (getCustomerRanking):
+  suma order.total de pedidos pagados, no anulados y FIDELIZABLES, agrupado por
+  customerId.  [CORTE aplicado]
+  El buscador devuelve cualquier coincidencia (incluidos postpago) y es el
+  groupBy el que deja fuera a quien solo consumio a cuenta.
+
+CANJE (redeemCustomerPoints):
+  valida saldo >= puntos; descuenta puntos y escribe CustomerReward.
+  No toca el ticket.  [sin restriccion de modalidad]
+
+COHERENCIA: el reporte diario ya separa "ingreso real" de "consumo a cuenta"
+(RECARGA/PAGO_DEUDA entran a caja, CONSUMO no). Con este change, la separacion
+se extiende al ambito de la fidelizacion: solo lo que entra como venta genera
+lealtad.
+
+
+================================================================================
+FIN DEL INFORME v3
+================================================================================

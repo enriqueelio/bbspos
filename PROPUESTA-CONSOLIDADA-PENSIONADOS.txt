@@ -1,0 +1,485 @@
+================================================================================
+PROPUESTA CONSOLIDADA - MODULO DE LEALTAD Y PENSIONADOS (v2)
+Analisis comparativo de gen.md, net.txt y gpt.txt + verificacion en codigo
+================================================================================
+
+Fecha        : 2026-10-01
+Pantalla     : /customers (admin) y su espejo en /customers-ranking
+Base         : packages/db/prisma/dev.db (datos reales auditados)
+Archivos     : indicaciones/pen/gen.md, net.txt, gpt.txt
+Spec         : openspec/specs/customer-loyalty/spec.md
+Change       : openspec/changes/excluir-postpago-de-fidelizacion
+Estado       : FASES 0, 1 y 2 IMPLEMENTADAS. FASES 3 (parcial), 4-6 pendientes.
+
+REGLA FINAL VIGENTE (corrige la regla de la v1 de este documento):
+
+  "La lealtad se gana AL COMPRAR, no al mover la cuenta corriente."
+  Se decide por MOVIMIENTO (cliente + metodo de pago), no por tipo de cliente.
+
+    Mostrador (isPension=false)   -> puntua con cualquier metodo
+    PREPAGO                       -> puntua con cualquier metodo (incluido el
+                                     consumo de su saldo). La recarga NO.
+    POSTPAGO                      -> NO puntua al consumir a cuenta (PENSION);
+                                     SI puntua si compra pagando efectivo/QR/
+                                     tarjeta.
+    Recarga (prepago)             -> nunca puntua
+    Pago de deuda (postpago)      -> nunca puntua
+
+  Ademas: `isPension` va SIEMPRE primero. `pensionType` tiene default "PREPAGO"
+  en el esquema, asi que los clientes de mostrador tambien lo tienen
+  almacenado y no son pensionados prepago.
+
+  QUE CAMBIO RESPECTO DE LA v1 DE ESTE DOCUMENTO: los tres documentos de
+  indicaciones/pen y la v1 de esta propuesta coinciden en "el postpago no tiene
+  fidelizacion". Eso es incorrecto por exceso: excluye tambien las compras que
+  el postpago paga en el mostrador, que SI son venta real. La regla correcta es
+  por metodo de pago. Ver seccion 2, ERROR-1.
+
+
+================================================================================
+1. QUE DICEN LOS TRES DOCUMENTOS (COMPARACION, sin cambios)
+================================================================================
+
+Los tres coinciden en el nucleo. gen.md es el mas preciso y accionable; net.txt
+es el mas UX; gpt.txt es el mas exhaustivo en alcance pero el mas costoso.
+
+  TEMA                        gen.md    net.txt   gpt.txt
+  -----------------------------------------------------------
+  Excluir postpago de lealtad   SI        SI        SI
+  Corregir ranking              SI        SI        SI
+  Alerta inline al elegir PP    SI        SI        SI
+  Badge "sin fidelizacion"      SI        (parcial) SI
+  Bloquear addCustomerFunds     SI        SI        SI
+  Ledger con orderId            SI        SI        SI
+  Script fix:postpago-loyalty   SI        SI        SI
+  Bloquear canje en postpago    SI        SI        (via UI)
+  Corregir customerName         NO        SI        SI
+  Segmentar en 3 tabs           NO        SI        SI
+  Vista de detalle/ficha        NO        parcial   SI
+  3 rankings separados          NO        NO        SI
+  Filtros/buscador              NO        SI        SI
+  Paginacion / carga bajo demanda NO     SI        SI
+  Dias de mora                  NO        SI        SI
+  KPI medibles                  SI        SI        SI
+
+1.1 ACUERDO TOTAL DE LOS TRES DOCUMENTOS
+  - El postpago NO acumula puntos/visitas/gasto/nivel.        [CORREGIDO: solo
+    por su consumo a cuenta; si compra pagando, SI acumula]
+  - El ranking no debe contar deuda postpaga como "gasto".     [CORRECTO]
+  - El canje de puntos se bloquea para postpago.               [CORREGIDO: no se
+    bloquea. Tiene puntos validos porque los gano pagando.]
+  - addCustomerFunds se bloquea para no-pensionados.           [CORREGIDO: no se
+    bloqueo. Ver ERROR-3/Pregunta abierta.]
+  - El formulario avisa al elegir POSTPAGO que no hay fidelizacion.
+    [CORREGIDO: el aviso debe ser matizado.]
+  - Script de correccion para los contadores ya acumulados.    [CORRECTO]
+  - PREPAGO SI mantiene lealtad.                               [CORRECTO]
+
+  Nota sobre el acuerdo: 3 de las 7 conclusiones del "acuerdo total" estaban
+  mal. Coincidir no es estar bien, y el error venia de no separar "consumo a
+  cuenta" de "compra que se paga".
+
+1.2 DIVERGENCIAS RELEVANTES
+  a) ALCANCE DE LA UI
+     - gen.md: cambio minimo (badge + alerta). Bajo riesgo, entrega rapido.
+     - net.txt: 3 tabs (Por cobrar / Saldos / Mostrador). Punto medio.
+     - gpt.txt: 3 tabs + ficha de detalle + 3 rankings + filtros + mora.
+       Es un proyecto de semanas, no un fix.
+
+  b) RANKING
+     - gen.md/net.txt/gpt.txt proponen SEPARAR el ranking.
+     - gpt.txt llega mas lejos: 3 rankings (Facturacion / Fidelizacion /
+       Cuentas por cobrar).
+     - Ninguno define si el PREPAGO entra al ranking de "facturacion".
+
+  c) ORDEN DE IMPLEMENTACION
+     - Ninguno de los tres ordena las fases ni define dependencias. Esto es un
+       hueco importante (ver seccion 5).
+
+
+================================================================================
+2. ERRORES TECNICOS QUE LOS TRES DOCUMENTOS NO DETECTARON
+================================================================================
+
+Verifique cada punto ejecutando consultas contra dev.db y leyendo el codigo.
+
+--- ERROR-1 (GRAVE): el filtro de ranking proposed expulsa al PREPAGO --------
+  Lo que proponen (net.txt, linea 74):
+      getCustomerRanking -> WHERE paymentMethod != PENSION
+                         OR customer.pensionType != POSTPAGO
+
+  El problema: un PREPAGO consume contra su saldo, asi que su pedido TIENE
+  paymentMethod = "PENSION". Es indistinguible del POSTPAGO por el metodo de
+  pago; la unica diferencia es pensionType.
+
+  Dato real (verificado): de los 6 pedidos PENSION, los 6 son de Ronald Paz,
+  que es POSTPAGO. Un PREPAGO generaria pedidos PENSION identicos.
+
+  REGLA CORRECTA (v1 de esta propuesta, INCOMPLETA):
+      "la exclusion es por pensionType del cliente, nunca por paymentMethod"
+  Eso arregla el sintoma pero rompe la regla de negocio: excluye al postpago de
+  las compras que paga en efectivo, que SI son venta.
+
+  REGLA CORRECTA (v2, la vigente):
+      La exclusion combina las DOS dimensiones, en un filtro de PEDIDO:
+
+        order.puntua  <=>  cliente NO es pensionado
+                          O  pedido NO se cobro con PENSION
+
+      Escrito como `fidelizableOrderWhere()`:
+        OR: [
+          { customer: { is: { NOT: { isPension: true, pensionType: POSTPAGO } } } },
+          { paymentMethod: { not: PENSION } },
+        ]
+
+  Comprobacion de que hace lo correcto en los tres casos:
+        Mostrador comprando a cuenta -> 1er termino -> puntua.
+        PREPAGO consumiendo saldo      -> 1er termino -> puntua.
+        POSTPAGO consumiendo a cuenta  -> ninguno     -> NO puntua.
+        POSTPAGO comprando en efectivo -> 2do termino -> puntua.
+  Ni por cliente solo (expulsa al postpago que compro) ni por metodo solo
+  (expulsa al prepago). Hacen falta las dos.
+
+  NOTA: en la practica `acceptPensionOrder` solo se usa con pensionados, asi que
+  el primer termino es el que opera para mostradores reales.
+
+--- ERROR-2 (GRAVE): el guard debe estar DENTRO de la funcion de acumulacion ---
+  Los tres documentos dicen "el ranking suma deuda postpaga como gasto". Cierto.
+  Pero el problema de fondo es mas amplio: `accumulateCustomerLoyalty` se llama
+  desde DOS sitios y ninguno mira la modalidad ni el metodo:
+
+    (a) acceptPensionOrder (orders.ts:404) -> suma al cobrar A CUENTA.
+    (b) acceptOrder (orders.ts:269) -> suma en CUALQUIER cobro con cliente
+        vinculado, si order.customerId no es null.
+
+  Es decir: un POSTPAGO que paga su compra en EFECTIVO/QR con su cliente
+  vinculado suma puntos hoy, y el filtro del ranking NO lo arregla (el pedido
+  seria "efectivo" y pasaria el filtro).
+
+  REGLA CORRECTA: la exclusion debe estar DENTRO de la funcion de acumulacion,
+  no solo en el WHERE del ranking. Si solo se arregla el ranking, los contadores
+  siguen corruptos.
+
+  Y el corolario que los tres se saltan: la funcion NO PUEDE decidir solo por
+  cliente, porque los dos call sites representan movimientos distintos. Tiene que
+  recibir el metodo de pago. De ahi que `isFidelizable(cliente, metodo)`.
+
+--- ERROR-3 (MEDIO): addCustomerFunds, dos problemas distintos ----------------
+  gen.md y los demas dicen "bloquear addCustomerFunds para isPension=false".
+  El problema real (dinero atrapado) es de negocio, no de codigo, y la v1 de
+  esta propuesta lo resuelve bloqueando, lo cual es una decision, no un fix:
+
+    (a) MONETARIO: si un mostrador puede "recargar", el cajero no lo encuentra
+        (su lista filtra isPension), asi que esa plata no se puede cobrar.
+    (b) DE ETIQUETA: el TIPO del movimiento se decide por pensionType
+        (PREPAGO -> RECARGA, POSTPAGO -> PAGO_DEUDA). Con el default PREPAGO
+        del esquema, un mostrador cae en RECARGA por accidente de esquema, no
+        por diseno. Y un POSTPAGO que recibe un abono y queda positivo se
+        registra como PAGO_DEUDA con saldo a favor: semantica imposible.
+
+  RESUELTO EN CODIGO: (b). `addCustomerFunds` decide ahora por `isPension`
+  primero, asi que un mostrador registra RECARGA de forma explicita y un
+  pensionado postpago registra PAGO_DEUDA.
+
+  SIGUE ABIERTO: (a). Si un mostrador puede tener saldo a favor, hay que
+  decision de negocio + cambiar la lista del cajero. Si no puede, hay que
+  ocultar el boton. Ver seccion 7, P4. Y el saldo positivo de un postpago.
+
+--- ERROR-4 (MEDIO): el script de correccion debe RECALCULAR, no resetear -----
+  gen.md y los demas proponen resetear a 0. Es incorrecto:
+
+    - Ronald tiene 70 pts y 2 visitas, pero 6 pedidos. Si se resetea a 0 se
+      descarta informacion correcta (las visitas que si hubo antes de la regla
+      son historico real) y se mezcla "no fidelity" con "no purchases".
+    - El problema real NO es "el postpago tiene puntos" sino "este pedido NO
+      generaba lealtad". La correccion es recalcular cada cliente desde SUS
+      pedidos que puntuan.
+    - Un reset a 0 es idempotente por casualidad; un recalculo es idempotente
+      por construccion. Ademas un recalculo puede SUBIR contadores (el programa
+      no es retroactivo: hay pedidos anteriores a la funcion), lo cual un
+      reset a 0 jamas haria.
+
+  REGLA CORRECTA (la implementada): recalcular los cuatro campos de lealtad de
+  cada cliente desde los pedidos pagados, no anulados y fidelizables. NO tocar
+  balance ni ledger (la deuda es real). Dry-run obligatorio con `--apply` para
+  escribir, patron ya establecido en el proyecto. Snapshot previo impreso.
+
+  Aplicado sobre dev.db con autorizacion del usuario: Ronald quedo en 0/0/0 (sus
+  6 pedidos fueron todos PENSION) y los otros tres clientes no cambiaron (ya
+  cuadraban). Segunda corrida sin cambios: idempotente.
+
+--- ERROR-5 (BAJO): "dias de mora" pero el dato no existe ---------------------
+  Verificado: no hay campo de fecha de "ultimo pago" ni de vencimiento en
+  Customer. Calcular mora exigiria derivarla del ultimo PAGO_DEUDA del ledger,
+  lo cual es posible pero es logica nueva y una decision de negocio
+  (a los cuantos dias vence una deuda postpaga?). Los tres documentos lo
+  proponen sin notar que requiere definir la politica de vencimiento.
+
+  REGLA CORRECTA: "dias de mora" necesita primero una politica de vencimiento
+  definida por el negocio. No es solo UI.
+
+--- ERROR-6 (ALTO, NUEVO en esta v2): `pensionType` no puede representar la ----
+  realidad
+  El esquema declara `Customer.pensionType` NOT NULL con default "PREPAGO". Los
+  clientes de mostrador guardan "PREPAGO" sin ser pensionados. Los tres
+  documentos escriben sus reglas mirando `pensionType` (y el filtro de ERROR-1
+  que corrigieron primero era exactamente eso), asi que los tres estan a una
+  linea de tratar a un cliente normal como pensionado prepago.
+
+  Ademas el toggle "Es pensionado" arranca MARCADO en el formulario de alta, asi
+  que el caso por defecto de la UI es crear un pensionado, no un mostrador.
+
+  REGLA CORRECTA: toda regla mira `isPension` PRIMERO y `pensionType` solo
+  después. Es lo que hacen hoy las tres funciones de lealtad y
+  `addCustomerFunds`. La correccion de raiz (hacer `pensionType` nullable)
+  requiere migracion y decidir que se hace con los mostradores que ya tienen
+  "PREPAGO" almacenado: es una fase aparte, no parte de este fix.
+
+
+================================================================================
+3. DIAGNOSTICO CONSOLIDADO
+================================================================================
+
+RAIZ UNICA: existe UNA sola funcion que decide fidelidad (accumulateCustomerLoyalty)
+pero el criterio de "que movimiento es una compra" esta distribuido en varios
+lugares inconsistentes (isPension, pensionType, paymentMethod). Por eso todo se
+rompe a la vez.
+
+  CAUSA 1 - La fidelidad no consulta metodo ni modalidad (ERROR-2)
+    accumulateCustomerLoyalty no sabe con que metodo se cobro.
+    Impacto: puntos/visitas/gasto/nivel inflados en el postpago.
+    ESTADO: RESUELTO. Guard dentro de la funcion, recibe el metodo.
+
+  CAUSA 2 - El ranking no excluye la deuda (coincidente en los 3 docs)
+    getCustomerRanking suma order.total sin filtrar.
+    Impacto: el #1 del ranking es el mayor deudor.
+    ESTADO: RESUELTO con `fidelizableOrderWhere()` (ver ERROR-1).
+
+  CAUSA 3 - El nivel se calcula sobre la deuda (coincidente)
+    levelNameOf cuenta visitas/gasto que incluyen el consumo a cuenta.
+    ESTADO: RESUELTO. El aggregate lleva el mismo filtro que el ranking.
+
+  CAUSA 4 - El canje no valida modalidad (coincidente)
+    redeemCustomerPoints solo valida saldo de puntos.
+    ESTADO: RESUELTO, pero al reves de lo que propuestas los 3 docs: NO se
+    bloquea. Con la regla por metodo, un postpago puede tener puntos validos, y
+    el canje sigue validando solo el saldo.
+
+  CAUSA 5 - addCustomerFunds no valida isPension (coincidente)
+    El tipo de movimiento se derivaba del default del esquema.
+    ESTADO: RESUELTO en codigo (decide por isPension). El problema de negocio
+    subyacente (plata atrapada) sigue abierto: ver ERROR-3 y seccion 7 P4.
+
+  CAUSA 6 - La UI no explicita la consecuencia (coincidente)
+    El admin elige POSTPAGO sin saber el efecto real sobre la lealtad.
+    ESTADO: PENDIENTE. Y el aviso ya no puede ser el trivial ("no fideliza"):
+    debe decir que no suma por lo que consume a cuenta, pero si si compra
+    pagando.
+
+  CAUSA 7 - La semantica del saldo depende del signo (solo gpt.txt lo nombra bien)
+    balance >0 = plata del cliente (prepago); <0 = plata que nos deben.
+    No hay etiqueta que lo diga.
+    ESTADO: PENDIENTE.
+
+  CAUSA 8 - No hay contexto unificado (los 3 lo mencionan de distinta forma)
+    Para entender a un cliente hay que saltar entre /customers y
+    /customers-ranking.
+    ESTADO: PENDIENTE.
+
+  CAUSA 9 (nueva) - El ranking no tiene contraparte para la deuda
+    Al excluir la deuda postpaga del ranking (lo correcto), desaparece el lugar
+    donde el admin ve quien debe. La pregunta "quien factura" y "quien debe" son
+    distintas y ahora solo una tiene pantalla.
+    ESTADO: PENDIENTE. Ver seccion 5, FASE 6.
+
+
+================================================================================
+4. PROPUESTA FINAL Y ESTADO DE IMPLEMENTACION
+================================================================================
+
+PRINCIPIO: primero corregir la VERDAD (backend), luego la FORMA (UI). Al reves
+se construye UI sobre reglas incorrectas y se descarta.
+
+--- FASE 0: Definir la regla en un solo lugar [HECHA] -----------------------
+  Regla unica, client-safe, en @bbspos/types:
+
+    export function isFidelizable(c: {isPension, pensionType},
+                                  metodo?: PaymentMethod | null): boolean {
+      if (!c.isPension) return true;                  // mostrador: si
+      if (c.pensionType !== "POSTPAGO") return true;   // prepago: si
+      return metodo != null && metodo !== "PENSION";  // postpago: si paga
+    }
+
+  Mas dos filtros de Prisma derivados del mismo enum:
+    fidelizableCustomerWhere()  -> caracteristicas del cliente
+    fidelizableOrderWhere()     -> pedidos que puntuan  (ver ERROR-1)
+
+  Motivo: las causas 1, 2 y 3 son el mismo error de filtros dispersos. Una regla
+  central las elimina de raiz y evita que el proximo bug se repita. El
+  `metodo` es OBLIGATORIO en la practica: sin el, la funcion no puede
+  distinguir las dos formas de cobro de un postpago (ERROR-2).
+
+--- FASE 1: Backend, los parches criticos [HECHA] ---------------------------
+  P1.1 accumulateCustomerLoyalty: recibe el metodo y no suma si ese movimiento no
+       fideliza. El guard va DENTRO de la funcion, no en el llamador.
+       No-op silencioso si el cliente no existe (un customerId huerfano no debe
+       impedir cobrar).
+  P1.2 getCustomerRanking: `fidelizableOrderWhere()`, antes del groupBy, mas
+       `status != ANULADO`. El buscador NO filtra por tipo de cuenta, para que un
+       postpago con compras en efectivo se encuentre.
+  P1.3 levelNameOf: el aggregate del mes lleva el mismo filtro.
+  P1.4 redeemCustomerPoints: valida solo el saldo. Sin bloqueo por modalidad.
+
+--- FASE 2: Correccion de datos [HECHA] ------------------------------------
+  P2.1 Script fix:postpago-loyalty (dry-run + --apply).
+       - RECALCULA los cuatro campos de lealtad desde los pedidos que puntuan.
+       - NO resetea a 0 (ver ERROR-4).
+       - Imprime snapshot previo y delta por cliente.
+       - NO toca balance, ni ledger, ni pedidos, ni canjes.
+       - Idempotente, y puede subir contadores (no es retroactivo).
+       - Aplicado con autorizacion del usuario. Verificado idempotente.
+
+--- FASE 3: Backend, errores de dinero [PARCIAL] ---------------------------
+  P3.1 [HECHO] addCustomerFunds decide RECARGA vs PAGO_DEUDA por `isPension`.
+  P3.2 [ABIERTO] Decidir y aplicar el caso "postpago con saldo positivo"
+       (ERROR-3). Es decision de negocio, no de codigo.
+  P3.3 [ABIERTO] Decidir quien puede tener saldo a favor y como lo consume el
+       cajero (la lista filtra isPension). Ver seccion 7 P4.
+
+--- FASE 4: UI, el minimo que hace visible la regla [PENDIENTE] -------------
+  P4.1 Formulario: al elegir POSTPAGO, alerta inline MATIZADA:
+         "No acumula puntos ni nivel por lo que consume a cuenta (su beneficio es
+          el pago diferido). Si compra pagando en efectivo o QR, si suma."
+       + campo "Limite de credito".
+  P4.2 Formulario: el toggle "Es pensionado" arranca MARCADO. Considerar un
+       selector de 3 tipos (Mostrador / Prepago / Postpago) en el alta, para que
+       la consecuencia sea obvia desde el primer campo. (gpt.txt 2.3.)
+  P4.3 Tabla: rotular saldo como "Saldo a favor" (prepago) vs "Deuda"
+       (postpago). NO un badge "sin fidelizacion": seria falso, un postpago
+       puede tener puntos.
+  P4.4 LedgerDialog: mostrar el # de ticket (daySeq ?? seq) y el saldo
+       resultante. Convierte el dialogo en una herramienta de conciliacion.
+
+--- FASE 5: UI, el salto de calidad [Backlog] -------------------------------
+  P5.1 Segmentar en 3 pestanas (Por cobrar / Saldos / Mostrador) con KPI por
+       segmento (net.txt). Es la propuesta mas valuable de las tres.
+  P5.2 Buscador + filtros + paginacion en /customers.
+  P5.3 Ficha de detalle por cliente (elimina el salto entre paginas) (gpt.txt).
+  P5.4 Cargar el ledger bajo demanda (no 100 por cliente en la carga inicial).
+
+--- FASE 6 (solo con politica de negocio definida) [PENDIENTE] --------------
+  P6.1 "Cuentas por cobrar" separado + dias de mora. Requiere antes definir la
+       politica de vencimiento (ERROR-5) y resolver si un postpago con saldo
+       positivo es valido (ERROR-3). No es solo UI. CAUSA 9: hoy, tras excluir
+       la deuda del ranking, no queda pantalla para ella.
+
+
+================================================================================
+5. POR QUE ESTE ORDEN Y NO OTRO
+================================================================================
+
+  - FASE 0 antes que 1: sin una regla central, cada parche de la Fase 1 es un
+    parche puntual y el proximo bug se repite.
+  - FASE 1 antes que 2: primero se deja de sumar errores, luego se limpia el
+    historico. Al reves, se limpia y al dia siguiente vuelve a contaminarse.
+  - FASE 4 (UI minima) recien con la verdad: avisar "no fideliza" cuando
+    todavia fideliza seria mentirle al admin. Y el aviso debe ser matizado, no
+    un "no" seco.
+  - FASES 5-6 son mejora de experiencia, no correccion. Van Backlog.
+
+DEPENDENCIAS CRITICAS:
+  - La Fase 0 desbloquea todo lo demas.
+  - La Fase 2 (script) depende de la Fase 1 (para no re-contaminar).
+  - La Fase 6 depende de decisiones de negocio que NADIE ha tomado aun
+    (vencimiento, saldo positivo, quien puede tener saldo a favor).
+  - La correccion de raiz de ERROR-6 (pensionType nullable) es una migracion
+    aparte: no bloquea las fases 0-4, pero dejala abierta o se va a re-introducir
+    el bug.
+
+
+================================================================================
+6. COMPARACION FINAL: CUAL PROPUESTA ERA LA MEJOR
+================================================================================
+
+  gen.md  -> La mas CORRECTA en backend (identifica bien accumulateCustomerLoyalty
+             y la necesidad del script de correccion) y la mas ESCALABLE (cambio
+             minimo, sin riesgo de reescribir la pantalla). Debil: propone
+             resetear a 0 en vez de recalcular (ERROR-4), no detecta ERROR-1, no
+             toca la UI de fondo, y no ordena las fases.
+
+  net.txt -> La mejor intuicion de UX de las tres: "3 tabs por intencion" y el
+             KPI de "% de deuda en ranking = 0" son lo mas valioso. Debil: su
+             WHERE tecnico tiene ERROR-1, propone "dias de mora" sin definir la
+             politica (ERROR-5), y el KPI "% de deuda en ranking = 0" ya no
+             tiene sentido con la regla por metodo (sigue siendo 0, pero por un
+             motivo distinto).
+
+  gpt.txt -> El mas completo y el mejor en semantica ("Facturacion != Deuda",
+             "el cambio mas importante es semantico, no visual"). Aporta la idea
+             de ficha de detalle y ledger orientado a conciliacion. Debil: es un
+             proyecto grande sin fases; no identifica ERROR-1, ERROR-2 ni
+             ERROR-6.
+
+  MEJOR SOLUCION = gen.md en el backend + gpt.txt en el diseno semantico +
+  net.txt en las pestanas, montadas sobre la FASE 0 (regla central) que ninguno
+  de los tres propone, y corrigiendo los ERROR-1..6.
+
+  Valor real aportado por los tres (medible):
+   - Identifican correctamente el fallo de raiz (el postpago se fideliza).
+   - Coinciden 100% en excluir al postpago de la fidelidad. [Coincidir no es
+     estar bien: la regla correcta es mas estrecha que la que ellos proponen.]
+   - Los tres responden la Pregunta 1 con "SI, prepago mantiene lealtad"
+     (correcto, por la razon que ahora esta clara: la recarga no puntua, el
+     consumo si).
+   - Los tres proponen un script de correccion de datos.
+  Lo que ninguno tiene:
+   - Una funcion central de verdad (Fase 0), con el metodo de pago.
+   - El filtro de ranking correcto (cliente Y metodo, no uno de los dos).
+   - La exclusion DENTRO del motor de lealtad (no solo en el ranking).
+   - Un script que RECALCULA en vez de resetear.
+   - La excepcion de que el postpago SI puntua al comprar pagando.
+   - La trampa del default PREPAGO en pensionType (ERROR-6).
+   - Un orden de fases con dependencias.
+   - La definicion de la politica de mora.
+
+
+================================================================================
+7. PREGUNTAS: RESPUESTADAS Y ABIERTAS
+================================================================================
+
+  RESPONDIDAS:
+  P1. ¿El prepago mantiene fidelidad? -> SI. La recarga no puntua; el consumo de
+      su saldo si, porque es una compra.
+  P2. ¿El postpago tiene fidelidad? -> SI, pero SOLO por lo que compra pagando en
+      efectivo/QR/tarjeta. Su consumo a cuenta no puntua.
+  P3. ¿Pagar la deuda con efectivo da puntos? -> NO. Es un abono a la cuenta
+      corriente, no una compra. Mismo criterio que la recarga.
+  P4. ¿Un postpago puede canjear? -> SI, si tiene saldo. Tiene puntos validos.
+  P5. ¿Que pasa con los puntos historicos del postpago? -> Recalculados. Ronald
+      paso de 2v/70Bs/70p a 0/0/0 porque sus 6 pedidos fueron todos PENSION, no
+      porque fuera postpago.
+
+  SIGUEN ABIERTAS:
+  P6. ¿El canje de puntos baja el ticket o es premio manual? Define si hace
+      falta logica de descuento. (Toca la spec si la respuesta es "baja".)
+  P7. ¿Un postpago con saldo POSITIVO es valido (exceso) o es error? (ERROR-3.)
+      Si es error, la UI debe advertirlo.
+  P8. ¿Cual es la politica de vencimiento de una deuda postpago? (para "mora")
+      (ERROR-5).
+  P9. ¿Quien puede tener saldo a favor? Si un mostrador puede recargar, el cajero
+      tiene que poder cobrarle de ese saldo, y hoy su lista filtra isPension.
+  P10. ¿Un mostrador que ascciende a postpago pierde sus puntos? (transicion)
+      Probablemente no, porque ya se ganaron comprando, pero hay que decidirlo
+      para los puntos FUTUROS.
+  P11. ¿Se hace nullable pensionType y que se hace con los mostradores que ya
+      tienen "PREPAGO" almacenado? (ERROR-6, correccion de raiz.)
+  P12. En un pago dividido (parte a cuenta PENSION + parte en efectivo/QR), ¿los
+      puntos son por el total o solo por la parte pagada en el local? Hoy
+      `Order` tiene un solo paymentMethod, asi que no se puede llegar al caso;
+      hay que decidirlo ANTES de agregar pagos mixtos. La regla "puntos al
+      comprar, no al mover la cuenta" sugiere la parte pagada en el local.
+
+
+================================================================================
+FIN DE LA PROPUESTA CONSOLIDADA v2
+================================================================================

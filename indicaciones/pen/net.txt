@@ -1,0 +1,96 @@
+Listo. Leí tu informe v2 completo. Estás en un punto crítico: la pantalla funciona, pero está diseñada contra tu regla de negocio. Aquí va el análisis como Product Designer.
+
+### 1. Diagnóstico de Problemas
+
+Tu pantalla `/customers` tiene una crisis de identidad. Mezcla 3 poblaciones en una misma tabla sin diferenciar comportamiento, y eso genera fricción cognitiva y errores de negocio.
+
+*Cuellos de botella críticos:*
+
+*HALLAZGO-A + B + C [ALTO] - La regla de negocio está rota en código:*
+El sistema trata deuda como facturación. `acceptPensionOrder` llama a `accumulateCustomerLoyalty` sin filtrar modalidad. Resultado: Ronald Paz, tu único POSTPAGO con -290 Bs de deuda, es #1 en ranking de "Clientes frecuentes". Estás premiando al que más te debe. Esto no es UX, es pérdida financiera si canjea puntos.
+
+*Fricción Cognitiva Severa:*
+- *Columna Saldo:* Verde >0 y Rojo <0 es correcto, pero el admin debe inferir si es "plata del cliente que debo administrar" (PREPAGO) o "plata que me deben y tengo que cobrar" (POSTPAGO). Mismo componente visual para dos problemas opuestos.
+- *Sin feedback de consecuencia:* El toggle "Es pensionado" + Select POSTPAGO permite crear un cliente sin lealtad sin advertirlo. Violación del principio de visibilidad del estado del sistema.
+- *Doble salto mental:* Para entender a un cliente, el admin debe ir a `/customers` para ver saldo y a `/customers-ranking` para ver puntos/nivel/última visita. 2 páginas para 1 persona.
+
+*Pasos innecesarios y puntos de abandono:*
+- *BUG-4:* `addCustomerFunds` permite recargar a un cliente de mostrador. La plata entra al reporte diario pero nunca se puede cobrar en caja porque el POS filtra `isPension`. Dinero atrapado.
+- *BUG-2:* `customerName` en pedidos es texto libre. Tienes 5 variantes de "Ronald" en 6 pedidos. Tus reportes por nombre están rotos.
+- *Carga inicial:* `findMany` sin paginación + `ledger take:100` por cliente. A 200 clientes son 20k filas en memoria inicial. Lento en móvil.
+- *LedgerDialog:* Muestra "Consumo -45 Bs" sin # de ticket ni saldo acumulado. El admin no puede auditar.
+
+### 2. Propuesta de Flujo Optimizado
+
+Principio rector: *Separar por intención, no por tabla.* La regla "POSTPAGO = sin fidelización porque el crédito ES el premio" debe ser visible en toda la UI.
+
+*Nuevo modelo mental:*
+
+1. *Segmentación Visual Primero:* La tabla ya no es una lista. Es 3 tabs con KPIs distintos.
+   - Tab `Por Cobrar [POSTPAGO]`: Objetivo = Cobrar. Métricas = Deuda total, días de mora. Sin puntos, sin nivel.
+   - Tab `Saldos a Favor [PREPAGO]`: Objetivo = Administrar. Métrica = Saldo del cliente.
+   - Tab `Mostrador [Lealtad]`: Objetivo = Fidelizar. Métricas = Puntos, Nivel, Visitas.
+
+2. *Creación Guiada con Consecuencia:*
+   - Antes: Toggle "Es pensionado" marcado por defecto -> confuso.
+   - Ahora: Selector de tipo al inicio: `¿Qué tipo de cliente es? [Mostrador / Prepago / Postpago]`. Al elegir POSTPAGO, aparece inline alert: `> El cliente Postpago no acumula puntos ni nivel. Su beneficio es el pago diferido.` Reduces error y explicas la regla.
+
+3. *Unificación de Contexto:* En una misma fila de POSTPAGO ves Deuda + Último consumo + Botón "Cobrar Deuda". En una fila de Mostrador ves Puntos + Nivel + Botón "Canjear". No más salto entre `/customers` y ranking.
+
+4. *Fix de Flujo de Dinero:*
+   - `addCustomerFunds` bloqueado para Mostrador. Si `isPension=false`, el botón de recarga desaparece. Eliminas dinero atrapado.
+   - Al cobrar a cuenta POSTPAGO, el `customerName` del pedido se sobreescribe con el nombre canónico del Customer. Arreglas BUG-2.
+
+*¿Por qué es mejor?* Reduces de 2 pantallas a 1, reduces carga cognitiva de 3 conceptos en 1 tabla a 1 concepto por tab, y previenes el error de "premiar la deuda" desde el código (A1-A4 de tu informe).
+
+### 3. Wireframe en Texto / User Flow
+
+*Flujo Actual :*[Roto]
+Admin entra a /customers -> Ve 4 clientes mezclados -> No distingue deuda vs saldo -> Click en Ronald (-290) -> Ve Saldo rojo -> Va a /customers-ranking -> Ve a Ronald #1 con 290 Bs "gastados" -> Confusión: ¿es mi mejor cliente o el que más me debe? -> Intenta canjear puntos de un postpago -> Sistema lo permite -> Pérdida
+*Flujo Optimizado Propuesto:*
+[ENTRY] /customers
+  |
+  +-> [TABS HEADER]
+  | Tab 1: POSTPAGO Por Cobrar (1) | Tab 2: PREPAGO Saldos (0) | Tab 3: MOSTRADOR Lealtad (3)
+  |
+  +-> [TAB: POSTPAGO] - Objetivo: COBRAR
+  | Filtros: [Buscar por nombre] [Ordenar por Deuda mayor / Mora]
+  | Tabla: Nombre | Deuda (Rojo, con label "Debe") | Días Mora | Último Consumo | Acción
+  | Fila: Ronald Paz | -Bs 290 DEUDA | 12 días | #037 25 Bs | [Ver Consumos con #Ticket] [Pagar Deuda -> FundDialog]
+  | Footer KPI: Total por cobrar: Bs 290
+  |
+  +-> [TAB: MOSTRADOR] - Objetivo: FIDELIZAR
+  | Tabla: Nombre | Nivel Badge | Puntos | Visitas Mes | Total Gastado Real | Acción
+  | Fila: Maria F. | Frecuente | 150 pts | 4 visitas | 150 Bs | [Ver Movimientos con Saldo Acumulado] [Canjear]
+  |
+  +-> [CREAR CLIENTE]
+        Paso 1: ¿Tipo? -> ( ) Mostrador ( ) Prepago ( ) Postpago
+        Si Postpago -> Muestra Alert: "Sin puntos/nivel. Límite crédito obligatorio"
+        Paso 2: Formulario específico por tipo
+        Paso 3: Confirmar -> Crea con contadores correctos (Postpago nace en 0/0/0)
+
+[LOGICA BACKEND]
+acceptPensionOrder -> IF pensionType == POSTPAGO -> NO llamar a accumulateCustomerLoyalty -> ELSE llamar
+getCustomerRanking -> WHERE paymentMethod!= PENSION OR customer.pensionType!= POSTPAGO -> Excluir deuda
+### 4. Métricas de Éxito
+
+Para validar que el nuevo flujo es mejor, mide antes/después:
+
+*KPIs de Negocio [Lo más importante]:*
+1. *% de Deuda Postpago en Ranking:* Debe ir a 0%. Hoy es 100% de tu ranking #1 es deuda. Métrica de éxito = 0 Bs de deuda contado como "gasto" en ranking.
+2. *Puntos Acumulados por Postpago:* Debe ser 0. Hoy Ronald tiene 70. Tras fix `fix:postpago-loyalty`, debe quedar en 0/0/0.
+3. *Tiempo de Cobranza Postpago:* Días promedio desde CONSUMO hasta PAGO_DEUDA. Con tab dedicado y saldo acumulado visible, debería bajar.
+
+*KPIs de Usabilidad:*
+4. *Tiempo para cobrar una deuda:* Desde entrar a /customers hasta completar Pagar Deuda. Objetivo: < 30 segundos, 2 clics. Hoy requiere buscar cliente + abrir dialog + entender saldo.
+5. *Tasa de Error BUG-4:* # de recargas a clientes de mostrador. Debe ser 0. Hoy es posible.
+6. *Tareas Completadas sin Salto:* % de admins que ven puntos/nivel sin ir a otra pantalla. Objetivo 100% con tabla unificada.
+
+*KPIs Técnicos:*
+7. *Tiempo de Carga Inicial /customers:* Con paginación y sin `ledger take:100`, debe bajar de ∼800ms a <200ms.
+8. *Canjes Inválidos:* # de canjes a POSTPAGO. Debe ser 0 tras bloquear.
+
+*Pregunta bloqueante para ti antes de diseñar en Figma:*
+Confírmame la Pregunta 1 de tu informe: ¿El PREPAGO SÍ mantiene lealtad? Yo recomiendo *SÍ*. El prepago ya te pagó, es plata cobrada. Si le quitas puntos también, matas el incentivo de recargar. Modelo ideal: `Mostrador + Prepago = con lealtad | Postpago = sin lealtad`.
+
+¿Quieres que te maqueto el componente `CustomerFormDialog` ya con la alerta de consecuencia y el bloqueo de `addCustomerFunds`?

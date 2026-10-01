@@ -107,7 +107,7 @@ El terminal SHALL mantener un ticket en curso que muestra todos los productos ag
 
 ### Requirement: Nombre del cliente obligatorio
 
-El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa del cliente en el momento del envío. El campo se convierte a mayúsculas automáticamente y, si está vacío habiendo ítems en el ticket, el envío se bloquea y el campo se resalta indicando el dato faltante.
+El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa del cliente en el momento del envío, convertido a mayúsculas automáticamente, con autocompletado en tiempo real que consulta clientes existentes por nombre o teléfono (hasta 8 coincidencias). Al seleccionar una coincidencia se vincula su `customerId` al pedido; si no hay coincidencia, el envío crea el cliente automáticamente. El campo sigue siendo obligatorio: si está vacío habiendo ítems en el ticket, el envío se bloquea y el campo se resalta indicando el dato faltante.
 
 #### Scenario: Envío sin nombre o mesa
 
@@ -118,6 +118,16 @@ El terminal SHALL incluir un campo de texto obligatorio para el nombre o mesa de
 
 - **WHEN** el usuario escribe el nombre o mesa
 - **THEN** el texto se muestra y se envía en mayúsculas, sin importar cómo se tecleó
+
+#### Scenario: Autocompletado de clientes existentes
+
+- **WHEN** el usuario escribe un texto que coincide con clientes registrados (por nombre o teléfono)
+- **THEN** aparece el listado de coincidencias y, al elegir una, el pedido queda vinculado a ese `customerId` con el campo completado
+
+#### Scenario: Cliente nuevo sin coincidencia
+
+- **WHEN** el usuario envía un pedido con un nombre (o teléfono) inexistente
+- **THEN** el sistema crea el cliente y vincula el pedido sin bloquear el envío
 
 #### Scenario: Cliente sin nombre
 

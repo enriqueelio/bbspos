@@ -1,10 +1,13 @@
-"use server";
+﻿"use server";
 
 import { prisma, localDayKey, type Prisma, type Customer } from "@bbspos/db";
 import {
   BenefitMetric,
+  fidelizableOrderWhere,
+  isFidelizable,
   type CustomerLoyaltyView,
   type CustomerSuggestion,
+  type PaymentMethod as PaymentMethodType,
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
@@ -16,7 +19,11 @@ function normalizePhone(raw: string): string {
 }
 
 /** Nombre del nivel vigente del cliente según las reglas activas: gasto del mes,
- *  visitas del mes o puntos acumulados (zona America/La_Paz, UTC-4). */
+ *  visitas del mes o puntos acumulados (zona America/La_Paz, UTC-4).
+ *
+ *  Solo cuentan los pedidos que generaron lealtad (`fidelizableOrderWhere`): el
+ *  consumo a cuenta de un pensionado POSTPAGO no le sube de nivel, porque no le
+ *  sumó puntos. Sus compras en efectivo/QR sí. Criterio en `isFidelizable`. */
 async function levelNameOf(
   customerId: string,
   points: number,
@@ -35,6 +42,7 @@ async function levelNameOf(
       customerId,
       paidAt: { not: null, gte: monthStart },
       status: { not: "ANULADO" },
+      ...fidelizableOrderWhere(),
     },
     _count: { _all: true },
     _sum: { total: true },
@@ -199,13 +207,29 @@ export async function registerCustomerAtPos(input: {
 /** Acumula lealtad al cobrar un pedido (misma transacción que registra paidAt):
  *  +1 visita, +total gastado, +total en puntos y última visita. Solo debe
  *  llamarse con customerId válido. Idempotente por pedido: paidAt solo se
- *  registra una vez. */
+ *  registra una vez.
+ *
+ *  Guard de elegibilidad: la regla vive AQUÍ y no en el llamador, para que
+ *  ninguna ruta de cobro la omita. Lo único que no puntúa es el consumo a
+ *  cuenta de un pensionado POSTPAGO (`metodo === PENSION`): su deuda diferida
+ *  ya es su beneficio. Ese mismo POSTPAGO sí suma si compra y paga en efectivo,
+ *  QR o tarjeta. Criterio en `isFidelizable` (@bbspos/types).
+ *
+ *  Un `customerId` que no exista se trata igual que uno no elegible: no-op
+ *  silencioso, para que un vínculo huérfano no impida cobrar el pedido. */
 export async function accumulateCustomerLoyalty(
   tx: Prisma.TransactionClient,
   customerId: string,
   total: number,
   when: Date,
+  metodo: PaymentMethodType | null,
 ): Promise<void> {
+  const cliente = await tx.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, isPension: true, pensionType: true },
+  });
+  if (!cliente || !isFidelizable(cliente, metodo)) return;
+
   await tx.customer.update({
     where: { id: customerId },
     data: {

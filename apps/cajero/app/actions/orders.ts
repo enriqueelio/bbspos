@@ -267,7 +267,13 @@ export async function acceptOrder(
     });
 
     if (order.customerId) {
-      await accumulateCustomerLoyalty(tx, order.customerId, order.total, paidAt);
+      await accumulateCustomerLoyalty(
+        tx,
+        order.customerId,
+        order.total,
+        paidAt,
+        method as PaymentMethodType,
+      );
     }
   });
 
@@ -401,7 +407,18 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         customerId,
       },
     });
-    await accumulateCustomerLoyalty(tx, customerId, total, paidAt);
+    // La elegibilidad a lealtad la decide `accumulateCustomerLoyalty`: aquí no
+    // se duplica el criterio. Este cobro es siempre a cuenta (PENSION), así que
+    // un pensionado POSTPAGO consume sin sumar puntos: su deuda es su beneficio.
+    // Si ese mismo cliente pagara en efectivo o QR, lo cobra `acceptOrder` y sí
+    // suma, porque ahí el método no es PENSION.
+    await accumulateCustomerLoyalty(
+      tx,
+      customerId,
+      total,
+      paidAt,
+      PaymentMethod.PENSION,
+    );
   });
 
   // Las reservas no imprimen al crearse: su comanda sale recién ahora, al

@@ -18,6 +18,7 @@
     "verify:lunch-stock": "tsx scripts/verify-lunch-stock.ts",
     "verify:lunch-holds": "tsx scripts/verify-lunch-holds.ts",
     "fix:accepted-at": "tsx scripts/fix-inverted-accepted-at.ts",
+    "fix:postpago-loyalty": "tsx scripts/fix-postpago-loyalty.ts",
     "menu-day-cleanup": "tsx scripts/menu-day-cleanup-worker.ts",
     "telegram-alert": "tsx scripts/telegram-alert-worker.ts",
     "rename-toppings": "tsx scripts/rename-toppings.mjs",

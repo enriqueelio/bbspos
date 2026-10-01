@@ -177,13 +177,32 @@ Verifique cada punto ejecutando consultas contra dev.db y leyendo el codigo.
         por diseno. Y un POSTPAGO que recibe un abono y queda positivo se
         registra como PAGO_DEUDA con saldo a favor: semantica imposible.
 
-  RESUELTO EN CODIGO: (b). `addCustomerFunds` decide ahora por `isPension`
-  primero, asi que un mostrador registra RECARGA de forma explicita y un
-  pensionado postpago registra PAGO_DEUDA.
+  RESUELTO EN CODIGO: (b), y despues tambien (a). Ver abajo.
 
-  SIGUE ABIERTO: (a). Si un mostrador puede tener saldo a favor, hay que
-  decision de negocio + cambiar la lista del cajero. Si no puede, hay que
-  ocultar el boton. Ver seccion 7, P4. Y el saldo positivo de un postpago.
+  CERRADO (a) CON MAS ALCANCE QUE LA PROPUESTA ORIGINAL. La regla de negocio que
+  se aplico es: "el saldo a favor es exclusivo del pensionado". Los documentos de
+  entrada (este archivo, INFORME y gen.md) pedian solo una cosa: bloquear el
+  abono a un `isPension = false`. Eso evita el dinero atrapado del caso nuevo,
+  pero deja la segunda puerta abierta: un pensionado con saldo o deuda podia
+  desmarcarse y quedar exactamente en el estado invalido, sin haber pasado nunca
+  por `addCustomerFunds`. Por eso el cierre actual bloquea las DOS:
+
+    - `addCustomerFunds` rechaza el abono a un no pensionado, antes de la
+      transaccion y del calculo del tipo de movimiento.
+    - `updateCustomer` rechaza quitar `isPension` con `balance != 0`, con un
+      mensaje distinto segun el signo (saldo a favor / deuda).
+
+  Invariante: `isPension = false => saldo = 0`. Sin migracion. Con saldo en cero
+  el guardado normal no cambia, asi que el pensionado puede volver a mostrador.
+  En la UI el boton de abono solo se renderiza para pensionados, pero eso es
+  conveniencia: los guards del servidor son la regla. Auditoria de solo lectura
+  del invariante: `pnpm --filter @bbspos/db verify:cuenta`.
+
+  EN CODIGO TAMBIEN: (b). `addCustomerFunds` decide por `isPension` primero, asi
+  que un pensionado postpago registra PAGO_DEUDA y un prepago RECARGA. (Con el
+  abono bloqueado para mostradores, esa rama ya no se alcanza con `isPension`
+  falso; se deja igual de todas formas porque es la forma correcta de
+  escribirla y no depende del guard de arriba.)
 
 --- ERROR-4 (MEDIO): el script de correccion debe RECALCULAR, no resetear -----
   gen.md y los demas proponen resetear a 0. Es incorrecto:
@@ -342,9 +361,12 @@ se construye UI sobre reglas incorrectas y se descarta.
 --- FASE 3: Backend, errores de dinero [PARCIAL] ---------------------------
   P3.1 [HECHO] addCustomerFunds decide RECARGA vs PAGO_DEUDA por `isPension`.
   P3.2 [ABIERTO] Decidir y aplicar el caso "postpago con saldo positivo"
-       (ERROR-3). Es decision de negocio, no de codigo.
-  P3.3 [ABIERTO] Decidir quien puede tener saldo a favor y como lo consume el
-       cajero (la lista filtra isPension). Ver seccion 7 P4.
+       (ERROR-3). Es decision de negocio, no de codigo. Nota: con el abono
+       bloqueado a no pensionados (P3.3), el positivo de un postpago solo puede
+       venir de que su deuda se pagara de mas, no de un abono.
+  P3.3 [HECHO] Quien puede tener saldo a favor: solo el pensionado. Se bloqueo
+       el abono a un no pensionado y tambien el desmarcado con saldo o deuda
+       (invariante `!isPension => saldo = 0`). Ver seccion 4, BUG-4.
 
 --- FASE 4: UI, el minimo que hace visible la regla [PENDIENTE] -------------
   P4.1 Formulario: al elegir POSTPAGO, alerta inline MATIZADA:
@@ -466,8 +488,10 @@ DEPENDENCIAS CRITICAS:
       Si es error, la UI debe advertirlo.
   P8. ¿Cual es la politica de vencimiento de una deuda postpago? (para "mora")
       (ERROR-5).
-  P9. ¿Quien puede tener saldo a favor? Si un mostrador puede recargar, el cajero
-      tiene que poder cobrarle de ese saldo, y hoy su lista filtra isPension.
+  P9. [RESUELTA] ¿Quien puede tener saldo a favor? Solo el pensionado. Se
+      bloquearon las dos puertas (el abono a un no pensionado y el desmarcado con
+      saldo o deuda). No hizo falta tocar la lista del cajero, que sigue filtrando
+      `isPension`. Ver seccion 4, BUG-4.
   P10. ¿Un mostrador que ascciende a postpago pierde sus puntos? (transicion)
       Probablemente no, porque ya se ganaron comprando, pero hay que decidirlo
       para los puntos FUTUROS.

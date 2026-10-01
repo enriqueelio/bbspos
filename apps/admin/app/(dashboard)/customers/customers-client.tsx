@@ -178,18 +178,26 @@ cliente&rdquo;.
                       >
                         <Pencil className="mr-1 h-4 w-4" /> Editar
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setError(null);
-                          setFundDialog({ customer });
-                        }}
-                      >
-                        <Wallet className="mr-1 h-4 w-4" />
-                        {customer.pensionType === PensionTypeValue.PREPAGO
-                          ? "Recargar Saldo"
-                          : "Pagar Deuda"}
-                      </Button>
+                      {/* Solo el pensionado tiene cuenta corriente. Un mostrador
+                       *  no se puede bonificar: el saldo entraría al cierre del
+                       *  día y el cajero no podría gastarlo, porque su lista de
+                       *  cobro a cuenta solo tiene marcados como pensionado.
+                       *  `addCustomerFunds` lo rechaza igual, esto solo evita
+                       *  ofrecer una acción que va a fallar. */}
+                      {customer.isPension && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setError(null);
+                            setFundDialog({ customer });
+                          }}
+                        >
+                          <Wallet className="mr-1 h-4 w-4" />
+                          {customer.pensionType === PensionTypeValue.PREPAGO
+                            ? "Recargar Saldo"
+                            : "Pagar Deuda"}
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="secondary"
@@ -379,7 +387,9 @@ function CustomerFormDialog({
             <span className="block text-xs text-muted-foreground">
               Marcado, aparece en el cobro &laquo;PENSIONADO&raquo; del cajero y
               se le puede cargar consumo a la cuenta. Sin marcar, es un cliente
-              de mostrador: solo acumula lealtad.
+              de mostrador: solo acumula lealtad y no tiene cuenta corriente,
+              así que no admite saldo. Si tiene saldo o deuda, la cuenta no se
+              puede desmarcar.
             </span>
           </span>
         </label>
@@ -455,6 +465,12 @@ function FundDialog({
   onError: (msg: string) => void;
   onDone: (message: string) => void;
 }) {
+  // El título sigue por `pensionType` porque ES lo que distingue "Recargar saldo"
+  // de "Pagar deuda", y para un pensionado `pensionType` sí es un dato real (ya no
+  // es el default PREPAGO que el esquema le pone a los mostradores). Lo que evita
+  // el default engañoso es que un mostrador no pueda abrir este diálogo: el
+  // botón de la tabla queda oculto para él y `addCustomerFunds` rechaza el abono
+  // igual, por si el diálogo llegara a abrirse de otra forma.
   const isPrepago = customer.pensionType === PensionTypeValue.PREPAGO;
   const title = isPrepago ? "Recargar saldo" : "Pagar deuda";
 

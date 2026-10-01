@@ -17,6 +17,7 @@
     "verify:lunch": "tsx scripts/verify-lunch-stock.ts && tsx scripts/verify-lunch-holds.ts",
     "verify:lunch-stock": "tsx scripts/verify-lunch-stock.ts",
     "verify:lunch-holds": "tsx scripts/verify-lunch-holds.ts",
+    "verify:cuenta": "tsx scripts/verify-cuenta-solo-pensionados.ts",
     "fix:accepted-at": "tsx scripts/fix-inverted-accepted-at.ts",
     "fix:postpago-loyalty": "tsx scripts/fix-postpago-loyalty.ts",
     "menu-day-cleanup": "tsx scripts/menu-day-cleanup-worker.ts",

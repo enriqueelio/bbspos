@@ -128,7 +128,7 @@ HALLAZGOS DE ESTA v3:
   - HALLAZGO-E (MEDIO): el admin no ve la consecuencia de crear un POSTPAGO.
   - HALLAZGO-F (MEDIO): semantica de saldo confusa entre prepago y postpago.
   - BUG-2 (MEDIO): customerName desincronizado en pedidos.
-  - BUG-4 (MEDIO, PARCIALMENTE mitigado): plata de mostrador sin poder cobrar.
+  - BUG-4 (MEDIO, RESUELTO): el saldo a favor es exclusivo del pensionado.
   - BUG-5/6/7 (BAJO): escala, archivado, normalizacion de nombre.
 
 
@@ -378,23 +378,35 @@ distingue esa diferencia (HALLAZGO-E).
   ACCION: al cobrar a cuenta, copiar el nombre canonico del Customer o no usar
   customerName en pedidos con customerId.
 
---- BUG-4 (MEDIO) [PARCIALMENTE mitigado]: plata de mostrador sin poder cobrar --
-  Donde: apps/admin/app/actions/customers.ts:165-203
+--- BUG-4 (MEDIO) [RESUELTO]: el saldo a favor es exclusivo del pensionado -----
+  Donde: apps/admin/app/actions/customers.ts (addCustomerFunds, updateCustomer)
   Que pasaba: la recarga/abono no comprobaba `isPension`, y el tipo de movimiento
   se derivaba de `pensionType` (PREPAGO por default para todos). Un mostrador
   podia recibir "Recargar Saldo": el saldo sube y entra al reporte diario, pero
   el cajero nunca lo podra cobrar (su lista de clientes filtra `isPension`).
   Plata atrapada.
-  MITIGADO: `addCustomerFunds` ahora decide RECARGA vs PAGO_DEUDA mirando
-  `isPension` primero, y el titulo del dialogo ya no se apoya en un valor por
-  defecto enganoso. El mostrador sigue pudiendo recibir un abono (que es lo
-  logico: esta pagando por adelantado), pero su abono se registra como RECARGA
-  de forma explicita, no por accidente del default.
-  PENDIENTE (esto es lo importante): sigue sin resolverse QUIEN puede tener
-  saldo a favor. Si un mostrador puede, el cajero tiene que poder cobrarle de
-  ese saldo (hoy su lista filtra `isPension` y no lo encuentra). Si no puede,
-  el boton de recarga debe ocultarse para mostrador. Es una pregunta de negocio,
-  no un bug de codigo.
+  DECISION DE NEGOCIO: el saldo a favor es exclusivo del pensionado. El mostrador
+  no tiene cuenta corriente. Se cerraron las DOS puertas por las que se llegaba
+  al estado invalido, no solo la del abono:
+  - Puerta 1, el abono: `addCustomerFunds` rechaza el abono a un `!isPension`
+    antes de la transaccion y antes de calcular el tipo de movimiento, con un
+    mensaje que dice que hay que marcarlo como pensionado primero. El rechazo no
+    mueve `balance` ni escribe en `CustomerLedger`.
+  - Puerta 2, el desmarcado: `updateCustomer` rechaza quitar `isPension` cuando
+    el saldo no es cero, con un mensaje distinto segun el signo. Con saldo a
+    favor la plata quedaria sin poder gastar; con deuda, la deuda quedaria sin
+    poder cobrar. El guard va antes de escribir cualquier campo, asi que nombre,
+    CI y telefono tampoco se guardan cuando se rechaza. Con saldo en cero el
+    guardado normal sigue igual: el pensionado puede volver a mostrador.
+  Invariante resultante: `isPension = false => saldo = 0`. Sin migracion.
+  Tambien en la UI: el boton de recarga/abono de la tabla solo se renderiza para
+  pensionados, y la ayuda del toggle "Es pensionado" lo dice. El boton es
+  conveniencia, no seguridad: los guards del servidor son la regla.
+  DATO SOBRE dev.db: al cerrar esto no habia plata atrapada. 3 mostradores con
+  saldo 0, 1 pensionado POSTPAGO con -290 Bs, y cero recargas de mostrador en el
+  libro. La auditoria de solo lectura
+  `pnpm --filter @bbspos/db verify:cuenta` lo comprueba en cualquier base y
+  sale con codigo 1 si encuentra un caso.
 
 --- BUG-5/6/7 (BAJO): escala, archivado, normalizacion -------------------------
   - Sin buscador ni paginacion en /customers; ledger limitado a 100 sin aviso.
@@ -432,8 +444,10 @@ distingue esa diferencia (HALLAZGO-E).
       - Formulario: al marcar POSTPAGO, la nota inline matizada de HALLAZGO-E.
       - Tabla: rotular saldo como "Saldo a favor" (prepago) vs "Deuda"
         (postpago).
-  B2. [PARCIAL] Decidir y cerrar BUG-4: quien puede tener saldo a favor y como
-      lo consume el cajero.
+  B2. [HECHO] BUG-4 cerrado: el saldo a favor es exclusivo del pensionado. Se
+      bloquea el abono a un mostrador y tambien se bloquea desmarcar a un
+      pensionado con saldo o deuda (invariante `!isPension => saldo = 0`). Ver
+      seccion 4. Auditoria: `pnpm --filter @bbspos/db verify:cuenta`.
   B3. Corregir `customerName` en pedidos a cuenta (BUG-2).
   B4. Definir el efecto del canje (ver pregunta 3 de la seccion 6).
   B5. Anadir buscador/paginacion a /customers y mostrar puntos/nivel/ultima

@@ -6,6 +6,7 @@ import {
   CustomerLedgerType,
   PaymentMethod,
   PensionType,
+  formatPrice,
   type PaymentMethod as PaymentMethodType,
   type PensionType as PensionTypeType,
 } from "@bbspos/types";
@@ -139,6 +140,20 @@ export async function updateCustomer(input: {
     throw new Error("Cliente no encontrado.");
   }
 
+  // Quitar la marca de pensionado saca la cuenta corriente del alcance del
+  // cajero, que solo lista clientes marcados como pensionado. Con saldo a favor
+  // la plata quedaría sin poder gastar; con deuda, la deuda quedaría sin poder
+  // cobrar. Los dos casos son el mismo defecto, así que se bloquean juntos: la
+  // invariante es `isPension = false => saldo = 0`. El mensaje cambia con el signo
+  // porque la explicación es distinta.
+  if (customer.isPension && !input.isPension && customer.balance !== 0) {
+    throw new Error(
+      customer.balance > 0
+        ? `${customer.name} tiene ${formatPrice(customer.balance)} de saldo a favor, que se gasta en el mostrador. No se puede desmarcar como pensionado hasta que ese saldo esté en cero.`
+        : `${customer.name} debe ${formatPrice(Math.abs(customer.balance))}, que se cobra en el mostrador. No se puede desmarcar como pensionado hasta que la deuda esté saldada.`,
+    );
+  }
+
   await assertPhoneAvailable(phone, customer.id);
 
   await prisma.customer.update({
@@ -163,6 +178,12 @@ export async function updateCustomer(input: {
  *  o de vuelta hacia 0) y se registra en CustomerLedger para que cuadre como
  *  ingreso real (Efectivo/QR) en el cierre diario.
  *
+ *  Solo los pensionados tienen cuenta corriente. Abonar a un cliente de mostrador
+ *  sería plata que entra al cierre del día y que después nadie puede gastar: el
+ *  cajero solo lista clientes marcados como pensionado (`isPension: true`) y
+ *  `acceptPensionOrder` rechaza cobrarle a cuenta. Por eso se valida acá y no solo
+ *  ocultando el botón: la invariante es `isPension = false => saldo = 0`.
+ *
  *  El tipo de movimiento se decide por `isPension`, NO solo por `pensionType`:
  *  el esquema le pone `PREPAGO` por defecto a todos, así que mirar solo
  *  `pensionType` trataría a un cliente de mostrador como pensionado prepago y le
@@ -186,6 +207,11 @@ export async function addCustomerFunds(input: {
   });
   if (!customer) {
     throw new Error("Cliente no encontrado.");
+  }
+  if (!customer.isPension) {
+    throw new Error(
+      `${customer.name} no es pensionado y no tiene cuenta corriente donde entrar el abono. Edítalo y márcalo como pensionado para poder bonificarle.`,
+    );
   }
 
   const type =

@@ -305,6 +305,14 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
     throw new Error("Cliente no encontrado.");
   }
 
+  // Un cliente de mostrador no tiene cuenta corriente: aunque se llegue con su
+  // id (la lista ya los filtra), el cobro a cuenta no aplica.
+  if (!customer.isPension) {
+    throw new Error(
+      `${customer.name} no es pensionado, no se le puede cobrar a cuenta.`,
+    );
+  }
+
   if (order.status === OrderStatus.ANULADO) {
     throw new Error("El pedido está anulado.");
   }

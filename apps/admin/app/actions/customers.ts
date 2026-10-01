@@ -79,6 +79,7 @@ export async function createCustomer(input: {
   name: string;
   ci?: string;
   phone?: string;
+  isPension: boolean;
   pensionType: string;
   creditLimit?: number;
 }) {
@@ -101,6 +102,7 @@ export async function createCustomer(input: {
       name,
       ci,
       phone,
+      isPension: input.isPension,
       pensionType,
       creditLimit,
       balance: 0,
@@ -115,6 +117,7 @@ export async function updateCustomer(input: {
   name: string;
   ci?: string;
   phone?: string;
+  isPension: boolean;
   pensionType: string;
   creditLimit?: number;
 }) {
@@ -140,7 +143,16 @@ export async function updateCustomer(input: {
 
   await prisma.customer.update({
     where: { id: input.customerId },
-    data: { name, ci, phone, pensionType, creditLimit },
+    data: {
+      name,
+      ci,
+      phone,
+      isPension: input.isPension,
+      // Desmarcar "pensionado" no borra la cuenta: la modalidad y el límite se
+      // dejan como están para que volver a marcarlo no pierda el historial. El
+      // saldo y el libro nunca se tocan desde acá.
+      ...(input.isPension ? { pensionType, creditLimit } : {}),
+    },
   });
 
   revalidatePath("/customers");

@@ -140,11 +140,17 @@ model AlitaSauce {
 // de métricas para rankings rápidos; la fuente de verdad es Order con paidAt.
 // phone es opcional (los clientes de mostrador solo dan nombre) pero único: en
 // SQLite los NULL no chocan entre sí, así que puede haber varios sin teléfono.
+// Customer mezcla dos mundos: los PENSIONADOS (tienen cuenta corriente, se les
+// cobra "PENSIONADO" en caja) y los clientes de MOSTRADOR (solo lealtad, se
+// registran al vuelo en el ticket). pensionType NO los separa: su default es
+// PREPAGO, que es una modalidad de ahorro, no una marca de que sea pensionado.
+// isPension es esa marca, y es lo único que filtra la lista de cobro del cajero.
 model Customer {
   id          String           @id @default(cuid())
   name        String
   ci          String?
   phone       String?          @unique
+  isPension   Boolean          @default(false)
   pensionType PensionType      @default(PREPAGO)
   balance     Int              @default(0)
   creditLimit Int              @default(0)

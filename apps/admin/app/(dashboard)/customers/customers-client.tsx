@@ -27,6 +27,7 @@ export interface PensionCustomer {
   name: string;
   ci: string | null;
   phone: string;
+  isPension: boolean;
   pensionType: PensionType;
   balance: number;
   creditLimit: number;
@@ -77,7 +78,8 @@ export function CustomersClient({
           <h1 className="text-xl font-bold text-white">Clientes / Pensionados</h1>
           <p className="text-muted-foreground">
             Cuentas corrientes Prepago y Postpago: saldos, recargas y pagos de
-            deuda.
+            deuda. Solo los <strong>Pensionados</strong> aparecen en el cobro
+            por cuenta del cajero; los de Mostrador son clientes de lealtad.
           </p>
         </div>
         {isAdmin && (
@@ -139,21 +141,26 @@ cliente&rdquo;.
                     {customer.phone || "—"}
                   </td>
                   <td className="px-4 py-2">
-                    <Badge
-                      variant={
-                        customer.pensionType === PensionTypeValue.POSTPAGO
-                          ? "warning"
-                          : "default"
-                      }
-                    >
-                      {PensionTypeLabel[customer.pensionType]}
-                    </Badge>
+                    {customer.isPension ? (
+                      <Badge
+                        variant={
+                          customer.pensionType === PensionTypeValue.POSTPAGO
+                            ? "warning"
+                            : "default"
+                        }
+                      >
+                        {PensionTypeLabel[customer.pensionType]}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">Mostrador</span>
+                    )}
                   </td>
                   <td className="px-4 py-2">
                     <BalanceCell customer={customer} />
                   </td>
                   <td className="px-4 py-2">
-                    {customer.pensionType === PensionTypeValue.POSTPAGO
+                    {customer.isPension &&
+                    customer.pensionType === PensionTypeValue.POSTPAGO
                       ? customer.creditLimit > 0
                         ? formatPrice(customer.creditLimit)
                         : "Sin límite"
@@ -265,6 +272,9 @@ function CustomerFormDialog({
   const [name, setName] = useState(target?.name ?? "");
   const [ci, setCi] = useState(target?.ci ?? "");
   const [phone, setPhone] = useState(target?.phone ?? "");
+  // Al crear desde esta pantalla lo esperable es una cuenta corriente, así que
+  // el toggle arranca marcado; al editar manda lo que ya está en BD.
+  const [isPension, setIsPension] = useState(target?.isPension ?? true);
   const [pensionType, setPensionType] = useState<PensionType>(
     target?.pensionType ?? "PREPAGO",
   );
@@ -291,6 +301,7 @@ function CustomerFormDialog({
           name,
           ci,
           phone,
+          isPension,
           pensionType,
           creditLimit: creditLimitValue,
         });
@@ -299,6 +310,7 @@ function CustomerFormDialog({
           name,
           ci,
           phone,
+          isPension,
           pensionType,
           creditLimit: creditLimitValue,
         });
@@ -351,37 +363,62 @@ function CustomerFormDialog({
           />
         </div>
 
-        <div className="space-y-1">
-          <Label htmlFor="c-type">Modalidad</Label>
-          <select
-            id="c-type"
-            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
-            value={pensionType}
-            onChange={(e) => setPensionType(e.target.value as PensionType)}
-          >
-            {PensionTypeList.map((t) => (
-              <option key={t} value={t}>
-                {PensionTypeLabel[t]}
-              </option>
-            ))}
-          </select>
-        </div>
+        <label
+          htmlFor="c-pension"
+          className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5"
+        >
+          <input
+            id="c-pension"
+            type="checkbox"
+            checked={isPension}
+            onChange={(e) => setIsPension(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-primary"
+          />
+          <span className="text-sm">
+            <span className="block font-semibold">Es pensionado</span>
+            <span className="block text-xs text-muted-foreground">
+              Marcado, aparece en el cobro &laquo;PENSIONADO&raquo; del cajero y
+              se le puede cargar consumo a la cuenta. Sin marcar, es un cliente
+              de mostrador: solo acumula lealtad.
+            </span>
+          </span>
+        </label>
 
-        {pensionType === PensionTypeValue.POSTPAGO && (
-          <div className="space-y-1">
-            <Label htmlFor="c-credit">
-              Límite de crédito (Bs, 0 = sin límite)
-            </Label>
-            <Input
-              id="c-credit"
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={creditLimit}
-              onChange={(e) => setCreditLimit(e.target.value)}
-              placeholder="0"
-            />
-          </div>
+        {isPension && (
+          <>
+            <div className="space-y-1">
+              <Label htmlFor="c-type">Modalidad</Label>
+              <select
+                id="c-type"
+                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+                value={pensionType}
+                onChange={(e) => setPensionType(e.target.value as PensionType)}
+              >
+                {PensionTypeList.map((t) => (
+                  <option key={t} value={t}>
+                    {PensionTypeLabel[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {pensionType === PensionTypeValue.POSTPAGO && (
+              <div className="space-y-1">
+                <Label htmlFor="c-credit">
+                  Límite de crédito (Bs, 0 = sin límite)
+                </Label>
+                <Input
+                  id="c-credit"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            )}
+          </>
         )}
 
         {error && (

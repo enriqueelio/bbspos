@@ -128,6 +128,11 @@ async function getQueueData() {
       orderBy: [{ createdAt: "desc" }, { seq: "desc" }],
     }),
     prisma.customer.findMany({
+      // Solo los pensionados: la lista de "Cuenta Pensionado" es para cobrar
+      // contra una cuenta corriente, no para elegir entre todos los clientes de
+      // la casa (los de mostrador se registran al vuelo en el ticket y no
+      // tienen cuenta).
+      where: { isPension: true },
       orderBy: [{ name: "asc" }],
       select: {
         id: true,

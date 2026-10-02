@@ -233,7 +233,7 @@ export function PosTerminal({
   const [sizeId, setSizeId] = useState<string>("");
   const [bobaTypeId, setBobaTypeId] = useState<string>("");
   const [selectedFlavorId, setSelectedFlavorId] = useState<string | null>(null);
-  const [toppingIds, setToppingIds] = useState<string[]>([]);
+  const [selectedToppings, setSelectedToppings] = useState<{ id: string; name: string; price: number; qty: number }[]>([]);
   const [productQty, setProductQty] = useState(1);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -269,7 +269,7 @@ export function PosTerminal({
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
-    setToppingIds([]);
+    setSelectedToppings([]);
     setProductQty(1);
     setVariantItem(null);
     setVariantSize(null);
@@ -396,16 +396,14 @@ export function PosTerminal({
     return entry ? entry.price : null;
   }
 
-  const selectedToppings = toppingIds
-    .map((id) => toppings.find((t) => t.id === id))
-    .filter((t): t is Topping => Boolean(t));
+  const selectedToppingsArray = selectedToppings;
 
   // Subtotal del producto en proceso: bebida base + el costo de los extras
   // seleccionados. null = el combo de tamaño+boba no tiene precio (no disponible).
   function preticketSubtotal(): number | null {
     const base = priceOf();
     if (base === null) return null;
-    const extras = selectedToppings.reduce((sum, t) => sum + t.price, 0);
+    const extras = selectedToppingsArray.reduce((sum, t) => sum + t.price * t.qty, 0);
     return base + extras;
   }
 
@@ -426,7 +424,7 @@ export function PosTerminal({
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
-    setToppingIds([]);
+    setSelectedToppings([]);
     setProductQty(1);
   }
 
@@ -450,14 +448,29 @@ export function PosTerminal({
     setVariantItem(null);
     setVariantSize(null);
     setVariantSauces([]);
+    // Al entrar a Bubbas, limpiar estado del builder para no arrastrar selección previa
+    if (pane === BUBAS_PANE) {
+      setSizeId("");
+      setBobaTypeId("");
+      setSelectedFlavorId(null);
+      setSelectedToppings([]);
+      setProductQty(1);
+    }
   }
 
-  function toggleTopping(id: string) {
-    setToppingIds((current) =>
-      current.includes(id)
-        ? current.filter((t) => t !== id)
-        : [...current, id],
-    );
+  function setToppingQty(toppingId: string, qty: number) {
+    setSelectedToppings((current) => {
+      const topping = toppings.find((t) => t.id === toppingId);
+      if (!topping) return current;
+      if (qty <= 0) {
+        return current.filter((t) => t.id !== toppingId);
+      }
+      const existing = current.find((t) => t.id === toppingId);
+      if (existing) {
+        return current.map((t) => (t.id === toppingId ? { ...t, qty } : t));
+      }
+      return [...current, { id: topping.id, name: topping.name, price: topping.price, qty }];
+    });
   }
 
   // Tocar un sabor marca el producto en construcción. Los toppings se conservan
@@ -490,10 +503,11 @@ export function PosTerminal({
         category: bubaCategory,
         bobaType,
         unitPrice,
-        toppings: selectedToppings.map((t) => ({
+        toppings: selectedToppingsArray.map((t) => ({
           id: t.id,
           name: t.name,
           price: t.price,
+          qty: t.qty,
         })),
       },
       productQty,
@@ -501,7 +515,7 @@ export function PosTerminal({
     // Restablece el selector para empezar a armar otro producto.
     setSelectedFlavorId(null);
     setSizeId("");
-    setToppingIds([]);
+    setSelectedToppings([]);
     setProductQty(1);
   }
 
@@ -569,7 +583,7 @@ export function PosTerminal({
       cart.clear();
       // Devuelve los selectores a su estado por defecto para no arrastrar
       // las opciones del pedido anterior.
-      setToppingIds([]);
+      setSelectedToppings([]);
       setSizeId("");
       setBobaTypeId("");
       setSelectedFlavorId(null);
@@ -606,7 +620,7 @@ export function PosTerminal({
     void syncLunchHolds(cart.cartId, [], cart.scheduledFor || null).catch(() => {});
     cart.clear();
     setNotice(null);
-    setToppingIds([]);
+    setSelectedToppings([]);
     setSizeId("");
     setBobaTypeId("");
     setSelectedFlavorId(null);
@@ -984,6 +998,7 @@ export function PosTerminal({
                   bubaCategory={bubaCategory}
                   onSwitchCategory={switchBubaCategory}
                   flavors={flavors}
+                  allFlavors={catalog.flavors}
                   sizes={sizes}
                   bobaTypes={sortedBobaTypes}
                   toppings={toppings}
@@ -991,7 +1006,7 @@ export function PosTerminal({
                   selectedFlavor={selectedFlavor}
                   selectedSize={size}
                   selectedBobaType={bobaType}
-                  selectedToppings={selectedToppings}
+                  selectedToppings={selectedToppingsArray}
                   productQty={productQty}
                   productBlockReason={productBlockReason}
                   preticketSubtotal={preticketSubtotal()}
@@ -999,8 +1014,7 @@ export function PosTerminal({
                   onSelectFlavor={selectFlavor}
                   onSelectSize={setSizeId}
                   onSelectBoba={setBobaTypeId}
-                  onToggleTopping={toggleTopping}
-                  onSetQty={(value) => setProductQty(Math.max(1, value))}
+                  onSetToppingQty={setToppingQty}
                   onConfirmProduct={confirmProduct}
                 />
               )}

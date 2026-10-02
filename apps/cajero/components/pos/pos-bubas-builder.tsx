@@ -16,6 +16,7 @@ export function PosBubasBuilder({
   bubaCategory,
   onSwitchCategory,
   flavors,
+  allFlavors,
   sizes,
   bobaTypes,
   toppings,
@@ -31,13 +32,13 @@ export function PosBubasBuilder({
   onSelectFlavor,
   onSelectSize,
   onSelectBoba,
-  onToggleTopping,
-  onSetQty,
+  onSetToppingQty,
   onConfirmProduct,
 }: {
   bubaCategory: FlavorCategoryType;
   onSwitchCategory: (category: FlavorCategoryType) => void;
   flavors: Flavor[];
+  allFlavors: Flavor[];
   sizes: Size[];
   bobaTypes: BobaType[];
   toppings: Topping[];
@@ -45,7 +46,7 @@ export function PosBubasBuilder({
   selectedFlavor: Flavor | null;
   selectedSize: Size | undefined;
   selectedBobaType: BobaType | undefined;
-  selectedToppings: Topping[];
+  selectedToppings: { id: string; name: string; price: number; qty: number }[];
   productQty: number;
   productBlockReason: string | null;
   preticketSubtotal: number | null;
@@ -53,16 +54,25 @@ export function PosBubasBuilder({
   onSelectFlavor: (flavor: Flavor) => void;
   onSelectSize: (id: string) => void;
   onSelectBoba: (id: string) => void;
-  onToggleTopping: (id: string) => void;
-  onSetQty: (value: number) => void;
+  onSetToppingQty: (toppingId: string, qty: number) => void;
   onConfirmProduct: () => void;
 }) {
+  // Encontrar toppings de boba (Tapioca y Explosivas)
+  const bobaToppings = toppings.filter((t) => {
+    const name = t.name.toLowerCase();
+    return name.includes("tapioca") || name.includes("explosiva");
+  });
+
+  // Obtener cantidad actual de un topping
+  const getToppingQty = (toppingId: string) =>
+    selectedToppings.find((tp) => tp.id === toppingId)?.qty ?? 0;
+
   return (
     <>
       {/* Subcategorías de Bubble Drinks (Especiales / Con agua / Con leche) */}
       <div className="flex flex-wrap gap-2">
         {FlavorCategoryList.map((category) => {
-          const enabled = flavors.some((f) =>
+          const enabled = allFlavors.some((f) =>
             f.categories.includes(category),
           );
           const selected = category === bubaCategory;
@@ -92,7 +102,7 @@ export function PosBubasBuilder({
               key={flavor.id}
               type="button"
               onClick={() => onSelectFlavor(flavor)}
-              className={`${PRODUCT_BASE} h-14 ${
+              className={`${PRODUCT_BASE} h-12 ${
                 selected ? PRODUCT.selected : PRODUCT.idle
               }`}
             >
@@ -111,7 +121,7 @@ export function PosBubasBuilder({
               key={s.id}
               type="button"
               onClick={() => onSelectSize(s.id)}
-              className={`${PRODUCT_BASE} h-14 ${
+              className={`${PRODUCT_BASE} h-12 ${
                 s.id === selectedSize?.id ? PRODUCT.selected : PRODUCT.idle
               }`}
             >
@@ -121,7 +131,7 @@ export function PosBubasBuilder({
         </div>
       </section>
 
-      {/* Tipo de boba (debajo de tamaño) */}
+      {/* Tipo de boba (debajo de tamaño) - selección radio */}
       <section className="mt-2 space-y-3">
         <h3 className={TOP_LABEL}>Tipo de boba</h3>
         <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
@@ -130,7 +140,7 @@ export function PosBubasBuilder({
               key={b.id}
               type="button"
               onClick={() => onSelectBoba(b.id)}
-              className={`${PRODUCT_BASE} h-14 ${
+              className={`${PRODUCT_BASE} h-12 ${
                 b.id === selectedBobaType?.id ? PRODUCT.selected : PRODUCT.idle
               }`}
             >
@@ -140,30 +150,78 @@ export function PosBubasBuilder({
         </div>
       </section>
 
-      {toppings.length > 0 && (
+      {/* Extras: Tapioca extra y Explosiva extra con controles +/- */}
+      {bobaToppings.length > 0 && (
         <section className="mt-2 space-y-3">
           <h3 className={TOP_LABEL}>Extras</h3>
           <div className="flex flex-wrap gap-2">
-            {toppings.map((t) => {
-              const selected = selectedToppings.some((tp) => tp.id === t.id);
+            {bobaToppings.map((t) => {
+              const qty = getToppingQty(t.id);
               return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onToggleTopping(t.id)}
-                  className={`${CHIP_BASE} ${
-                    selected ? CHIP.selected : CHIP.idle
-                  }`}
-                >
-                  + {t.name} · {formatPrice(t.price)}
-                </button>
+                <div key={t.id} className="flex items-center gap-1 whitespace-nowrap">
+                  <button
+                    type="button"
+                    disabled={qty <= 0}
+                    onClick={() => onSetToppingQty(t.id, qty - 1)}
+                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-sm font-bold text-white shrink-0">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onSetToppingQty(t.id, qty + 1)}
+                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0"
+                  >
+                    +
+                  </button>
+                  <span className="px-2 text-xs text-slate-300 whitespace-nowrap shrink-0">
+                    {t.name} · {formatPrice(t.price)}
+                  </span>
+                </div>
               );
             })}
+            {/* Otros toppings no-boba */}
+            {toppings
+              .filter((t) => {
+                const name = t.name.toLowerCase();
+                return !name.includes("tapioca") && !name.includes("explosiva");
+              })
+              .map((t) => {
+                const qty = getToppingQty(t.id);
+                return (
+                  <div key={t.id} className="flex items-center gap-1 whitespace-nowrap">
+                    <button
+                      type="button"
+                      disabled={qty <= 0}
+                      onClick={() => onSetToppingQty(t.id, qty - 1)}
+                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0"
+                    >
+                      −
+                    </button>
+                    <span className="w-6 text-center text-sm font-bold text-white shrink-0">
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSetToppingQty(t.id, qty + 1)}
+                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0"
+                    >
+                      +
+                    </button>
+                    <span className="px-2 text-xs text-slate-300 whitespace-nowrap shrink-0">
+                      {t.name} · {formatPrice(t.price)}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </section>
       )}
 
-      {/* Preticket: producto en construcción */}
+      {/* Preticket: producto en construcción - SIN control de cantidad */}
       {selectedFlavor ? (
         <section className="rounded-xl border border-slate-700 bg-slate-900/80 p-4 shadow-lg shadow-black/20">
           <h3 className="text-sm font-bold uppercase tracking-widest text-white">
@@ -178,7 +236,7 @@ export function PosBubasBuilder({
             </p>
             {selectedToppings.length > 0 && (
               <p className="text-slate-400">
-                + {selectedToppings.map((t) => t.name).join(", ")}
+                + {selectedToppings.map((t) => `${t.name} × ${t.qty}`).join(", ")}
               </p>
             )}
             {productBlockReason && (
@@ -187,50 +245,18 @@ export function PosBubasBuilder({
               </p>
             )}
           </div>
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-              Cantidad
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                aria-label="Restar cantidad"
-                disabled={productQty <= 1}
-                onClick={() => onSetQty(productQty - 1)}
-                className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                −
-              </button>
-              <span className="text-base font-bold w-6 text-center text-slate-200">
-                {productQty}
-              </span>
-              <button
-                type="button"
-                aria-label="Sumar cantidad"
-                onClick={() => onSetQty(productQty + 1)}
-                className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-              Subtotal
-            </span>
-            <span className="font-mono text-xl font-bold text-white">
-              {preticketSubtotal !== null
-                ? formatPrice(preticketSubtotal * productQty)
-                : "—"}
-            </span>
-          </div>
           <button
             type="button"
             disabled={!canConfirm}
             onClick={onConfirmProduct}
-            className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center gap-2"
           >
-            Confirmar producto{productQty > 1 ? ` × ${productQty}` : ""}
+            <span>Confirmar</span>
+            {preticketSubtotal !== null && (
+              <span className="font-bold text-base text-white">
+                {formatPrice(preticketSubtotal * productQty)}
+              </span>
+            )}
           </button>
         </section>
       ) : (

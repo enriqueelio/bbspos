@@ -133,34 +133,37 @@ model AlitaSauce {
   updatedAt DateTime @updatedAt
 }
 
-// Cuenta corriente de un cliente/pensionado. El saldo es Int (Bs, igual que el
-// resto del sistema): positivo = saldo a favor (Prepago), negativo = deuda
-// (Postpago). creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
-// Los campos de lealtad (totalVisits/totalSpent/lastVisitAt/points) son una caché
-// de métricas para rankings rápidos; la fuente de verdad es Order con paidAt.
-// phone es opcional (los clientes de mostrador solo dan nombre) pero único: en
-// SQLite los NULL no chocan entre sí, así que puede haber varios sin teléfono.
-// Customer mezcla dos mundos: los PENSIONADOS (tienen cuenta corriente, se les
-// cobra "PENSIONADO" en caja) y los clientes de MOSTRADOR (solo lealtad, se
-// registran al vuelo en el ticket). pensionType NO los separa: su default es
-// PREPAGO, que es una modalidad de ahorro, no una marca de que sea pensionado.
-// isPension es esa marca, y es lo único que filtra la lista de cobro del cajero.
+// Cuenta corriente de un pensionado. Existencia de esta entidad = es pensionado.
+// El saldo es Int (Bs): positivo = saldo a favor (Prepago), negativo = deuda (Postpago).
+// creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
+model CustomerAccount {
+  id           String           @id @default(cuid())
+  customerId   String           @unique
+  customer     Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  pensionType  PensionType      @default(PREPAGO)
+  balance      Int              @default(0)
+  creditLimit  Int              @default(0)
+  ledger       CustomerLedger[]
+  orders       Order[]
+
+  @@index([customerId])
+  @@index([pensionType])
+}
+
+// Cliente: identidad + fidelidad (sin datos financieros).
+// La cuenta corriente vive en CustomerAccount (1:1 opcional).
 model Customer {
   id          String           @id @default(cuid())
   name        String
   ci          String?
   phone       String?          @unique
-  isPension   Boolean          @default(false)
-  pensionType PensionType      @default(PREPAGO)
-  balance     Int              @default(0)
-  creditLimit Int              @default(0)
   totalVisits Int              @default(0)
   totalSpent  Int              @default(0)
   lastVisitAt DateTime?
   points      Int              @default(0)
   createdAt   DateTime         @default(now())
   orders      Order[]
-  ledger      CustomerLedger[]
+  account     CustomerAccount? // 1:1 opcional - solo si es pensionado
   rewards     CustomerReward[]
 
   @@index([name])
@@ -203,23 +206,21 @@ model CustomerReward {
   @@index([ruleId])
 }
 
-// Historial de movimientos de la cuenta. type es un String con los valores
-// "RECARGA" (saldo a favor de un Prepago), "PAGO_DEUDA" (abono de un Postpago)
-// o "CONSUMO" (compra descontada de la cuenta). amount es siempre positivo;
-// el significado lo da el type. paymentMethod solo se registra en abonos
-// (RECARGA/PAGO_DEUDA) porque ahí entra efectivo/QR real a la caja.
+// Historial de movimientos de la cuenta corriente. Apunta a CustomerAccount (no a Customer).
+// type: "RECARGA" (saldo a favor Prepago), "PAGO_DEUDA" (abono Postpago), "CONSUMO" (compra a cuenta).
+// amount siempre positivo; el sentido lo da el type. paymentMethod solo en abonos (RECARGA/PAGO_DEUDA).
 model CustomerLedger {
-  id            String         @id @default(cuid())
-  customerId    String
-  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id            String           @id @default(cuid())
+  accountId     String
+  account       CustomerAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   type          String
   amount        Int
   paymentMethod PaymentMethod?
   orderId       String?
-  order         Order?         @relation(fields: [orderId], references: [id])
-  createdAt     DateTime       @default(now())
+  order         Order?           @relation(fields: [orderId], references: [id])
+  createdAt     DateTime         @default(now())
 
-  @@index([customerId])
+  @@index([accountId])
   @@index([createdAt])
 }
 
@@ -263,6 +264,8 @@ model Order {
   tiempoEstimado Int              @default(10)
   customerId     String?
   customer       Customer?        @relation(fields: [customerId], references: [id])
+  accountId      String?          // Para pagos PENSION: referencia a CustomerAccount
+  account        CustomerAccount? @relation(fields: [accountId], references: [id])
   ledgerEntries  CustomerLedger[]
   customerRewards CustomerReward[]
 
@@ -274,6 +277,7 @@ model Order {
   @@index([userId])
   @@index([userId, status])
   @@index([customerId])
+  @@index([accountId])
 }
 
 model OrderItem {
@@ -362,7 +366,7 @@ model LunchAdjust {
 
 // Apartado de cupo mientras el almuerzo esta en el ticket en curso: una fila por
 // (menuItemId, date, cartId). Impide que otra terminal venda lo que esta caja ya
-//prometio. expiresAt libera el cupo si la caja abandona el ticket.
+// prometio. expiresAt libera el cupo si la caja abandona el ticket.
 model LunchHold {
   id         String   @id @default(cuid())
   menuItemId String

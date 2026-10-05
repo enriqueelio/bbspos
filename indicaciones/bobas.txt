@@ -1,0 +1,278 @@
+Quiero que modifiques la interfaz del POS de CAJERO para optimizar el espacio vertical y hacer más clara la selección de productos.
+
+IMPORTANTE:
+- NO cambies la lógica de negocio.
+- NO cambies precios, cálculos, persistencia, estructura de datos ni acciones del servidor.
+- NO cambies el comportamiento del carrito/ticket.
+- Primero inspecciona el código existente para identificar exactamente qué componentes renderizan esta sección.
+- Haz una implementación coherente con el estilo visual actual del sistema.
+- Mantén responsive el diseño.
+- Antes de modificar, identifica los archivos/componentes involucrados y verifica cómo se construye actualmente la categoría "Bubbas".
+- Después de modificar, ejecuta typecheck/lint del proyecto correspondiente y corrige cualquier error introducido.
+
+CONTEXTO
+========
+
+Estoy modificando la pantalla POS de CAJERO, específicamente la categoría:
+
+"Bubbas"
+
+Actualmente existe una sección similar a:
+
+TAMAÑO / BOBA / EXTRAS
+
+con:
+- Tamaño: Grande 16oz / Extragrande 21oz
+- Boba: Tapioca / Explosivas
+- Controles de cantidad para:
+  - Explosiva extra
+  - Tapioca extra
+
+Y debajo:
+
+PRODUCTO EN CURSO
+
+que actualmente muestra:
+- nombre del producto
+- configuración
+- cantidad con botones - / +
+- subtotal
+- botón "Confirmar producto"
+
+CAMBIOS SOLICITADOS
+===================
+
+1. ORGANIZAR MEJOR LA SECCIÓN DE BUBBAS
+---------------------------------------
+
+Quiero ahorrar espacio y mejorar el orden visual.
+
+La sección debe quedar organizada por filas/grupos claramente separados:
+
+FILA 1:
+TAMAÑO
+
+Ejemplo:
+[ Grande ] [ Extragrande ]
+
+FILA 2:
+BOBA
+
+Ejemplo:
+[ Tapioca ]     [ control/cantidad ] [ Explosiva ]   [ control/cantidad ]
+
+
+No quiero alterar la funcionalidad actual de los botones +/- de los extras.
+Solo reorganizar visualmente esa parte.
+
+La jerarquía visual debe ser:
+
+TAMAÑO
+[opciones]
+
+BOBA
+[opciones]
+
+
+o una variante horizontal compacta equivalente que conserve claramente estas tres secciones.
+
+2. PRODUCTO EN CURSO
+--------------------
+
+En la tarjeta "PRODUCTO EN CURSO":
+
+ELIMINAR COMPLETAMENTE:
+- botón "-"
+- número de cantidad
+- botón "+"
+
+Es decir, actualmente probablemente existe algo como:
+
+CANTIDAD
+
+[ - ]  1  [ + ]
+
+Eso debe desaparecer de "Producto en curso".
+
+La tarjeta debe mostrar solamente la información necesaria para confirmar la configuración del producto.
+
+Ejemplo deseado:
+
+PRODUCTO EN CURSO
+
+Capuchino
+
+Grande · Tapioca
+
+SUBTOTAL                              20 Bs
+
+[                 Confirmar producto                 ]
+
+No mostrar la cantidad en esta tarjeta.
+
+RAZÓN FUNCIONAL:
+================
+
+La cantidad del producto NO se debe modificar en "Producto en curso".
+
+La cantidad se gestiona posteriormente desde el "Ticket en curso", donde ya existe la posibilidad de aumentar/disminuir cantidades.
+
+Por lo tanto:
+- "Producto en curso" = configurar y confirmar una unidad/configuración del producto.
+- "Ticket en curso" = administrar cantidades de productos ya agregados.
+
+NO DUPLICAR EL CONTROL DE CANTIDAD.
+
+3. OBJETIVO VISUAL
+==================
+
+Quiero reducir la altura ocupada por esta sección sin sacrificar claridad.
+
+Prioridades:
+
+1. Separar claramente Tamaño / Boba / Extras.
+2. Poner Extras en su propio renglón.
+3. Eliminar el bloque "Cantidad" de Producto en curso.
+4. Mantener botones suficientemente grandes para uso en pantalla táctil.
+5. Mantener el estilo actual:
+   - fondo oscuro;
+   - bordes redondeados;
+   - botones tipo pill;
+   - azul para selección;
+   - verde para acción principal;
+   - tipografía y espaciado coherentes con el POS existente.
+6. Aprovechar mejor el espacio horizontal.
+7. Evitar introducir scroll vertical innecesario.
+
+4. REFERENCIA VISUAL
+====================
+
+La composición visual objetivo es conceptualmente:
+
+------------------------------------------------------
+TAMAÑO / BOBA
+
+TAMAÑO
+[ Grande ] [ Extragrande ]
+
+BOBA
+[ Tapioca ] 		[ 0 ] [ + ]
+[ Explosivas ]		[ 0 ] [ + ]
+
+
+------------------------------------------------------
+
+PRODUCTO EN CURSO
+
+Capuchino
+Grande · Tapioca
+
+SUBTOTAL                              20 Bs
+
+[              CONFIRMAR PRODUCTO              ]
+
+------------------------------------------------------
+
+No copies literalmente el diseño si no coincide con los componentes existentes.
+Adáptalo al sistema actual.
+
+5. INVESTIGACIÓN DEL CÓDIGO
+===========================
+
+Antes de editar:
+
+- localiza el componente que renderiza la categoría "Bubbas";
+- localiza el componente que renderiza "TAMAÑO / BOBA / EXTRAS";
+- localiza el componente de "PRODUCTO EN CURSO";
+- localiza dónde se maneja la cantidad del producto en curso;
+- verifica dónde se modifica la cantidad en el ticket/carrito.
+
+Busca especialmente componentes relacionados con:
+
+- pos-terminal
+- pos-ticket-panel
+- pos-bubas-builder
+- pos-cart-store
+- cualquier componente builder de bebidas
+
+No asumas nombres de archivos: verifica el repositorio.
+
+6. REGLAS DE IMPLEMENTACIÓN
+===========================
+
+- Reutiliza los componentes existentes siempre que sea posible.
+- No dupliques lógica.
+- No crees un segundo estado para las cantidades.
+- No cambies la estructura del carrito.
+- No cambies las acciones del servidor.
+- No cambies el cálculo de precios.
+- No cambies la forma en que se agregan productos al ticket.
+- Solo modifica la presentación y elimina el control de cantidad de "Producto en curso".
+
+7. CRITERIOS DE ACEPTACIÓN
+==========================
+
+El trabajo se considera correcto cuando:
+
+[ ] La categoría Bubbas tiene Tamaño en una sección/fila propia.
+
+[ ] Boba tiene una sección/fila propia.
+
+[ ] Los controles +/-  siguen funcionando exactamente igual.
+
+[ ] "Producto en curso" ya NO muestra controles "-" ni "+".
+
+[ ] "Producto en curso" ya NO muestra el número de cantidad.
+
+[ ] El subtotal continúa funcionando correctamente.
+
+[ ] "Confirmar producto" continúa funcionando exactamente igual.
+
+[ ] La cantidad sigue pudiéndose modificar posteriormente desde "Ticket en curso".
+
+[ ] No se modifica ninguna regla de negocio.
+
+[ ] No se rompe ningún otro tipo de producto del POS.
+
+[ ] El diseño ocupa menos altura vertical que antes o, como mínimo, utiliza el espacio de forma claramente más eficiente.
+
+[ ] Se mantienen los estilos visuales existentes del POS.
+
+[ ] No aparecen errores de TypeScript.
+
+[ ] No se introducen warnings nuevos de lint.
+
+8. VALIDACIÓN FINAL
+===================
+
+Después de implementar:
+
+1. Revisa el diff.
+2. Confirma que los cambios sean exclusivamente los necesarios.
+3. Ejecuta typecheck.
+4. Ejecuta lint.
+5. Si existe una forma disponible de ejecutar/verificar el POS, verifica específicamente:
+   - seleccionar Bubbas;
+   - cambiar tamaño;
+   - cambiar boba;
+   - aumentar/disminuir Tapioca;
+   - aumentar/disminuir Explosiva;
+   - confirmar producto;
+   - comprobar que la cantidad sigue siendo modificable en Ticket en curso.
+
+No hagas refactors generales ni cambios no solicitados.
+
+OBJETIVO FINAL
+==============
+
+Quiero una interfaz más compacta, ordenada y rápida de operar:
+
+Tamaño
+↓
+Boba
+↓
+Producto en curso
+↓
+Confirmar
+
+Y la cantidad debe gestionarse únicamente después, desde Ticket en curso.

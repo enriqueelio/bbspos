@@ -53,8 +53,7 @@ async function buscarClientes() {
     select: {
       id: true,
       name: true,
-      isPension: true,
-      pensionType: true,
+      account: { select: { pensionType: true } }, // hasAccount = account != null
       totalVisits: true,
       totalSpent: true,
       points: true,
@@ -84,16 +83,15 @@ async function calcularDesdePedidos(customerId: string): Promise<Cache> {
       total: true,
       paidAt: true,
       paymentMethod: true,
-      customer: { select: { isPension: true, pensionType: true } },
+      customer: { select: { account: { select: { pensionType: true } } } },
     },
   });
   const puntuan = pedidos.filter(
     (p) =>
       // Todo lo que no sea consumo a cuenta de un pensionado POSTPAGO.
-      // `customer` es nullable en el tipo generado; el where ya garantiza que
-      // no es null, pero el filtro no lo estrecha, asi que se trata igual.
-      !p.customer?.isPension ||
-      p.customer?.pensionType !== "POSTPAGO" ||
+      // customer.account es nullable en el tipo generado; si no existe = mostrador.
+      !p.customer?.account ||
+      p.customer?.account?.pensionType !== "POSTPAGO" ||
       p.paymentMethod !== "PENSION",
   );
   const totalSpent = puntuan.reduce((suma, p) => suma + p.total, 0);
@@ -146,7 +144,7 @@ async function main() {
   console.log("  cliente                pension            ahora                 recalculado           delta");
   for (const { c, cache, verdad } of cambios) {
     const delta = verdad.totalSpent - cache.totalSpent;
-    const cuenta = c.isPension ? c.pensionType : "MOSTRADOR";
+    const cuenta = c.account ? c.account.pensionType : "MOSTRADOR";
     console.log(
       `  ${c.name.slice(0, 20).padEnd(20)}  ${cuenta.padEnd(16)}  ` +
         `${describe(cache)}  ->  ${describe(verdad)}  ${delta > 0 ? "+" : ""}${delta}Bs`,

@@ -226,9 +226,9 @@ export async function accumulateCustomerLoyalty(
 ): Promise<void> {
   const cliente = await tx.customer.findUnique({
     where: { id: customerId },
-    select: { id: true, isPension: true, pensionType: true },
+    select: { id: true, account: { select: { pensionType: true } } },
   });
-  if (!cliente || !isFidelizable(cliente, metodo)) return;
+  if (!cliente || !isFidelizable({ hasAccount: !!cliente.account, account: cliente.account }, metodo)) return;
 
   await tx.customer.update({
     where: { id: customerId },

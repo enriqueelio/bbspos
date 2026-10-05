@@ -1,38 +1,25 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Wallet, ScrollText, Pencil } from "lucide-react";
-import { Badge, Button, Card, CardContent, Input, Label } from "@bbspos/ui";
+import { useState } from "react";
+import { Plus, Pencil, Wallet } from "lucide-react";
+import { Button, Card, CardContent, Input, Label } from "@bbspos/ui";
+import { formatPrice } from "@bbspos/types";
 import {
-  CustomerLedgerTypeLabel,
-  CustomerLedgerType,
-  PaymentMethod,
-  PaymentMethodLabel,
-  PensionType as PensionTypeValue,
-  PensionTypeLabel,
-  PensionTypeList,
-  formatPrice,
-  type CustomerLedgerView,
-  type PaymentMethod as PaymentMethodType,
-  type PensionType,
-} from "@bbspos/types";
-import {
-  addCustomerFunds,
-  createCustomer,
+  createClient,
+  convertToPensionado,
   updateCustomer,
 } from "@/app/actions/customers";
 
-export interface PensionCustomer {
+export interface ClientCustomer {
   id: string;
   name: string;
   ci: string | null;
   phone: string;
-  isPension: boolean;
-  pensionType: PensionType;
-  balance: number;
-  creditLimit: number;
+  totalVisits: number;
+  totalSpent: number;
+  lastVisitAt: string | null;
+  points: number;
   createdAt: string;
-  ledger: CustomerLedgerView[];
 }
 
 function runAction(fn: () => Promise<void>, onError: (msg: string) => void) {
@@ -41,45 +28,33 @@ function runAction(fn: () => Promise<void>, onError: (msg: string) => void) {
   );
 }
 
-type FundDialogState = { customer: PensionCustomer } | null;
-type LedgerDialogState = { customer: PensionCustomer } | null;
 type FormDialogState =
   | { kind: "create" }
-  | { kind: "edit"; customer: PensionCustomer }
+  | { kind: "edit"; customer: ClientCustomer }
+  | { kind: "convert"; customer: ClientCustomer }
   | null;
 
 export function CustomersClient({
   customers,
   currentUserRole,
 }: {
-  customers: PensionCustomer[];
+  customers: ClientCustomer[];
   currentUserRole: string;
 }) {
-  const [fundDialog, setFundDialog] = useState<FundDialogState>(null);
-  const [ledgerDialog, setLedgerDialog] = useState<LedgerDialogState>(null);
   const [formDialog, setFormDialog] = useState<FormDialogState>(null);
-  const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const isAdmin =
     currentUserRole === "ADMIN" || currentUserRole === "SUPER_ADMIN";
 
-  function closeDialogs() {
-    setFundDialog(null);
-    setLedgerDialog(null);
-    setFormDialog(null);
-    setError(null);
-  }
-
   return (
     <div className="space-y-6">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Clientes / Pensionados</h1>
+          <h1 className="text-xl font-bold text-white">Clientes (Mostrador)</h1>
           <p className="text-muted-foreground">
-            Cuentas corrientes Prepago y Postpago: saldos, recargas y pagos de
-            deuda. Solo los <strong>Pensionados</strong> aparecen en el cobro
-            por cuenta del cajero; los de Mostrador son clientes de lealtad.
+            Clientes de mostrador: solo acumulan lealtad (visitas, gasto, puntos).
+            Usa &ldquo;Convertir en pensionado&rdquo; para darles cuenta corriente.
           </p>
         </div>
         {isAdmin && (
@@ -95,12 +70,6 @@ export function CustomersClient({
         )}
       </div>
 
-      {error && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
       {notice && (
         <p className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
           {notice}
@@ -115,9 +84,10 @@ export function CustomersClient({
                 <th className="px-4 py-2 font-medium">Nombre</th>
                 <th className="px-4 py-2 font-medium">CI</th>
                 <th className="px-4 py-2 font-medium">Teléfono</th>
-                <th className="px-4 py-2 font-medium">Modalidad</th>
-                <th className="px-4 py-2 font-medium">Saldo</th>
-                <th className="px-4 py-2 font-medium">Límite (Postpago)</th>
+                <th className="px-4 py-2 font-medium">Visitas</th>
+                <th className="px-4 py-2 font-medium">Gasto total</th>
+                <th className="px-4 py-2 font-medium">Puntos</th>
+                <th className="px-4 py-2 font-medium">Última visita</th>
                 <th className="px-4 py-2 font-medium text-right">Acciones</th>
               </tr>
             </thead>
@@ -125,11 +95,11 @@ export function CustomersClient({
               {customers.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-8 text-center text-muted-foreground"
                   >
-Aún no hay clientes registrados. Crea el primero con &ldquo;Nuevo
-cliente&rdquo;.
+                    Aún no hay clientes registrados. Crea el primero con &ldquo;Nuevo
+                    cliente&rdquo;.
                   </td>
                 </tr>
               )}
@@ -137,33 +107,17 @@ cliente&rdquo;.
                 <tr key={customer.id} className="border-b last:border-b-0">
                   <td className="px-4 py-2 font-medium">{customer.name}</td>
                   <td className="px-4 py-2">{customer.ci ?? "—"}</td>
-                  <td className="px-4 py-2">
-                    {customer.phone || "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {customer.isPension ? (
-                      <Badge
-                        variant={
-                          customer.pensionType === PensionTypeValue.POSTPAGO
-                            ? "warning"
-                            : "default"
-                        }
-                      >
-                        {PensionTypeLabel[customer.pensionType]}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">Mostrador</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <BalanceCell customer={customer} />
-                  </td>
-                  <td className="px-4 py-2">
-                    {customer.isPension &&
-                    customer.pensionType === PensionTypeValue.POSTPAGO
-                      ? customer.creditLimit > 0
-                        ? formatPrice(customer.creditLimit)
-                        : "Sin límite"
+                  <td className="px-4 py-2">{customer.phone || "—"}</td>
+                  <td className="px-4 py-2 text-center">{customer.totalVisits}</td>
+                  <td className="px-4 py-2 text-right">{formatPrice(customer.totalSpent)}</td>
+                  <td className="px-4 py-2 text-center font-bold">{customer.points}</td>
+                  <td className="px-4 py-2 text-center text-sm">
+                    {customer.lastVisitAt
+                      ? new Date(customer.lastVisitAt).toLocaleDateString("es-MX", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "2-digit",
+                        })
                       : "—"}
                   </td>
                   <td className="px-4 py-2">
@@ -178,35 +132,15 @@ cliente&rdquo;.
                       >
                         <Pencil className="mr-1 h-4 w-4" /> Editar
                       </Button>
-                      {/* Solo el pensionado tiene cuenta corriente. Un mostrador
-                       *  no se puede bonificar: el saldo entraría al cierre del
-                       *  día y el cajero no podría gastarlo, porque su lista de
-                       *  cobro a cuenta solo tiene marcados como pensionado.
-                       *  `addCustomerFunds` lo rechaza igual, esto solo evita
-                       *  ofrecer una acción que va a fallar. */}
-                      {customer.isPension && (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setError(null);
-                            setFundDialog({ customer });
-                          }}
-                        >
-                          <Wallet className="mr-1 h-4 w-4" />
-                          {customer.pensionType === PensionTypeValue.PREPAGO
-                            ? "Recargar Saldo"
-                            : "Pagar Deuda"}
-                        </Button>
-                      )}
                       <Button
                         size="sm"
-                        variant="secondary"
                         onClick={() => {
-                          setError(null);
-                          setLedgerDialog({ customer });
+                          setNotice(null);
+                          setFormDialog({ kind: "convert", customer });
                         }}
                       >
-                        <ScrollText className="mr-1 h-4 w-4" /> Movimientos
+                        <Wallet className="mr-1 h-4 w-4" />
+                        Convertir en pensionado
                       </Button>
                     </div>
                   </td>
@@ -218,110 +152,69 @@ cliente&rdquo;.
       </Card>
 
       {formDialog && (
-        <CustomerFormDialog
+        <ClientFormDialog
           dialog={formDialog}
           onClose={() => setFormDialog(null)}
-          onError={setError}
-        />
-      )}
-
-      {fundDialog && (
-        <FundDialog
-          customer={fundDialog.customer}
-          onClose={() => setFundDialog(null)}
-          onError={setError}
           onDone={(message) => {
             setNotice(message);
-            setFundDialog(null);
+            setFormDialog(null);
           }}
-        />
-      )}
-
-      {ledgerDialog && (
-        <LedgerDialog
-          customer={ledgerDialog.customer}
-          onClose={() => setLedgerDialog(null)}
         />
       )}
     </div>
   );
 }
 
-function BalanceCell({ customer }: { customer: PensionCustomer }) {
-  if (customer.balance > 0) {
-    return (
-      <span className="font-bold text-success">
-        {formatPrice(customer.balance)} a favor
-      </span>
-    );
-  }
-  if (customer.balance < 0) {
-    return (
-      <span className="font-bold text-destructive">
-        {formatPrice(Math.abs(customer.balance))} de deuda
-      </span>
-    );
-  }
-  return <span className="text-muted-foreground">{formatPrice(0)}</span>;
-}
-
-function CustomerFormDialog({
+function ClientFormDialog({
   dialog,
   onClose,
-  onError,
+  onDone,
 }: {
   dialog: NonNullable<FormDialogState>;
   onClose: () => void;
-  onError: (msg: string) => void;
+  onDone: (message: string) => void;
 }) {
   const isEdit = dialog.kind === "edit";
-  const target = isEdit ? dialog.customer : null;
+  const isConvert = dialog.kind === "convert";
+  const target = isEdit || isConvert ? dialog.customer : null;
 
   const [name, setName] = useState(target?.name ?? "");
   const [ci, setCi] = useState(target?.ci ?? "");
   const [phone, setPhone] = useState(target?.phone ?? "");
-  // Al crear desde esta pantalla lo esperable es una cuenta corriente, así que
-  // el toggle arranca marcado; al editar manda lo que ya está en BD.
-  const [isPension, setIsPension] = useState(target?.isPension ?? true);
-  const [pensionType, setPensionType] = useState<PensionType>(
-    target?.pensionType ?? "PREPAGO",
-  );
-  const [creditLimit, setCreditLimit] = useState(
-    target && target.pensionType === PensionTypeValue.POSTPAGO
-      ? String(target.creditLimit)
-      : "",
-  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Para conversión a pensionado
+  const [pensionType, setPensionType] = useState<"PREPAGO" | "POSTPAGO">("PREPAGO");
+  const [creditLimit, setCreditLimit] = useState("");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     runAction(async () => {
-      const creditLimitValue =
-        pensionType === PensionTypeValue.POSTPAGO
-          ? parseInt(creditLimit, 10) || 0
-          : 0;
       if (isEdit && target) {
         await updateCustomer({
           customerId: target.id,
           name,
           ci,
           phone,
-          isPension,
-          pensionType,
-          creditLimit: creditLimitValue,
         });
+        onDone(`Cliente "${name}" actualizado.`);
+      } else if (isConvert && target) {
+        await convertToPensionado({
+          customerId: target.id,
+          pensionType,
+          creditLimit: creditLimit ? parseInt(creditLimit, 10) : 0,
+        });
+        onDone(`Cliente "${name}" convertido a pensionado ${pensionType === "PREPAGO" ? "Prepago" : "Postpago"}.`);
       } else {
-        await createCustomer({
+        await createClient({
           name,
           ci,
           phone,
-          isPension,
-          pensionType,
-          creditLimit: creditLimitValue,
         });
+        onDone(`Cliente "${name}" creado.`);
       }
       onClose();
     }, (msg) => {
@@ -333,7 +226,7 @@ function CustomerFormDialog({
   return (
     <Modal>
       <h2 className="text-lg font-bold">
-        {isEdit ? `Editar ${target?.name}` : "Nuevo cliente"}
+        {isEdit ? `Editar ${target?.name}` : isConvert ? `Convertir a pensionado: ${target?.name}` : "Nuevo cliente"}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1">
@@ -371,30 +264,7 @@ function CustomerFormDialog({
           />
         </div>
 
-        <label
-          htmlFor="c-pension"
-          className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5"
-        >
-          <input
-            id="c-pension"
-            type="checkbox"
-            checked={isPension}
-            onChange={(e) => setIsPension(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-primary"
-          />
-          <span className="text-sm">
-            <span className="block font-semibold">Es pensionado</span>
-            <span className="block text-xs text-muted-foreground">
-              Marcado, aparece en el cobro &laquo;PENSIONADO&raquo; del cajero y
-              se le puede cargar consumo a la cuenta. Sin marcar, es un cliente
-              de mostrador: solo acumula lealtad y no tiene cuenta corriente,
-              así que no admite saldo. Si tiene saldo o deuda, la cuenta no se
-              puede desmarcar.
-            </span>
-          </span>
-        </label>
-
-        {isPension && (
+        {isConvert && (
           <>
             <div className="space-y-1">
               <Label htmlFor="c-type">Modalidad</Label>
@@ -402,17 +272,14 @@ function CustomerFormDialog({
                 id="c-type"
                 className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
                 value={pensionType}
-                onChange={(e) => setPensionType(e.target.value as PensionType)}
+                onChange={(e) => setPensionType(e.target.value as "PREPAGO" | "POSTPAGO")}
               >
-                {PensionTypeList.map((t) => (
-                  <option key={t} value={t}>
-                    {PensionTypeLabel[t]}
-                  </option>
-                ))}
+                <option value="PREPAGO">Prepago (saldo a favor)</option>
+                <option value="POSTPAGO">Postpago (crédito/deuda)</option>
               </select>
             </div>
 
-            {pensionType === PensionTypeValue.POSTPAGO && (
+            {pensionType === "POSTPAGO" && (
               <div className="space-y-1">
                 <Label htmlFor="c-credit">
                   Límite de crédito (Bs, 0 = sin límite)
@@ -445,247 +312,13 @@ function CustomerFormDialog({
             {saving
               ? "Guardando…"
               : isEdit
-                ? "Guardar cambios"
-                : "Crear cliente"}
+              ? "Guardar cambios"
+              : isConvert
+              ? "Convertir a pensionado"
+              : "Crear cliente"}
           </Button>
         </div>
       </form>
-    </Modal>
-  );
-}
-
-function FundDialog({
-  customer,
-  onClose,
-  onError,
-  onDone,
-}: {
-  customer: PensionCustomer;
-  onClose: () => void;
-  onError: (msg: string) => void;
-  onDone: (message: string) => void;
-}) {
-  // El título sigue por `pensionType` porque ES lo que distingue "Recargar saldo"
-  // de "Pagar deuda", y para un pensionado `pensionType` sí es un dato real (ya no
-  // es el default PREPAGO que el esquema le pone a los mostradores). Lo que evita
-  // el default engañoso es que un mostrador no pueda abrir este diálogo: el
-  // botón de la tabla queda oculto para él y `addCustomerFunds` rechaza el abono
-  // igual, por si el diálogo llegara a abrirse de otra forma.
-  const isPrepago = customer.pensionType === PensionTypeValue.PREPAGO;
-  const title = isPrepago ? "Recargar saldo" : "Pagar deuda";
-
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<PaymentMethodType>(
-    PaymentMethod.EFECTIVO,
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const parsedAmount = useMemo(() => {
-    const n = parseInt(amount, 10);
-    return Number.isFinite(n) ? n : 0;
-  }, [amount]);
-
-  function handleConfirm() {
-    if (parsedAmount <= 0) {
-      setError("Ingresa un monto mayor a cero.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    runAction(async () => {
-      await addCustomerFunds({
-        customerId: customer.id,
-        amount: parsedAmount,
-        paymentMethod: method,
-      });
-      onDone(
-        `${title} registrada: ${formatPrice(parsedAmount)} (${PaymentMethodLabel[method]}).`,
-      );
-    }, (msg) => {
-      setError(msg);
-      setSaving(false);
-    });
-  }
-
-  function handleNumpad(d: string) {
-    setAmount((prev) => (prev === "0" ? d : prev + d));
-    setError(null);
-  }
-
-  function backspace() {
-    setAmount((prev) => prev.slice(0, -1));
-    setError(null);
-  }
-
-  return (
-    <Modal>
-      <h2 className="text-lg font-bold">
-        {title} — {customer.name}
-      </h2>
-      <div className="space-y-4">
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          <p>
-            Modalidad:{" "}
-            <Badge
-              variant={isPrepago ? "default" : "warning"}
-              className="ml-1"
-            >
-              {PensionTypeLabel[customer.pensionType]}
-            </Badge>
-          </p>
-          <p className="mt-1">
-            Saldo actual:{" "}
-            <BalanceInline customer={customer} />
-          </p>
-        </div>
-
-        <div className="w-full rounded-lg border border-border bg-slate-900 p-4 text-right font-mono text-4xl font-black text-emerald-400">
-          {amount || "0"}
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((d) => (
-            <Button
-              key={d}
-              type="button"
-              variant="secondary"
-              className="h-14 text-2xl font-bold"
-              onClick={() => handleNumpad(d)}
-            >
-              {d}
-            </Button>
-          ))}
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-14 text-2xl font-bold"
-            onClick={() => handleNumpad("0")}
-          >
-            0
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-14 text-2xl font-bold"
-            onClick={backspace}
-          >
-            Borrar
-          </Button>
-        </div>
-
-        <div className="space-y-1">
-          <Label>Medio de pago (ingresa a caja)</Label>
-          <div className="flex gap-2">
-            {[PaymentMethod.EFECTIVO, PaymentMethod.QR].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMethod(m)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  method === m
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:bg-accent"
-                }`}
-              >
-                {PaymentMethodLabel[m]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {error && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button type="button" onClick={handleConfirm} disabled={saving}>
-            {saving ? "Registrando…" : "Registrar abono"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function BalanceInline({ customer }: { customer: PensionCustomer }) {
-  if (customer.balance > 0) {
-    return (
-      <span className="font-bold text-success">
-        {formatPrice(customer.balance)} a favor
-      </span>
-    );
-  }
-  if (customer.balance < 0) {
-    return (
-      <span className="font-bold text-destructive">
-        {formatPrice(Math.abs(customer.balance))} de deuda
-      </span>
-    );
-  }
-  return <span className="font-semibold">{formatPrice(0)}</span>;
-}
-
-function LedgerDialog({
-  customer,
-  onClose,
-}: {
-  customer: PensionCustomer;
-  onClose: () => void;
-}) {
-  return (
-    <Modal>
-      <h2 className="text-lg font-bold">Movimientos — {customer.name}</h2>
-      <div className="max-h-[60vh] space-y-2 overflow-y-auto">
-        {customer.ledger.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Este cliente aún no tiene movimientos.
-          </p>
-        ) : (
-          customer.ledger.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2"
-            >
-              <div>
-                <p className="text-sm font-semibold">
-                  {CustomerLedgerTypeLabel[entry.type as keyof typeof CustomerLedgerTypeLabel] ??
-                    entry.type}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleString("es-MX", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                  {entry.paymentMethod
-                    ? ` · ${PaymentMethodLabel[entry.paymentMethod]}`
-                    : ""}
-                </p>
-              </div>
-              <span
-                className={`font-mono font-bold ${
-                  entry.type === CustomerLedgerType.CONSUMO
-                    ? "text-destructive"
-                    : "text-success"
-                }`}
-              >
-                {entry.type === CustomerLedgerType.CONSUMO ? "−" : "+"}
-                {formatPrice(entry.amount)}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="flex justify-end pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cerrar
-        </Button>
-      </div>
     </Modal>
   );
 }

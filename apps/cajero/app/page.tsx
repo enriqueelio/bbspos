@@ -132,15 +132,15 @@ async function getQueueData() {
       // contra una cuenta corriente, no para elegir entre todos los clientes de
       // la casa (los de mostrador se registran al vuelo en el ticket y no
       // tienen cuenta).
-      where: { isPension: true },
+      where: { account: { isNot: null } },
       orderBy: [{ name: "asc" }],
       select: {
         id: true,
         name: true,
         ci: true,
-        pensionType: true,
-        balance: true,
-        creditLimit: true,
+        account: {
+          select: { pensionType: true, balance: true, creditLimit: true },
+        },
       },
     }),
   ]);
@@ -149,9 +149,9 @@ async function getQueueData() {
     id: c.id,
     name: c.name,
     ci: c.ci,
-    pensionType: c.pensionType as PensionCustomerOption["pensionType"],
-    balance: c.balance,
-    creditLimit: c.creditLimit,
+    pensionType: c.account?.pensionType as PensionCustomerOption["pensionType"] ?? "PREPAGO",
+    balance: c.account?.balance ?? 0,
+    creditLimit: c.account?.creditLimit ?? 0,
   }));
 
   const orders = rows.map(toPlainOrder);

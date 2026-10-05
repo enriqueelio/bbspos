@@ -7,9 +7,10 @@ import {
   PensionType,
 } from "./index";
 
-const MOSTRADOR = { isPension: false, pensionType: PensionType.PREPAGO };
-const PREPAGO = { isPension: true, pensionType: PensionType.PREPAGO };
-const POSTPAGO = { isPension: true, pensionType: PensionType.POSTPAGO };
+const MOSTRADOR = { hasAccount: false };
+const PREPAGO = { hasAccount: true, account: { pensionType: PensionType.PREPAGO } };
+const POSTPAGO = { hasAccount: true, account: { pensionType: PensionType.POSTPAGO } };
+const PENSION_SIN_MODALIDAD = { hasAccount: true, account: { pensionType: null } };
 
 describe("isFidelizable", () => {
   it("fideliza a un cliente de mostrador con cualquier metodo", () => {
@@ -44,15 +45,15 @@ describe("isFidelizable", () => {
     expect(isFidelizable(POSTPAGO, null)).toBe(false);
   });
 
-  it("fideliza a un pensionado sin modalidad definida", () => {
-    expect(isFidelizable({ isPension: true }, PaymentMethod.PENSION)).toBe(true);
+  it("fideliza a un pensionado sin modalidad definida (trata como PREPAGO)", () => {
+    expect(isFidelizable(PENSION_SIN_MODALIDAD, PaymentMethod.PENSION)).toBe(true);
   });
 });
 
 describe("fidelizableCustomerWhere", () => {
-  it("marca al pensionado POSTPAGO como el unico excluido", () => {
+  it("marca al pensionado POSTPAGO como el unico excluido (usa account relation)", () => {
     expect(fidelizableCustomerWhere()).toEqual({
-      NOT: { isPension: true, pensionType: PensionType.POSTPAGO },
+      NOT: { account: { is: { pensionType: PensionType.POSTPAGO } } },
     });
   });
 });
@@ -63,7 +64,7 @@ describe("fidelizableOrderWhere", () => {
       OR: [
         {
           customer: {
-            is: { NOT: { isPension: true, pensionType: PensionType.POSTPAGO } },
+            is: { NOT: { account: { is: { pensionType: PensionType.POSTPAGO } } } },
           },
         },
         { paymentMethod: { not: PaymentMethod.PENSION } },

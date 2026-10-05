@@ -301,7 +301,10 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
 
   const [order, customer] = await Promise.all([
     prisma.order.findUnique({ where: { id: orderId } }),
-    prisma.customer.findUnique({ where: { id: customerId } }),
+    prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { account: true },
+    }),
   ]);
 
   if (!order) {
@@ -313,7 +316,7 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
 
   // Un cliente de mostrador no tiene cuenta corriente: aunque se llegue con su
   // id (la lista ya los filtra), el cobro a cuenta no aplica.
-  if (!customer.isPension) {
+  if (!customer.account) {
     throw new Error(
       `${customer.name} no es pensionado, no se le puede cobrar a cuenta.`,
     );
@@ -336,21 +339,22 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
   }
 
   const total = order.total;
-  const pensionType: PensionTypeType = customer.pensionType;
+  const account = customer.account!;
+  const pensionType: PensionTypeType = account.pensionType;
   let nextBalance: number;
 
   if (pensionType === PensionType.PREPAGO) {
-    if (customer.balance < total) {
+    if (account.balance < total) {
       throw new Error(
-        `Saldo insuficiente: ${customer.name} tiene ${formatPrice(customer.balance)} y el pedido cuesta ${formatPrice(total)}. Pide una recarga de ${formatPrice(total - customer.balance)} en Administración.`,
+        `Saldo insuficiente: ${customer.name} tiene ${formatPrice(account.balance)} y el pedido cuesta ${formatPrice(total)}. Pide una recarga de ${formatPrice(total - account.balance)} en Administración.`,
       );
     }
-    nextBalance = customer.balance - total;
+    nextBalance = account.balance - total;
   } else {
-    nextBalance = customer.balance - total;
-    if (customer.creditLimit > 0 && nextBalance < -customer.creditLimit) {
+    nextBalance = account.balance - total;
+    if (account.creditLimit > 0 && nextBalance < -account.creditLimit) {
       throw new Error(
-        `La deuda de ${customer.name} superaría el límite de ${formatPrice(customer.creditLimit)} (quedaría en ${formatPrice(Math.abs(nextBalance))}).`,
+        `La deuda de ${customer.name} superaría el límite de ${formatPrice(account.creditLimit)} (quedaría en ${formatPrice(Math.abs(nextBalance))}).`,
       );
     }
   }
@@ -371,13 +375,13 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
   // marca de tiempo.
   const paidAt = new Date();
   await prisma.$transaction(async (tx) => {
-    await tx.customer.update({
-      where: { id: customerId },
+    await tx.customerAccount.update({
+      where: { id: account.id },
       data: { balance: nextBalance },
     });
     await tx.customerLedger.create({
       data: {
-        customerId,
+        accountId: account.id,
         type: "CONSUMO",
         amount: total,
         orderId: order.id,
@@ -405,6 +409,7 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         paidAt,
         userId,
         customerId,
+        accountId: account.id,
       },
     });
     // La elegibilidad a lealtad la decide `accumulateCustomerLoyalty`: aquí no

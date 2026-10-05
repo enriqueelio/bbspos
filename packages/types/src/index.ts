@@ -405,13 +405,11 @@ export const PensionTypeList: PensionType[] = [
  *  Deliberadamente estructural (no un `Customer` de Prisma) para que el
  *  predicado sea client-safe y usable desde server actions y desde la UI.
  *
- *  OJO con `pensionType`: viene con default `PREPAGO` en el esquema, así que
- *  TODO cliente no pensionado lo tiene guardado como PREPAGO. No significa que
- *  sea pensionado: eso lo dice `isPension`. La elegibilidad siempre se decide
- *  por `isPension` primero y `pensionType` solo se mira si es pensionado. */
+ *  Ahora usa `hasAccount` (existencia de CustomerAccount) en lugar de `isPension`.
+ *  `account?.pensionType` reemplaza a `pensionType` directo. */
 export type FidelizableCliente = {
-  isPension: boolean;
-  pensionType?: PensionType | null;
+  hasAccount: boolean;
+  account?: { pensionType?: PensionType | null } | null;
 };
 
 /** Regla central de elegibilidad a la lealtad.
@@ -428,8 +426,8 @@ export function isFidelizable(
   cliente: FidelizableCliente,
   metodo?: PaymentMethod | null,
 ): boolean {
-  if (!cliente.isPension) return true;
-  if (cliente.pensionType !== PensionType.POSTPAGO) return true;
+  if (!cliente.hasAccount) return true;
+  if (cliente.account?.pensionType !== PensionType.POSTPAGO) return true;
   // POSTPAGO: fideliza solo si esta vez pagó de verdad en el local.
   return metodo != null && metodo !== PaymentMethod.PENSION;
 }
@@ -437,11 +435,12 @@ export function isFidelizable(
 /** Clientes que pueden tener lealtad: todo el que no sea un pensionado
  *  POSTPAGO. OJO: un POSTPAGO sí puede tener puntos (comprando en efectivo/QR),
  *  así que esto NO lo excluye del ranking; para eso está `fidelizableOrderWhere`.
- *  Sirve para consultas sobre `Customer` donde no importa el método de pago. */
+ *  Sirve para consultas sobre `Customer` donde no importa el método de pago.
+ *  Ahora usa la relación `account` en lugar de campos directos. */
 export function fidelizableCustomerWhere(): {
-  NOT: { isPension: true; pensionType: PensionType };
+  NOT: { account: { is: { pensionType: PensionType } } };
 } {
-  return { NOT: { isPension: true, pensionType: PensionType.POSTPAGO } };
+  return { NOT: { account: { is: { pensionType: PensionType.POSTPAGO } } } };
 }
 
 /** Filtro de Prisma para los pedidos que SÍ generaron lealtad: todo lo que no
@@ -452,10 +451,10 @@ export function fidelizableCustomerWhere(): {
  *  como visita, ni como gasto, ni como puntos.
  *
  *  Se deriva del mismo enum que `isFidelizable` para que ambas formas no puedan
- *  divergir. */
+ *  divergir. Ahora usa `account` relation. */
 export function fidelizableOrderWhere(): {
   OR: [
-    { customer: { is: { NOT: { isPension: true; pensionType: PensionType } } } },
+    { customer: { is: { NOT: { account: { is: { pensionType: PensionType } } } } } },
     { paymentMethod: { not: PaymentMethod } },
   ];
 } {
@@ -483,12 +482,10 @@ export const CustomerLedgerTypeLabel: Record<CustomerLedgerType, string> = {
   CONSUMO: "Consumo",
 };
 
-/** Vista de un cliente/pensionado para el módulo de cuentas corrientes. */
-export interface CustomerView {
+/** Vista de la cuenta corriente de un pensionado (CustomerAccount). */
+export interface CustomerAccountView {
   id: string;
-  name: string;
-  ci: string | null;
-  phone: string;
+  customerId: string;
   pensionType: PensionType;
   /** Positivo = saldo a favor (Prepago); negativo = deuda (Postpago). */
   balance: number;
@@ -497,10 +494,29 @@ export interface CustomerView {
   createdAt: string;
 }
 
+/** Vista de un cliente para el módulo de fidelidad (sin datos financieros directos).
+ *  La cuenta corriente vive en `account` (opcional, solo si es pensionado). */
+export interface CustomerView {
+  id: string;
+  name: string;
+  ci: string | null;
+  phone: string;
+  /** true si el cliente tiene cuenta corriente (es pensionado). */
+  hasAccount: boolean;
+  /** Datos de la cuenta corriente si existe. */
+  account?: CustomerAccountView | null;
+  /** Métricas de fidelidad (caché). */
+  totalVisits: number;
+  totalSpent: number;
+  lastVisitAt: string | null;
+  points: number;
+  createdAt: string;
+}
+
 /** Movimiento de la cuenta corriente listado en la UI admin. */
 export interface CustomerLedgerView {
   id: string;
-  customerId: string;
+  accountId: string;
   type: CustomerLedgerType;
   amount: number;
   paymentMethod: PaymentMethod | null;
@@ -1067,4 +1083,19 @@ export function stringifyDenominations(
   return JSON.stringify(
     counts.map((c) => [c.value, c.count]),
   );
+}
+
+/** Input para crear un pensionado (cliente + cuenta corriente). */
+export interface CreatePensionadoInput {
+  name: string;
+  ci?: string | null;
+  phone?: string | null;
+  pensionType: PensionType;
+  creditLimit?: number;
+}
+
+/** Input para actualizar solo la cuenta corriente de un pensionado. */
+export interface UpdatePensionadoAccountInput {
+  pensionType?: PensionType;
+  creditLimit?: number;
 }

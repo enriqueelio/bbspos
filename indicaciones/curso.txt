@@ -1,0 +1,271 @@
+Necesito realizar un ajuste adicional de UX/UI en la sección de CAJERO, específicamente en la categoría "Bubbas" y en la tarjeta "PRODUCTO EN CURSO".
+
+IMPORTANTE:
+- NO cambiar lógica de negocio.
+- NO cambiar precios.
+- NO cambiar cómo se agregan productos al carrito.
+- NO cambiar el funcionamiento de los botones +/-.
+- NO cambiar acciones del servidor.
+- Solo modificar estructura visual, orden y presentación.
+- Primero inspecciona los componentes existentes antes de editar.
+
+====================================================
+1. ELIMINAR EL TEXTO "EXTRAS"
+====================================================
+
+Actualmente aparece el título:
+
+EXTRAS
+
+encima de la sección de PRODUCTO EN CURSO
+
+Quiero eliminar COMPLETAMENTE la palabra/título:
+
+"EXTRAS"
+
+Los controles de extras deben permanecer funcionando, solamente debe desaparecer ese encabezado.
+
+
+====================================================
+2. PRODUCTO EN CURSO — NUEVO ORDEN
+====================================================
+
+Actualmente la tarjeta se ve aproximadamente así:
+
+PRODUCTO EN CURSO
+
+Capuchino
+Grande · Explosivas
+
+1   [-] [+]
+
+SUBTOTAL (UNIDAD)                         25 Bs
+
+[ Confirmar producto ]
+
+Quiero reorganizarla de esta manera:
+
+PRODUCTO EN CURSO
+
+Capuchino - Grande
+
+Explosivas	[-] [+]
+
+[ Confirmar  [Precio]]
+
+Es decir:
+
+LÍNEA 1:
+Nombre del producto + tamaño en la MISMA línea.
+
+Ejemplo:
+Capuchino - Grande
+
+No quiero:
+
+Capuchino
+Grande
+
+El tamaño debe ir al lado del nombre del producto.
+
+----------------------------------------------------
+
+LÍNEA 2:
+Tipo de boba/tapioca a la izquierda.
+
+Ejemplo:
+
+Explosivas	[-] [+]
+
+Los botones - y + deben estar en la MISMA línea que "Explosivas".
+
+NO deben aparecer debajo.
+
+NO quiero:
+
+Explosivas
+
+[-] [+]
+
+Quiero:
+
+Explosivas	[-] [+]
+
+====================================================
+3. REGLA ESPECIAL PARA LA CANTIDAD
+====================================================
+
+El comportamiento de cantidad debe mantenerse.
+
+Los botones:
+[-] [+]
+siguen funcionando exactamente igual.
+
+Pero quiero cambiar la VISUALIZACIÓN del número.
+
+REGLA:
+
+- Cuando cantidad = 1:
+    NO mostrar el número "1".
+
+Ejemplo:
+
+Explosivas	[-] [+]
+
+- Cuando cantidad > 1:
+    mostrar el número entre los botones o en la posición actual.
+
+Ejemplo cantidad 2:
+
+Explosivas	[-] 2 [+]
+
+Ejemplo cantidad 3:
+
+Explosivas	[-] 3 [+]
+
+Por tanto:
+
+cantidad = 1
+=> solamente botones - y +
+
+cantidad > 1
+=> botones - + número + +
+
+IMPORTANTE:
+No eliminar la cantidad internamente.
+Solo ocultar visualmente el número cuando sea exactamente 1.
+
+====================================================
+4. COMPOSICIÓN FINAL
+====================================================
+
+La tarjeta debería quedar conceptualmente así:
+
++------------------------------------------------------+
+| PRODUCTO EN CURSO                                    |
+|                                                      |
+| Capuchino - Grande                                   |
+|                                                      |
+| Explosivas	[-] [+]                                |
+|                                                      |
+|                                                      |
+| [             Confirmar [20 Bs]              ]       |
++------------------------------------------------------+
+
+Si cantidad = 2:
+
++------------------------------------------------------+
+| PRODUCTO EN CURSO                                    |
+|                                                      |
+| Capuchino - Grande                                   |
+|                                                      |
+| Explosivas	[-] 2 [+]                              |
+|                                                      |
+|                                                      |
+| [             Confirmar [20 Bs]              ]       |
++------------------------------------------------------+
+
+====================================================
+5. OBJETIVO DE UX
+====================================================
+
+Quiero conseguir:
+
+- menos espacio vertical;
+- menos elementos visuales innecesarios;
+- lectura más rápida;
+- nombre + tamaño como una sola identificación del producto;
+- boba + controles de cantidad en una sola línea;
+- ocultar información redundante cuando la cantidad es 1.
+
+La jerarquía visual debe ser:
+
+PRODUCTO EN CURSO
+↓
+Nombre + Tamaño
+↓
+Boba + controles de cantidad
+↓
+Confirmar (SubTotal)
+
+====================================================
+6. CONSIDERACIONES DE IMPLEMENTACIÓN
+====================================================
+
+Antes de modificar:
+
+1. Identifica exactamente qué componente renderiza "PRODUCTO EN CURSO".
+2. Identifica dónde se renderiza:
+   - nombre;
+   - tamaño;
+   - boba;
+   - cantidad;
+   - botones +/-.
+3. Verifica dónde se encuentra el estado real de quantity.
+4. Verifica que ese mismo quantity siga siendo utilizado correctamente por el carrito/ticket.
+
+NO crear un nuevo estado.
+
+NO duplicar quantity.
+
+NO cambiar la lógica de incremento/decremento.
+
+Solo modificar la presentación.
+
+====================================================
+7. CRITERIOS DE ACEPTACIÓN
+====================================================
+
+[ ] La palabra "EXTRAS" desapareció.
+
+[ ] Explosiva extra y Tapioca extra siguen funcionando.
+
+[ ] "Capuchino" y "Grande" aparecen en la misma línea:
+    Capuchino - Grande
+
+[ ] "Explosivas" y los botones +/- aparecen en la misma línea.
+
+[ ] La cantidad NO aparece cuando es 1.
+
+[ ] La cantidad aparece cuando es mayor que 1.
+
+[ ] Los botones +/- siguen funcionando.
+
+[ ] Al pulsar + desde cantidad 1:
+    aparece "2".
+
+[ ] Al volver de 2 a 1:
+    desaparece nuevamente el "1".
+[ ] "Confirmar producto" cambia a Confirmar.
+[ ] "Confirmar" sigue funcionando igual.
+
+[ ] El subtotal continúa calculándose correctamente.
+[ ] El subtotal aparece dentro del botón Confirmar.
+
+
+
+[ ] No cambia ninguna regla de negocio.
+
+[ ] No se altera el funcionamiento del ticket en curso.
+
+[ ] El diseño ocupa menos altura vertical.
+
+[ ] Se mantienen los estilos actuales del POS.
+
+====================================================
+8. VALIDACIÓN
+====================================================
+
+Después del cambio:
+
+- revisar el diff;
+- ejecutar typecheck;
+- ejecutar lint;
+- comprobar visualmente la categoría Bubbas;
+- comprobar cantidad 1;
+- comprobar cantidad 2;
+- comprobar decremento 2 -> 1;
+- comprobar confirmación del producto;
+- comprobar que el producto confirmado conserva la cantidad correcta en Ticket en curso.
+
+No hacer refactors generales ni modificar componentes que no sean necesarios para este ajuste.

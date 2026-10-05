@@ -32,7 +32,8 @@ const SETTINGS_ITEMS = [
   { href: "/menu", label: "Menú" },
   { href: "/payments", label: "Pagos" },
   { href: "/users", label: "Usuarios" },
-  { href: "/customers", label: "Clientes / Pensionados" },
+  { href: "/customers", label: "Clientes" },
+  { href: "/pensionados", label: "Pensionados" },
   { href: "/customers-ranking", label: "Lealtad / Frecuentes" },
 ];
 

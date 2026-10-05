@@ -1,42 +1,41 @@
 import { prisma } from "@bbspos/db";
-import { type CustomerLedgerType } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
-import { CustomersClient, type PensionCustomer } from "./customers-client";
+import { CustomersClient, type ClientCustomer } from "./customers-client";
 
 export const metadata = {
-  title: "Clientes / Pensionados — BBSPOS Admin",
+  title: "Clientes (Mostrador) — BBSPOS Admin",
 };
 
 export default async function CustomersPage() {
   const [session, customers] = await Promise.all([
     getRequiredSession(),
     prisma.customer.findMany({
+      where: { account: null },
       orderBy: [{ name: "asc" }],
-      include: {
-        ledger: { orderBy: { createdAt: "desc" }, take: 100 },
+      select: {
+        id: true,
+        name: true,
+        ci: true,
+        phone: true,
+        totalVisits: true,
+        totalSpent: true,
+        lastVisitAt: true,
+        points: true,
+        createdAt: true,
       },
     }),
   ]);
 
-  const data: PensionCustomer[] = customers.map((c) => ({
+  const data: ClientCustomer[] = customers.map((c) => ({
     id: c.id,
     name: c.name,
     ci: c.ci,
     phone: c.phone ?? "",
-    isPension: c.isPension,
-    pensionType: c.pensionType,
-    balance: c.balance,
-    creditLimit: c.creditLimit,
+    totalVisits: c.totalVisits,
+    totalSpent: c.totalSpent,
+    lastVisitAt: c.lastVisitAt?.toISOString() ?? null,
+    points: c.points,
     createdAt: c.createdAt.toISOString(),
-    ledger: c.ledger.map((l) => ({
-      id: l.id,
-      customerId: l.customerId,
-      type: l.type as CustomerLedgerType,
-      amount: l.amount,
-      paymentMethod: l.paymentMethod,
-      orderId: l.orderId,
-      createdAt: l.createdAt.toISOString(),
-    })),
   }));
 
   return (

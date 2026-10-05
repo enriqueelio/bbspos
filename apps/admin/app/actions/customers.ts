@@ -76,11 +76,35 @@ function parseFundsMethod(value: string): PaymentMethodType {
   return value as PaymentMethodType;
 }
 
-export async function createCustomer(input: {
+/** Crea un cliente de mostrador (sin cuenta corriente). */
+export async function createClient(input: {
   name: string;
   ci?: string;
   phone?: string;
-  isPension: boolean;
+}) {
+  await requireAdminSession();
+
+  const name = validateName(input.name);
+  const phone = validatePhone(input.phone ?? "");
+  const ci = input.ci?.trim() ? input.ci.trim() : null;
+
+  await assertPhoneAvailable(phone);
+
+  await prisma.customer.create({
+    data: { name, ci, phone },
+  });
+
+  revalidatePath("/customers");
+}
+
+/** Crea un cliente pensionado directamente: identity + cuenta corriente en una
+ *  transacción. El saldo arranca en cero.
+ *  Solo los pensionados tienen cuenta corriente. Abonar a un cliente de mostrador
+ *  sería plata que entra al cierre del día y que después nadie puede gastar. */
+export async function createPensionado(input: {
+  name: string;
+  ci?: string;
+  phone?: string;
   pensionType: string;
   creditLimit?: number;
 }) {
@@ -90,7 +114,6 @@ export async function createCustomer(input: {
   const phone = validatePhone(input.phone ?? "");
   const pensionType = parsePensionType(input.pensionType);
   const ci = input.ci?.trim() ? input.ci.trim() : null;
-  // El límite de crédito solo aplica a los Postpago; prepago se cobra por saldo.
   const creditLimit =
     pensionType === PensionType.POSTPAGO
       ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
@@ -103,35 +126,28 @@ export async function createCustomer(input: {
       name,
       ci,
       phone,
-      isPension: input.isPension,
-      pensionType,
-      creditLimit,
-      balance: 0,
+      account: {
+        create: { pensionType, creditLimit, balance: 0 },
+      },
     },
   });
 
+  revalidatePath("/pensionados");
   revalidatePath("/customers");
 }
 
+/** Actualiza los datos de identidad de un cliente (nombre, CI, teléfono). */
 export async function updateCustomer(input: {
   customerId: string;
   name: string;
   ci?: string;
   phone?: string;
-  isPension: boolean;
-  pensionType: string;
-  creditLimit?: number;
 }) {
   await requireAdminSession();
 
   const name = validateName(input.name);
   const phone = validatePhone(input.phone ?? "");
-  const pensionType = parsePensionType(input.pensionType);
   const ci = input.ci?.trim() ? input.ci.trim() : null;
-  const creditLimit =
-    pensionType === PensionType.POSTPAGO
-      ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
-      : 0;
 
   const customer = await prisma.customer.findUnique({
     where: { id: input.customerId },
@@ -140,55 +156,133 @@ export async function updateCustomer(input: {
     throw new Error("Cliente no encontrado.");
   }
 
-  // Quitar la marca de pensionado saca la cuenta corriente del alcance del
-  // cajero, que solo lista clientes marcados como pensionado. Con saldo a favor
-  // la plata quedaría sin poder gastar; con deuda, la deuda quedaría sin poder
-  // cobrar. Los dos casos son el mismo defecto, así que se bloquean juntos: la
-  // invariante es `isPension = false => saldo = 0`. El mensaje cambia con el signo
-  // porque la explicación es distinta.
-  if (customer.isPension && !input.isPension && customer.balance !== 0) {
-    throw new Error(
-      customer.balance > 0
-        ? `${customer.name} tiene ${formatPrice(customer.balance)} de saldo a favor, que se gasta en el mostrador. No se puede desmarcar como pensionado hasta que ese saldo esté en cero.`
-        : `${customer.name} debe ${formatPrice(Math.abs(customer.balance))}, que se cobra en el mostrador. No se puede desmarcar como pensionado hasta que la deuda esté saldada.`,
-    );
-  }
-
   await assertPhoneAvailable(phone, customer.id);
 
   await prisma.customer.update({
     where: { id: input.customerId },
-    data: {
-      name,
-      ci,
-      phone,
-      isPension: input.isPension,
-      // Desmarcar "pensionado" no borra la cuenta: la modalidad y el límite se
-      // dejan como están para que volver a marcarlo no pierda el historial. El
-      // saldo y el libro nunca se tocan desde acá.
-      ...(input.isPension ? { pensionType, creditLimit } : {}),
-    },
+    data: { name, ci, phone },
   });
 
   revalidatePath("/customers");
+  revalidatePath("/pensionados");
 }
 
-/** Abona a la cuenta de un cliente: "Recargar Saldo" si es Prepago o
+/** Actualiza la modalidad y el límite de crédito de un pensionado. */
+export async function updatePensionadoAccount(input: {
+  customerId: string;
+  pensionType: string;
+  creditLimit?: number;
+}) {
+  await requireAdminSession();
+
+  const pensionType = parsePensionType(input.pensionType);
+  const creditLimit =
+    pensionType === PensionType.POSTPAGO
+      ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
+      : 0;
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: input.customerId },
+    include: { account: true },
+  });
+  if (!customer) {
+    throw new Error("Cliente no encontrado.");
+  }
+  if (!customer.account) {
+    throw new Error("Este cliente no es pensionado (no tiene cuenta corriente).");
+  }
+
+  await prisma.customerAccount.update({
+    where: { id: customer.account.id },
+    data: { pensionType, creditLimit },
+  });
+
+  revalidatePath("/pensionados");
+}
+
+/** Convierte un cliente de mostrador en pensionado creando su cuenta corriente.
+ *  El saldo arranca en cero: la conversión es el momento de abrir la cuenta, no
+ *  de mover plata. Para tener saldo a favor o deuda hay que usar "Recargar
+ *  Saldo" / "Pagar Deuda" desde /pensionados, que sí lo deja asentado en el libro. */
+export async function convertToPensionado(input: {
+  customerId: string;
+  pensionType: string;
+  creditLimit?: number;
+}) {
+  await requireAdminSession();
+
+  const pensionType = parsePensionType(input.pensionType);
+  const creditLimit =
+    pensionType === PensionType.POSTPAGO
+      ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
+      : 0;
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: input.customerId },
+    include: { account: true },
+  });
+  if (!customer) {
+    throw new Error("Cliente no encontrado.");
+  }
+  if (customer.account) {
+    throw new Error(`${customer.name} ya es pensionado.`);
+  }
+
+  await prisma.customerAccount.create({
+    data: { customerId: customer.id, pensionType, creditLimit, balance: 0 },
+  });
+
+  revalidatePath("/customers");
+  revalidatePath("/pensionados");
+}
+
+/** Desmarca un pensionado borrando su cuenta corriente, y con ella su libro.
+ *
+ *  Solo se admite con `balance = 0`. El saldo es la suma firmada del libro, así
+ *  que un saldo distinto de cero significa que hay plata que se gasta en el
+ *  mostrador (a favor) o deuda que se cobra ahí (en contra). Sin la cuenta, el
+ *  cajero deja de listar al cliente en el cobro "PENSIONADO", y esa plata o esa
+ *  deuda quedarían sin poder usarse ni cobrarse. Los dos casos son el mismo
+ *  defecto — la cuenta no puede desaparecer mientras tenga saldo — y el mensaje
+ *  cambia con el signo porque la explicación es otra. */
+export async function removePensionadoStatus(customerId: string) {
+  await requireAdminSession();
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { account: true },
+  });
+  if (!customer) {
+    throw new Error("Cliente no encontrado.");
+  }
+  if (!customer.account) {
+    throw new Error(`${customer.name} no es pensionado.`);
+  }
+  if (customer.account.balance !== 0) {
+    throw new Error(
+      customer.account.balance > 0
+        ? `${customer.name} tiene ${formatPrice(customer.account.balance)} de saldo a favor, que se gasta en el mostrador. Llévelo a cero antes de desmarcarlo.`
+        : `${customer.name} debe ${formatPrice(Math.abs(customer.account.balance))}, que se cobra en el mostrador. Salda la deuda antes de desmarcarlo.`,
+    );
+  }
+
+  await prisma.customerAccount.delete({ where: { id: customer.account.id } });
+
+  revalidatePath("/customers");
+  revalidatePath("/pensionados");
+}
+
+/** Abona a la cuenta de un pensionado: "Recargar Saldo" si es Prepago o
  *  "Pagar Deuda" si es Postpago. El monto siempre sube el saldo (hacia positivo
  *  o de vuelta hacia 0) y se registra en CustomerLedger para que cuadre como
  *  ingreso real (Efectivo/QR) en el cierre diario.
  *
  *  Solo los pensionados tienen cuenta corriente. Abonar a un cliente de mostrador
  *  sería plata que entra al cierre del día y que después nadie puede gastar: el
- *  cajero solo lista clientes marcados como pensionado (`isPension: true`) y
- *  `acceptPensionOrder` rechaza cobrarle a cuenta. Por eso se valida acá y no solo
- *  ocultando el botón: la invariante es `isPension = false => saldo = 0`.
+ *  cajero solo lista clientes con cuenta y `acceptPensionOrder` rechaza cobrarle
+ *  a cuenta. Por eso se valida acá y no solo ocultando el botón.
  *
- *  El tipo de movimiento se decide por `isPension`, NO solo por `pensionType`:
- *  el esquema le pone `PREPAGO` por defecto a todos, así que mirar solo
- *  `pensionType` trataría a un cliente de mostrador como pensionado prepago y le
- *  marcaría su abono como "recarga de saldo" cuando en realidad está pagando por
- *  adelantado una cuenta corriente.
+ *  El tipo de movimiento se decide por `pensionType` (dato real del pensionado).
  *
  *  Ningún abono genera lealtad: los puntos se ganan al comprar, no al mover la
  *  cuenta. Esto no cambia ningún acumulado de `Customer`. */
@@ -204,29 +298,30 @@ export async function addCustomerFunds(input: {
 
   const customer = await prisma.customer.findUnique({
     where: { id: input.customerId },
+    include: { account: true },
   });
   if (!customer) {
     throw new Error("Cliente no encontrado.");
   }
-  if (!customer.isPension) {
+  if (!customer.account) {
     throw new Error(
-      `${customer.name} no es pensionado y no tiene cuenta corriente donde entrar el abono. Edítalo y márcalo como pensionado para poder bonificarle.`,
+      `${customer.name} no es pensionado y no tiene cuenta corriente donde entrar el abono. Conviértelo en pensionado para poder bonificarle.`,
     );
   }
 
   const type =
-    customer.isPension && customer.pensionType === PensionType.POSTPAGO
+    customer.account.pensionType === PensionType.POSTPAGO
       ? CustomerLedgerType.PAGO_DEUDA
       : CustomerLedgerType.RECARGA;
 
   await prisma.$transaction([
-    prisma.customer.update({
-      where: { id: input.customerId },
+    prisma.customerAccount.update({
+      where: { id: customer.account.id },
       data: { balance: { increment: amount } },
     }),
     prisma.customerLedger.create({
       data: {
-        customerId: input.customerId,
+        accountId: customer.account.id,
         type,
         amount,
         paymentMethod,
@@ -234,5 +329,5 @@ export async function addCustomerFunds(input: {
     }),
   ]);
 
-  revalidatePath("/customers");
+  revalidatePath("/pensionados");
 }

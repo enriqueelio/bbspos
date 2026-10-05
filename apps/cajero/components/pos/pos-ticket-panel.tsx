@@ -77,6 +77,7 @@ export function PosTicketPanel({
   const [regPhone, setRegPhone] = useState("");
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   // Los steppers de un almuerzo también mueven el cupo: subir aparta las
   // unidades para esta caja y bajar las suelta. Si al subir ya no hay
@@ -299,45 +300,57 @@ export function PosTicketPanel({
         )}
         {cart.items.map((item) => {
           const unitWithExtras = cartItemUnitTotal(item);
+          const isExpanded = expandedItemId === item.id;
           return (
             <div
               key={item.id}
-              className="flex items-start justify-between gap-2 rounded-md bg-slate-800 px-3 py-2"
+              className="rounded-md bg-slate-800 px-3 py-2"
+              onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
             >
-              <div className="min-w-0 text-sm">
-                <p className="font-semibold capitalize text-white">
-                  {item.quantity}× {item.kind === "DRINK" ? item.flavor.name : item.name}
-                </p>
-                <p className="text-slate-400">
-                  {item.kind === "DRINK" ? (
-                    `${item.size.name} · ${item.bobaType.name}`
-                  ) : (
-                    <>
-                      {MenuCategoryLabel[item.category]}
-                      {item.optionName && (
-                        <span className="ml-1 font-semibold text-white">
-                          · {item.optionName}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </p>
-                {item.kind === "MENU_ITEM" && item.detail && (
-                  <p className="text-xs font-semibold text-emerald-300">
-                    {item.detail}
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 text-sm">
+                  <p className="font-semibold capitalize text-white">
+                    {item.quantity}× {item.kind === "DRINK" ? item.flavor.name : item.name}
                   </p>
-                )}
-                {item.kind === "DRINK" && item.toppings.length > 0 && (
                   <p className="text-slate-400">
-                    + {item.toppings.map((t) => t.name).join(", ")}
+                    {item.kind === "DRINK" ? (
+                      `${item.size.name} · ${item.bobaType.name}`
+                    ) : (
+                      <>
+                        {MenuCategoryLabel[item.category]}
+                        {item.optionName && (
+                          <span className="ml-1 font-semibold text-white">
+                            · {item.optionName}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </p>
-                )}
-                <div className="mt-2 flex items-center gap-2">
+                  {item.kind === "MENU_ITEM" && item.detail && (
+                    <p className="text-xs font-semibold text-emerald-300">
+                      {item.detail}
+                    </p>
+                  )}
+                  {item.kind === "DRINK" && item.toppings.length > 0 && (
+                    <p className="text-slate-400">
+                      + {item.toppings.map((t) => t.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+                <span className="font-mono text-sm font-bold text-white whitespace-nowrap shrink-0">
+                  {formatPrice(unitWithExtras * item.quantity)}
+                </span>
+              </div>
+              {isExpanded && (
+                <div className="mt-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-150">
                   <button
                     type="button"
                     aria-label="Restar cantidad"
                     className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={() => changeQuantity(item, item.quantity - 1)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      changeQuantity(item, item.quantity - 1);
+                    }}
                   >
                     −
                   </button>
@@ -348,7 +361,10 @@ export function PosTicketPanel({
                     type="button"
                     aria-label="Sumar cantidad"
                     className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={() => changeQuantity(item, item.quantity + 1)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      changeQuantity(item, item.quantity + 1);
+                    }}
                   >
                     +
                   </button>
@@ -356,15 +372,15 @@ export function PosTicketPanel({
                     type="button"
                     aria-label="Quitar ítem del ticket"
                     className="h-8 px-3 rounded-lg bg-red-600/90 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-500"
-                    onClick={() => removeLine(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeLine(item);
+                    }}
                   >
                     Quitar
                   </button>
                 </div>
-              </div>
-              <span className="font-mono text-sm font-bold text-white whitespace-nowrap">
-                {formatPrice(unitWithExtras * item.quantity)}
-              </span>
+              )}
             </div>
           );
         })}

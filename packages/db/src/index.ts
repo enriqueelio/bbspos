@@ -15,3 +15,4 @@ export * from "./lunch-holds";
 export * from "./telegram-alert";
 export * from "./day";
 export * from "./printer";
+export * from "./loyalty";

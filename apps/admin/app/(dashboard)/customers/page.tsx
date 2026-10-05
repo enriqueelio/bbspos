@@ -3,25 +3,18 @@ import { getRequiredSession } from "@/lib/session";
 import { CustomersClient, type ClientCustomer } from "./customers-client";
 
 export const metadata = {
-  title: "Clientes (Mostrador) — BBSPOS Admin",
+  title: "Clientes — BBSPOS Admin",
 };
 
 export default async function CustomersPage() {
   const [session, customers] = await Promise.all([
     getRequiredSession(),
     prisma.customer.findMany({
-      where: { account: null },
       orderBy: [{ name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        ci: true,
-        phone: true,
-        totalVisits: true,
-        totalSpent: true,
-        lastVisitAt: true,
-        points: true,
-        createdAt: true,
+      include: {
+        account: {
+          select: { pensionType: true, balance: true, creditLimit: true },
+        },
       },
     }),
   ]);
@@ -31,6 +24,9 @@ export default async function CustomersPage() {
     name: c.name,
     ci: c.ci,
     phone: c.phone ?? "",
+    pensionType: c.account?.pensionType ?? null,
+    balance: c.account?.balance ?? 0,
+    creditLimit: c.account?.creditLimit ?? 0,
     totalVisits: c.totalVisits,
     totalSpent: c.totalSpent,
     lastVisitAt: c.lastVisitAt?.toISOString() ?? null,

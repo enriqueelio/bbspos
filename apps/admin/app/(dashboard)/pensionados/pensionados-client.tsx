@@ -1,34 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Wallet, ScrollText, Pencil, UserMinus } from "lucide-react";
+import { useState } from "react";
+import { Wallet, ScrollText, UserMinus } from "lucide-react";
 import { Badge, Button, Card, CardContent, Input, Label } from "@bbspos/ui";
 import {
-  CustomerLedgerTypeLabel,
-  CustomerLedgerType,
-  PaymentMethod,
-  PaymentMethodLabel,
   PensionType as PensionTypeValue,
   PensionTypeLabel,
   PensionTypeList,
   formatPrice,
   type CustomerLedgerView,
-  type PaymentMethod as PaymentMethodType,
   type PensionType,
 } from "@bbspos/types";
 import {
-  addCustomerFunds,
-  createPensionado,
-  removePensionadoStatus,
-  updateCustomer,
   updatePensionadoAccount,
 } from "@/app/actions/customers";
+import { Modal } from "@/components/shared/Modal";
+import { runAction } from "@/components/shared/runAction";
+import { BalanceCell } from "@/components/shared/BalanceCell";
+import { FundDialog } from "@/components/shared/FundDialog";
+import { LedgerDialog } from "@/components/shared/LedgerDialog";
+import { UnmarkDialog } from "@/components/shared/UnmarkDialog";
 
 export interface PensionadoCustomer {
   id: string;
   name: string;
-  ci: string | null;
-  phone: string;
   pensionType: PensionType;
   balance: number;
   creditLimit: number;
@@ -36,26 +31,25 @@ export interface PensionadoCustomer {
   ledger: CustomerLedgerView[];
 }
 
-function runAction(fn: () => Promise<void>, onError: (msg: string) => void) {
-  fn().catch((e) =>
-    onError(e instanceof Error ? e.message : "Ocurrió un error."),
-  );
+export interface PensionadosKPIs {
+  totalSaldoAFavor: number;
+  totalDeudaPorCobrar: number;
 }
 
 type FundDialogState = { customer: PensionadoCustomer } | null;
 type LedgerDialogState = { customer: PensionadoCustomer } | null;
 type UnmarkDialogState = { customer: PensionadoCustomer } | null;
 type FormDialogState =
-  | { kind: "create" }
-  | { kind: "editIdentity"; customer: PensionadoCustomer }
   | { kind: "editAccount"; customer: PensionadoCustomer }
   | null;
 
 export function PensionadosClient({
   customers,
+  kpis,
   currentUserRole,
 }: {
   customers: PensionadoCustomer[];
+  kpis: PensionadosKPIs;
   currentUserRole: string;
 }) {
   const [fundDialog, setFundDialog] = useState<FundDialogState>(null);
@@ -72,24 +66,11 @@ export function PensionadosClient({
     <div className="space-y-6">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Pensionados</h1>
+          <h1 className="text-xl font-bold text-white">Cuentas Pensionadas</h1>
           <p className="text-muted-foreground">
-            Cuentas corrientes Prepago y Postpago: saldos, recargas y pagos de
-            deuda. Solo los pensionados aparecen en el cobro por cuenta del
-            cajero.
+            Panel financiero: saldos, recargas, pagos de deuda y límites de crédito.
           </p>
         </div>
-        {isAdmin && (
-          <Button
-            size="sm"
-            onClick={() => {
-              setNotice(null);
-              setFormDialog({ kind: "create" });
-            }}
-          >
-            <Plus className="mr-1 h-4 w-4" /> Nuevo pensionado
-          </Button>
-        )}
       </div>
 
       {error && (
@@ -104,40 +85,48 @@ export function PensionadosClient({
         </p>
       )}
 
+      <div className="grid gap-4 sm:grid-cols-2 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Saldo total a favor (Prepago)</p>
+            <p className="text-2xl font-bold text-success">
+              {formatPrice(kpis.totalSaldoAFavor)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">Deuda total por cobrar (Postpago)</p>
+            <p className="text-2xl font-bold text-destructive">
+              {formatPrice(kpis.totalDeudaPorCobrar)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left">
-                <th className="px-4 py-2 font-medium">Nombre</th>
-                <th className="px-4 py-2 font-medium">CI</th>
-                <th className="px-4 py-2 font-medium">Teléfono</th>
+                <th className="px-4 py-2 font-medium">Cliente</th>
                 <th className="px-4 py-2 font-medium">Modalidad</th>
-                <th className="px-4 py-2 font-medium">Saldo</th>
-                <th className="px-4 py-2 font-medium">Límite (Postpago)</th>
+                <th className="px-4 py-2 font-medium">Saldo / Deuda</th>
+                <th className="px-4 py-2 font-medium">Límite de crédito</th>
                 <th className="px-4 py-2 font-medium text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {customers.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-8 text-center text-muted-foreground"
-                  >
-                    Aún no hay pensionados registrados. Crea el primero con
-                    &ldquo;Nuevo pensionado&rdquo; o convierte un cliente de mostrador
-                    desde /customers.
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    No hay cuentas pensionadas registradas.
                   </td>
                 </tr>
               )}
               {customers.map((customer) => (
                 <tr key={customer.id} className="border-b last:border-b-0">
                   <td className="px-4 py-2 font-medium">{customer.name}</td>
-                  <td className="px-4 py-2">{customer.ci ?? "—"}</td>
-                  <td className="px-4 py-2">
-                    {customer.phone || "—"}
-                  </td>
                   <td className="px-4 py-2">
                     <Badge
                       variant={
@@ -150,7 +139,11 @@ export function PensionadosClient({
                     </Badge>
                   </td>
                   <td className="px-4 py-2">
-                    <BalanceCell customer={customer} />
+                    <BalanceCell
+                      balance={customer.balance}
+                      pensionType={customer.pensionType}
+                      creditLimit={customer.creditLimit}
+                    />
                   </td>
                   <td className="px-4 py-2">
                     {customer.pensionType === PensionTypeValue.POSTPAGO
@@ -161,26 +154,6 @@ export function PensionadosClient({
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setNotice(null);
-                          setFormDialog({ kind: "editIdentity", customer });
-                        }}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" /> Editar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setNotice(null);
-                          setFormDialog({ kind: "editAccount", customer });
-                        }}
-                      >
-                        <Wallet className="mr-1 h-4 w-4" /> Modalidad
-                      </Button>
                       <Button
                         size="sm"
                         onClick={() => {
@@ -204,17 +177,31 @@ export function PensionadosClient({
                         <ScrollText className="mr-1 h-4 w-4" /> Movimientos
                       </Button>
                       {isAdmin && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            setNotice(null);
-                            setError(null);
-                            setUnmarkDialog({ customer });
-                          }}
-                        >
-                          <UserMinus className="mr-1 h-4 w-4" /> Desmarcar
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setError(null);
+                              setFormDialog({ kind: "editAccount", customer });
+                            }}
+                          >
+                            Configurar cuenta
+                          </Button>
+                          {customer.balance === 0 && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setNotice(null);
+                                setError(null);
+                                setUnmarkDialog({ customer });
+                              }}
+                            >
+                              <UserMinus className="mr-1 h-4 w-4" /> Desmarcar
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>
@@ -226,13 +213,14 @@ export function PensionadosClient({
       </Card>
 
       {formDialog && (
-        <PensionadoFormDialog
+        <EditAccountDialog
           dialog={formDialog}
           onClose={() => setFormDialog(null)}
           onDone={(message) => {
             setNotice(message);
             setFormDialog(null);
           }}
+          onError={setError}
         />
       )}
 
@@ -269,139 +257,43 @@ export function PensionadosClient({
   );
 }
 
-/** Desmarcar borra la cuenta y con ella el libro, así que se pide confirmación
- *  explícita. El servidor igual valida `balance = 0`: el boton se puede dejar
- *  activo con saldo porque el error explica qué hay que saldar primero. */
-function UnmarkDialog({
-  customer,
-  onClose,
-  onError,
-  onDone,
-}: {
-  customer: PensionadoCustomer;
-  onClose: () => void;
-  onError: (msg: string) => void;
-  onDone: (message: string) => void;
-}) {
-  const [saving, setSaving] = useState(false);
-
-  function handleConfirm() {
-    setSaving(true);
-    runAction(async () => {
-      await removePensionadoStatus(customer.id);
-      onDone(`${customer.name} ya no es pensionado.`);
-    }, (msg) => {
-      onError(msg);
-      onClose();
-    });
-  }
-
-  return (
-    <Modal>
-      <h2 className="text-lg font-bold">Desmarcar a {customer.name}</h2>
-      <div className="space-y-3 text-sm">
-        <p>
-          Se borra la cuenta corriente y todo su historial de movimientos. El
-          cliente vuelve a la lista de Clientes (Mostrador) y deja de aparecer en
-          el cobro &laquo;PENSIONADO&raquo; del cajero.
-        </p>
-        <p className="rounded-md border border-border bg-muted/40 px-3 py-2">
-          Saldo actual: <BalanceInline customer={customer} />
-        </p>
-        {customer.balance !== 0 && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive">
-            Con saldo distinto de cero no se puede desmarcar. Llévalo a cero
-            primero.
-          </p>
-        )}
-      </div>
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-          Cancelar
-        </Button>
-        <Button type="button" variant="destructive" onClick={handleConfirm} disabled={saving}>
-          {saving ? "Desmarcando…" : "Desmarcar pensionado"}
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
-function BalanceCell({ customer }: { customer: PensionadoCustomer }) {
-  if (customer.balance > 0) {
-    return (
-      <span className="font-bold text-success">
-        {formatPrice(customer.balance)} a favor
-      </span>
-    );
-  }
-  if (customer.balance < 0) {
-    return (
-      <span className="font-bold text-destructive">
-        {formatPrice(Math.abs(customer.balance))} deuda
-      </span>
-    );
-  }
-  return <span className="text-muted-foreground">{formatPrice(0)}</span>;
-}
-
-function PensionadoFormDialog({
+function EditAccountDialog({
   dialog,
   onClose,
   onDone,
+  onError,
 }: {
   dialog: NonNullable<FormDialogState>;
   onClose: () => void;
   onDone: (message: string) => void;
+  onError: (msg: string) => void;
 }) {
-  const isCreate = dialog.kind === "create";
-  const isEditIdentity = dialog.kind === "editIdentity";
   const isEditAccount = dialog.kind === "editAccount";
-  const target = isCreate ? null : dialog.customer;
+  const target = dialog.customer;
 
-  const [name, setName] = useState(target?.name ?? "");
-  const [ci, setCi] = useState(target?.ci ?? "");
-  const [phone, setPhone] = useState(target?.phone ?? "");
   const [pensionType, setPensionType] = useState<PensionType>(
-    isEditIdentity ? "PREPAGO" : target?.pensionType ?? "PREPAGO"
+    target.pensionType,
   );
   const [creditLimit, setCreditLimit] = useState(
-    isEditIdentity ? "" : String(target?.creditLimit ?? "")
+    String(target.creditLimit ?? ""),
   );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  /* Al cambiar la modalidad el saldo conserva su signo y número: el mismo saldo
-   * es a favor en Prepago y deuda en Postpago, así que el administrador decide
-   * cuando saldar. El límite solo aplica a Postpago. */
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    setError(null);
+    setLocalError(null);
     runAction(async () => {
-      if (isEditIdentity && target) {
-        await updateCustomer({ customerId: target.id, name, ci, phone });
-        onDone(`Pensionado "${name}" actualizado.`);
-      } else if (isEditAccount && target) {
-        await updatePensionadoAccount({
-          customerId: target.id,
-          pensionType,
-          creditLimit: creditLimit ? parseInt(creditLimit, 10) : 0,
-        });
-        onDone(`Modalidad de "${name}" actualizada.`);
-      } else {
-        await createPensionado({
-          name,
-          ci,
-          phone,
-          pensionType,
-          creditLimit: creditLimit ? parseInt(creditLimit, 10) : 0,
-        });
-        onDone(`Pensionado "${name}" creado.`);
-      }
-      onClose();
+      await updatePensionadoAccount({
+        customerId: target.id,
+        pensionType,
+        creditLimit: creditLimit ? parseInt(creditLimit, 10) : 0,
+      });
+      onDone(`Modalidad de "${target.name}" actualizada.`);
     }, (msg) => {
-      setError(msg);
+      onError(msg);
+      setLocalError(msg);
       setSaving(false);
     });
   }
@@ -409,249 +301,45 @@ function PensionadoFormDialog({
   return (
     <Modal>
       <h2 className="text-lg font-bold">
-        {isCreate
-          ? "Nuevo pensionado"
-          : isEditIdentity
-          ? `Editar ${target?.name}`
-          : `Cambiar modalidad de ${target?.name}`}
+        {isEditAccount ? `Configurar cuenta de ${target.name}` : "Configurar cuenta"}
       </h2>
       <form onSubmit={handleSubmit} className="space-y-4">
-        {!isEditAccount && (
-          <>
-            <div className="space-y-1">
-              <Label htmlFor="c-name">Nombre</Label>
-              <Input
-                id="c-name"
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ej. Doña María Rojas"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="c-ci">CI (opcional)</Label>
-              <Input
-                id="c-ci"
-                type="text"
-                autoComplete="off"
-                value={ci}
-                onChange={(e) => setCi(e.target.value)}
-                placeholder="Ej. 4567890"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="c-phone">Teléfono (opcional)</Label>
-              <Input
-                id="c-phone"
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Ej. 76543210"
-              />
-            </div>
-          </>
-        )}
-
-        {(isCreate || isEditAccount) && (
-          <>
-            <div className="space-y-1">
-              <Label htmlFor="c-type">Modalidad</Label>
-              <select
-                id="c-type"
-                className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
-                value={pensionType}
-                onChange={(e) => setPensionType(e.target.value as PensionType)}
-              >
-                {PensionTypeList.map((t) => (
-                  <option key={t} value={t}>
-                    {PensionTypeLabel[t]}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {pensionType === PensionTypeValue.POSTPAGO && (
-              <div className="space-y-1">
-                <Label htmlFor="c-credit">
-                  Límite de crédito (Bs, 0 = sin límite)
-                </Label>
-                <Input
-                  id="c-credit"
-                  type="number"
-                  min={0}
-                  inputMode="numeric"
-                  value={creditLimit}
-                  onChange={(e) => setCreditLimit(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {error && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="outline" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving
-              ? "Guardando…"
-              : isCreate
-              ? "Crear pensionado"
-              : isEditIdentity
-              ? "Guardar cambios"
-              : "Cambiar modalidad"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function FundDialog({
-  customer,
-  onClose,
-  onDone,
-}: {
-  customer: PensionadoCustomer;
-  onClose: () => void;
-  onDone: (message: string) => void;
-}) {
-  const isPrepago = customer.pensionType === PensionTypeValue.PREPAGO;
-  const title = isPrepago ? "Recargar saldo" : "Pagar deuda";
-
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<PaymentMethodType>(
-    PaymentMethod.EFECTIVO,
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const parsedAmount = useMemo(() => {
-    const n = parseInt(amount, 10);
-    return Number.isFinite(n) ? n : 0;
-  }, [amount]);
-
-  function handleConfirm() {
-    if (parsedAmount <= 0) {
-      setError("Ingresa un monto mayor a cero.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    runAction(async () => {
-      await addCustomerFunds({
-        customerId: customer.id,
-        amount: parsedAmount,
-        paymentMethod: method,
-      });
-      onDone(
-        `${title} registrada: ${formatPrice(parsedAmount)} (${PaymentMethodLabel[method]}).`,
-      );
-    }, (msg) => {
-      setError(msg);
-      setSaving(false);
-    });
-  }
-
-  function handleNumpad(d: string) {
-    setAmount((prev) => (prev === "0" ? d : prev + d));
-    setError(null);
-  }
-
-  function backspace() {
-    setAmount((prev) => prev.slice(0, -1));
-    setError(null);
-  }
-
-  return (
-    <Modal>
-      <h2 className="text-lg font-bold">
-        {title} — {customer.name}
-      </h2>
-      <div className="space-y-4">
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm">
-          <p>
-            Modalidad:{" "}
-            <Badge
-              variant={isPrepago ? "default" : "warning"}
-              className="ml-1"
-            >
-              {PensionTypeLabel[customer.pensionType]}
-            </Badge>
-          </p>
-          <p className="mt-1">
-            Saldo actual:{" "}
-            <BalanceInline customer={customer} />
-          </p>
-        </div>
-
-        <div className="w-full rounded-lg border border-border bg-slate-900 p-4 text-right font-mono text-4xl font-black text-emerald-400">
-          {amount || "0"}
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((d) => (
-            <Button
-              key={d}
-              type="button"
-              variant="secondary"
-              className="h-14 text-2xl font-bold"
-              onClick={() => handleNumpad(d)}
-            >
-              {d}
-            </Button>
-          ))}
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-14 text-2xl font-bold"
-            onClick={() => handleNumpad("0")}
-          >
-            0
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-14 text-2xl font-bold"
-            onClick={backspace}
-          >
-            Borrar
-          </Button>
-        </div>
-
         <div className="space-y-1">
-          <Label>Medio de pago (ingresa a caja)</Label>
-          <div className="flex gap-2">
-            {[PaymentMethod.EFECTIVO, PaymentMethod.QR].map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMethod(m)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  method === m
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:bg-accent"
-                }`}
-              >
-                {PaymentMethodLabel[m]}
-              </button>
+          <Label htmlFor="c-type">Modalidad</Label>
+          <select
+            id="c-type"
+            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+            value={pensionType}
+            onChange={(e) => setPensionType(e.target.value as PensionType)}
+          >
+            {PensionTypeList.map((t) => (
+              <option key={t} value={t}>
+                {PensionTypeLabel[t]}
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
-        {error && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
+        {pensionType === PensionTypeValue.POSTPAGO && (
+          <div className="space-y-1">
+            <Label htmlFor="c-credit">
+              Límite de crédito (Bs, 0 = sin límite)
+            </Label>
+            <Input
+              id="c-credit"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={creditLimit}
+              onChange={(e) => setCreditLimit(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        )}
+
+        {localError && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {localError}
           </p>
         )}
 
@@ -659,99 +347,11 @@ function FundDialog({
           <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button type="button" onClick={handleConfirm} disabled={saving}>
-            {saving ? "Registrando…" : "Registrar abono"}
+          <Button type="submit" disabled={saving}>
+            {saving ? "Guardando…" : "Cambiar modalidad"}
           </Button>
         </div>
-      </div>
+      </form>
     </Modal>
-  );
-}
-
-function BalanceInline({ customer }: { customer: PensionadoCustomer }) {
-  if (customer.balance > 0) {
-    return (
-      <span className="font-bold text-success">
-        {formatPrice(customer.balance)} a favor
-      </span>
-    );
-  }
-  if (customer.balance < 0) {
-    return (
-      <span className="font-bold text-destructive">
-        {formatPrice(Math.abs(customer.balance))} de deuda
-      </span>
-    );
-  }
-  return <span className="font-semibold">{formatPrice(0)}</span>;
-}
-
-function LedgerDialog({
-  customer,
-  onClose,
-}: {
-  customer: PensionadoCustomer;
-  onClose: () => void;
-}) {
-  return (
-    <Modal>
-      <h2 className="text-lg font-bold">Movimientos — {customer.name}</h2>
-      <div className="max-h-[60vh] space-y-2 overflow-y-auto">
-        {customer.ledger.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Este pensionado aún no tiene movimientos.
-          </p>
-        ) : (
-          customer.ledger.map((entry) => (
-            <div
-              key={entry.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2"
-            >
-              <div>
-                <p className="text-sm font-semibold">
-                  {CustomerLedgerTypeLabel[
-                    entry.type as keyof typeof CustomerLedgerTypeLabel
-                  ] ?? entry.type}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(entry.createdAt).toLocaleString("es-MX", {
-                    dateStyle: "short",
-                    timeStyle: "short",
-                  })}
-                  {entry.paymentMethod
-                    ? ` · ${PaymentMethodLabel[entry.paymentMethod]}`
-                    : ""}
-                </p>
-              </div>
-              <span
-                className={`font-mono font-bold ${
-                  entry.type === CustomerLedgerType.CONSUMO
-                    ? "text-destructive"
-                    : "text-success"
-                }`}
-              >
-                {entry.type === CustomerLedgerType.CONSUMO ? "−" : "+"}
-                {formatPrice(entry.amount)}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-      <div className="flex justify-end pt-4">
-        <Button type="button" variant="outline" onClick={onClose}>
-          Cerrar
-        </Button>
-      </div>
-    </Modal>
-  );
-}
-
-function Modal({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="space-y-4 p-6">{children}</CardContent>
-      </Card>
-    </div>
   );
 }

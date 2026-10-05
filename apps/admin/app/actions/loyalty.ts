@@ -48,10 +48,11 @@ function currentMonthStartUtc(now: Date): Date {
 /** Top 10 de clientes frecuentes del periodo: agrupa `Order.paidAt` no nulo
  *  (cobrado) por cliente y devuelve visitas/gasto del periodo más los
  *  acumulados históricos y puntos del caché del cliente. `search` filtra por
- *  nombre o teléfono. */
+ *  nombre o teléfono. `sortBy` permite ordenar por "gasto" (default) o "visitas". */
 export async function getCustomerRanking(
   periodo: string,
   search?: string,
+  sortBy?: "gasto" | "visitas",
 ): Promise<CustomerRankingRow[]> {
   await requireAdminSession();
   const period = parsePeriod(periodo);
@@ -94,14 +95,26 @@ export async function getCustomerRanking(
     ...(customerIds ? { customerId: { in: customerIds } } : {}),
   };
 
-  const grouped = await prisma.order.groupBy({
-    by: ["customerId"],
-    where,
-    _count: { _all: true },
-    _sum: { total: true },
-    orderBy: { _sum: { total: "desc" } },
-    take: 10,
-  });
+  let grouped;
+  if (sortBy === "visitas") {
+    grouped = await prisma.order.groupBy({
+      by: ["customerId"],
+      where,
+      _count: { customerId: true },
+      _sum: { total: true },
+      orderBy: { _count: { customerId: "desc" } },
+      take: 10,
+    });
+  } else {
+    grouped = await prisma.order.groupBy({
+      by: ["customerId"],
+      where,
+      _count: { _all: true },
+      _sum: { total: true },
+      orderBy: { _sum: { total: "desc" } },
+      take: 10,
+    });
+  }
 
   if (grouped.length === 0) return [];
 
@@ -127,11 +140,12 @@ export async function getCustomerRanking(
     if (!g.customerId) continue;
     const c = byId.get(g.customerId);
     if (!c) continue;
+    const periodVisits = "customerId" in g._count ? g._count.customerId : g._count._all;
     rows.push({
       customerId: c.id,
       customerName: c.name,
       phone: c.phone,
-      periodVisits: g._count._all,
+      periodVisits,
       periodSpent: g._sum.total ?? 0,
       totalVisits: c.totalVisits,
       totalSpent: c.totalSpent,
@@ -255,4 +269,35 @@ export async function saveBenefitRule(input: {
   }
 
   revalidatePath("/customers-ranking");
+}
+
+/** Lista los canjes de puntos de un cliente (para la pestaña Lealtad de la ficha). */
+export async function listCustomerRewards(customerId: string) {
+  await requireAdminSession();
+
+  const rewards = await prisma.customerReward.findMany({
+    where: { customerId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: {
+      id: true,
+      type: true,
+      pointsUsed: true,
+      description: true,
+      createdAt: true,
+      rule: { select: { name: true } },
+      order: { select: { id: true, daySeq: true } },
+    },
+  });
+
+  return rewards.map((r) => ({
+    id: r.id,
+    type: r.type,
+    pointsUsed: r.pointsUsed,
+    description: r.description,
+    createdAt: r.createdAt.toISOString(),
+    ruleName: r.rule?.name ?? null,
+    orderId: r.order?.id ?? null,
+    orderDaySeq: r.order?.daySeq ?? null,
+  }));
 }

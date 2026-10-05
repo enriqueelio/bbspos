@@ -1,0 +1,189 @@
+# REPORTE ESTADO ACTUAL (As-Is) — Módulo Clientes, Pensionados y Lealtad
+
+Fecha: 2026-10-05  
+Commit analizado: `4a39443` (normalize-customer-account completo y desplegado)
+
+---
+
+## 1. Modelo de datos (Prisma / SQLite)
+
+### Tablas principales
+
+| Tabla | Propósito | Claves / restricciones relevantes |
+|-------|-----------|-----------------------------------|
+| **Customer** | Identidad + caché de lealtad | `id` (cuid), `name`, `ci?`, `phone?`, `address?`, `createdAt`; **FK opcional** `accountId` → `CustomerAccount.id` (1:0..1). |
+| **CustomerAccount** | Fuente de verdad financiera | `id`, `customerId` (UNIQUE, FK → Customer), `pensionType` (PREPAGO\|POSTPAGO), `balance` (int, céntimos), `creditLimit` (int, céntimos, default 0), `createdAt`, `updatedAt`. |
+| **CustomerLedger** | Libro mayor de la cuenta | `id`, **FK `accountId`** → CustomerAccount, `type` (RECARGA\|PAGO_DEUDA\|CONSUMO), `amount` (int, céntimos, >0), `paymentMethod?`, `createdAt`. |
+| **Order** | Pedidos | `accountId?` (FK → CustomerAccount, **solo en pedidos PENSION**), `customerId?`, `paymentMethod` (EFECTIVO\|QR\|TARJETA\|PENSION), `status` (RECIBIDO\|ACEPTADO\|ENTREGADO\|ANULADO), `paidAt?`, `deliveredAt?`, `total` (céntimos). |
+
+### Reglas de integridad (normalizadas)
+
+1. **`CustomerAccount` es la única fuente de verdad** para saldos y límites. `Customer` no tiene campos financieros.
+2. **Tres tipos de cliente** (mutuamente excluyentes):
+   - **Mostrador**: `Customer.accountId` = `null` (sin cuenta).
+   - **Prepago**: `account.pensionType = PREPAGO`, `balance ≥ 0` (saldo a favor).
+   - **Postpago**: `account.pensionType = POSTPAGO`, `balance ≤ 0` (deuda), `creditLimit ≥ 0`.
+3. **`CustomerLedger.accountId` NOT NULL**: cada movimiento pertenece a una cuenta.
+4. **`Order.accountId` NOT NULL solo si `paymentMethod = PENSION`**: el pedido consume la cuenta corriente.
+5. **Saldo = suma ledger**: `balance = Σ(RECARGA + PAGO_DEUDA) − Σ(CONSUMO)`. Verificado por `verify-cuenta-solo-pensionados.ts`.
+
+### Migración aplicada
+`20261005120000_normalize_customer_account` (SQL a mano, `migrate deploy`):
+- Crea `CustomerAccount` y puebla desde `Customer` legacy (`pensionType`, `balance`, `creditLimit`).
+- Crea `CustomerLedger` con `accountId` desde `Order` (PENSION) y `CustomerTopUp` legacy.
+- Añade `accountId` a `Customer` y `Order` con FKs reales.
+- Elimina columnas legacy de `Customer`: `pensionType`, `balance`, `creditLimit`, `accountId` (la vieja, sin FK).
+- `dev.db` limpio: 0 columnas legacy, 7 ledger entries, 7 pedidos PENSION, saldo = suma ledger.
+
+---
+
+## 2. Lógica de lealtad (backend)
+
+### Dónde vive
+- **Tipos y helpers**: `packages/types/src/index.ts`
+- **Acumulación**: `apps/cajero/app/actions/customers.ts` → `accumulateCustomerLoyalty()`
+- **Cálculo de nivel**: `levelNameOf(customer, rules)` (mismo archivo + types)
+- **Corrección histórica**: `packages/db/scripts/fix-postpago-loyalty.ts`
+
+### Reglas de fidelización (`fidelizableOrderWhere` / `isFidelizable`)
+
+Un pedido **genera lealtad** si y solo si:
+1. `status = ENTREGADO` (o `paidAt` no null en script de corrección)
+2. `status ≠ ANULADO`
+3. **NO** es consumo a cuenta de pensionado POSTPAGO → excluye `paymentMethod = PENSION` **y** `customer.account.pensionType = POSTPAGO`
+
+```ts
+// packages/types/src/index.ts (extracto)
+export const fidelizableOrderWhere = {
+  status: "ENTREGADO",
+  NOT: {
+    paymentMethod: "PENSION",
+    customer: { account: { pensionType: "POSTPAGO" } },
+  },
+};
+```
+
+### Caché en `Customer` (4 campos)
+| Campo | Significado |
+|-------|-------------|
+| `totalVisits` | # pedidos fidelizables |
+| `totalSpent` | Σ `total` de pedidos fidelizables (céntimos) |
+| `points` | 1 punto por Bs gastado en pedidos fidelizables (`points = totalSpent / 100`) |
+| `lastVisitAt` | `paidAt` más reciente de pedidos fidelizables |
+
+### Acumulación (`accumulateCustomerLoyalty`)
+- Se llama al **entregar** pedido (`deliverOrder`) y al **pagar** (`payOrder`).
+- Recibe `customerId` + `orderTotal`; lee `Customer` con `include: { account: true }`.
+- Evalúa `isFidelizable(customer, order)` → si `true`, incrementa los 4 campos atómicamente.
+- **Guards**: excluye consumo POSTPAGO a cuenta; recargas/pagos de deuda **no** llaman a esta función.
+
+### Nivel de lealtad (`levelNameOf`)
+- Usa `BenefitRule` activas (`isActive = true`), ordenadas por `requiredVisits` / `requiredSpent` / `requiredPoints` descendente.
+- Agregados del **mes local (UTC-4)**: `date(createdAt/1000, 'unixepoch', '-4 hours')` en SQL raw.
+- Primer regla que cumple **todas** sus condiciones → `rule.name`. Si ninguna → `null`.
+
+### Corrección histórica (`fix-postpago-loyalty.ts`)
+- Dry-run por defecto; `--apply` escribe.
+- Recalcula desde `Order` (cobrados, no anulados, filtro POSTPAGO+PENSION) vs caché actual.
+- Idempotente: al terminar, todo cliente cuadra con sus pedidos.
+
+---
+
+## 3. Gestión de cuentas (Admin + Cajero)
+
+### Admin — Server Actions (`apps/admin/app/actions/customers.ts`)
+
+| Acción | Qué hace | Validaciones |
+|--------|----------|--------------|
+| `createClient(data)` | Crea `Customer` solo (mostrador). `name` requerido, `ci` único si se da. | — |
+| `createPensionado(data)` | Crea `Customer` + `CustomerAccount` atómico. `pensionType`, `initialBalance?`, `creditLimit?`. | PREPAGO: `initialBalance ≥ 0`; POSTPAGO: `creditLimit ≥ 0`. |
+| `convertToPensionado(customerId, data)` | Convierte mostrador → pensionado. Crea `CustomerAccount` + ledger `RECARGA` si `initialBalance > 0`. | `customer.account` debe ser `null`. |
+| `removePensionadoStatus(customerId)` | Elimina `CustomerAccount` + ledger asociado. Revierte a mostrador. | Solo si `ledger.length === 0` (saldo 0 y sin movimientos). |
+| `updatePensionadoAccount(customerId, data)` | Modifica `pensionType`, `creditLimit`, `balance` (delta vía ledger RECARGA/PAGO_DEUDA). | Cambio de tipo: PREPAGO→POSTPAGO requiere `balance ≤ 0`; POSTPAGO→PREPAGO requiere `balance ≥ 0`. |
+| `addCustomerFunds(customerId, amount, method)` | Ledger `RECARGA` (PREPAGO) o `PAGO_DEUDA` (POSTPAGO) + actualiza `balance`. | PREPAGO: `amount > 0`; POSTPAGO: `amount > 0` y reduce deuda. |
+| `updateCustomer(customerId, data)` | Edita `name`, `ci`, `phone`, `address` (solo identidad). | `ci` único si cambia. |
+
+### Cajero — Flujo Cuenta Pensionado
+
+#### 1. Selector de pensionados (`apps/cajero/app/page.tsx:130-155`)
+```ts
+prisma.customer.findMany({
+  where: { account: { isNot: null } },  // SOLO pensionados
+  select: { id, name, ci, account: { select: { pensionType, balance, creditLimit } } },
+})
+```
+→ Devuelve `PensionCustomerOption[]` para el diálogo de cobro.
+
+#### 2. Diálogo cobro (`apps/cajero/components/pension-payment-dialog.tsx`)
+- **PREPAGO**: valida `balance ≥ total`. Muestra saldo restante.
+- **POSTPAGO**: valida `balance - total ≥ -creditLimit`. Muestra deuda resultante.
+- Bloquea botón si validación falla.
+
+#### 3. Aceptar pedido a cuenta (`apps/cajero/app/actions/orders.ts` → `acceptPensionOrder`)
+```ts
+// 1. Valida cuenta existe
+const account = await prisma.customerAccount.findUnique({ where: { customerId } });
+// 2. Chequea saldo/límite (misma lógica que diálogo)
+// 3. Crea Order con paymentMethod=PENSION, accountId=account.id, status=ACEPTADO
+// 4. Crea CustomerLedger CONSUMO con accountId, amount=total
+// 5. Actualiza account.balance -= total
+// 6. NO llama accumulateCustomerLoyalty (consumo POSTPAGO no fideliza)
+```
+
+#### 4. Recarga / Pago deuda (Admin UI → `addCustomerFunds`)
+- Crea ledger `RECARGA` (PREPAGO) o `PAGO_DEUDA` (POSTPAGO) con `paymentMethod`.
+- Actualiza `account.balance` (+prepago / -postpago).
+- **Ingresa a caja real del día** (ver `cash-close.ts`, `daily-report.ts`).
+
+### Cierre de caja / Reporte diario
+- **Ingresos reales**: pedidos ENTREGADO (prorrateados si pago dividido) + ledger `RECARGA` + `PAGO_DEUDA`.
+- **NO entran a caja**: ledger `CONSUMO` (ya cobrado o se cobrará a fin de mes).
+- Ambos `cash-close.ts` y `daily-report.ts` usan idéntico criterio.
+
+---
+
+## 4. Estructura de UI (Admin)
+
+### Rutas y componentes
+
+| Ruta | Server Component | Client Component | Descripción |
+|------|------------------|------------------|-------------|
+| `/customers` | `page.tsx` | `customers-client.tsx` | **Solo mostrador** (identity + lealtad). Tabla: nombre, CI, teléfono, visitas, gasto, puntos, nivel, acciones. Botón "Convertir a pensionado" → modal. |
+| `/pensionados` | `page.tsx` | `pensionados-client.tsx` | **Solo cuentas corrientes**. Tabla: nombre, CI, modalidad (badge PREPAGO/POSTPAGO), saldo (rojo si deuda), límite (postpago), acciones: Recargar, Pagar deuda, Movimientos (ledger), Desmarcar. |
+| `/customers-ranking` | `page.tsx` | `customers-ranking-client.tsx` | Ranking fidelidad por período (semana/mes/año). Usa `getCustomerRanking` + reglas activas. |
+
+### Navegación (`apps/admin/components/admin-nav.tsx:29-38`)
+```ts
+const SETTINGS_ITEMS = [
+  { href: "/customers", label: "Clientes" },
+  { href: "/pensionados", label: "Pensionados" },
+  { href: "/customers-ranking", label: "Lealtad / Frecuentes" },
+  // ...
+];
+```
+Ambas páginas (`/customers` y `/pensionados`) están en el menú **Configuración** (icono Settings).
+
+### Detalles UI Clientes (`customers-client.tsx`)
+- `useActionState` para `createClient`, `convertToPensionado`, `updateCustomer`.
+- Modal "Convertir a pensionado": selecciona PREPAGO/POSTPAGO, saldo inicial, límite (postpago).
+- Tabla: muestra `levelName` calculado en servidor (`getCustomerRanking` incluye nivel).
+
+### Detalles UI Pensionados (`pensionados-client.tsx`)
+- `useActionState` para `createPensionado`, `updatePensionadoAccount`, `addCustomerFunds`, `removePensionadoStatus`.
+- Modal "Nuevo pensionado": tipo, saldo inicial, límite (postpago).
+- Modal "Recargar / Pagar deuda": amount + método (EFECTIVO/QR/TARJETA).
+- Modal "Movimientos": tabla ledger (tipo, monto, método, fecha) + saldo actual.
+- "Desmarcar": confirma, llama `removePensionadoStatus` (solo si ledger vacío).
+
+---
+
+## Resumen de invariantes clave (para futuros cambios)
+
+1. **`Customer.accountId` nullable** ⇔ cliente mostrador (sin cuenta).
+2. **`CustomerAccount` 1:1 con `Customer`** (UNIQUE `customerId`).
+3. **`Order.accountId` NOT NULL** ⇔ `paymentMethod = PENSION`.
+4. **Lealtad** = pedidos ENTREGADO, no ANULADO, **excluyendo** POSTPAGO+PENSION.
+5. **Caja real** = pedidos entregados + recargas/pagos deuda; **no** consumos a cuenta.
+6. **Zona horaria fija**: America/La_Paz (UTC-4) para agregados diarios/mensuales.
+7. **Ticket visible** = `daySeq` (diario #001…); `seq` solo global.
+8. **Scripts DB** son idempotentes y corren contra `dev.db` (crean/borran plato de prueba).

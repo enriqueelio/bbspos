@@ -9,11 +9,11 @@ export const metadata = { title: "Clientes frecuentes — BBSPOS Admin" };
 export default async function CustomersRankingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; q?: string }>;
+  searchParams: Promise<{ period?: string; q?: string; sortBy?: string }>;
 }) {
-  const { period, q } = await searchParams;
+  const { period, q, sortBy } = await searchParams;
   const [rows, rules] = await Promise.all([
-    getCustomerRanking(period ?? "month", q),
+    getCustomerRanking(period ?? "month", q, sortBy as "gasto" | "visitas" | undefined),
     listBenefitRules(),
   ]);
 
@@ -23,6 +23,7 @@ export default async function CustomersRankingPage({
       rules={rules}
       period={period ?? "month"}
       search={q ?? ""}
+      sortBy={sortBy ?? "gasto"}
     />
   );
 }

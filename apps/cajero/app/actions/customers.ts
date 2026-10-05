@@ -1,9 +1,7 @@
 ﻿"use server";
 
-import { prisma, localDayKey, type Prisma, type Customer } from "@bbspos/db";
+import { prisma, type Prisma, type Customer, levelNameOf } from "@bbspos/db";
 import {
-  BenefitMetric,
-  fidelizableOrderWhere,
   isFidelizable,
   type CustomerLoyaltyView,
   type CustomerSuggestion,
@@ -16,51 +14,6 @@ const PHONE_RE = /^[0-9+\s-]{7,}$/;
 /** Normaliza un teléfono: quita espacios y guiones (para comparar/almacenar). */
 function normalizePhone(raw: string): string {
   return raw.trim().replace(/[\s-]+/g, "");
-}
-
-/** Nombre del nivel vigente del cliente según las reglas activas: gasto del mes,
- *  visitas del mes o puntos acumulados (zona America/La_Paz, UTC-4).
- *
- *  Solo cuentan los pedidos que generaron lealtad (`fidelizableOrderWhere`): el
- *  consumo a cuenta de un pensionado POSTPAGO no le sube de nivel, porque no le
- *  sumó puntos. Sus compras en efectivo/QR sí. Criterio en `isFidelizable`. */
-async function levelNameOf(
-  customerId: string,
-  points: number,
-): Promise<string | null> {
-  const rules = await prisma.customerBenefitRule.findMany({
-    where: { active: true },
-  });
-  if (rules.length === 0) return null;
-
-  const now = new Date();
-  const [y, m] = localDayKey(now).split("-").map(Number);
-  // Medianoche local del día 1 en La Paz (UTC-4) = 04:00 UTC.
-  const monthStart = new Date(Date.UTC(y, m - 1, 1, 4, 0, 0));
-  const agg = await prisma.order.aggregate({
-    where: {
-      customerId,
-      paidAt: { not: null, gte: monthStart },
-      status: { not: "ANULADO" },
-      ...fidelizableOrderWhere(),
-    },
-    _count: { _all: true },
-    _sum: { total: true },
-  });
-  const visits = agg._count._all;
-  const spent = agg._sum.total ?? 0;
-
-  let level: string | null = null;
-  for (const rule of [...rules].sort((a, b) => a.threshold - b.threshold)) {
-    const value =
-      rule.metric === BenefitMetric.SPEND_MONTH
-        ? spent
-        : rule.metric === BenefitMetric.VISITS_MONTH
-          ? visits
-          : points;
-    if (value >= rule.threshold) level = rule.name;
-  }
-  return level;
 }
 
 /** Vista de lealtad de un cliente (para la alerta de nivel del terminal). */

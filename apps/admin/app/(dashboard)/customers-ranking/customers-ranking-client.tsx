@@ -29,13 +29,19 @@ import {
 import {
   redeemCustomerPoints,
   saveBenefitRule,
+  listCustomerRewards,
 } from "@/app/actions/loyalty";
+import {
+  CustomerRewardType,
+  CustomerRewardTypeLabel,
+} from "@bbspos/types";
 
 interface Props {
   rows: CustomerRankingRow[];
   rules: CustomerBenefitRuleView[];
   period: string;
   search: string;
+  sortBy: string;
 }
 
 function errText(e: unknown): string {
@@ -47,15 +53,17 @@ export function CustomersRankingClient({
   rules,
   period,
   search,
+  sortBy,
 }: Props) {
   const router = useRouter();
   const [q, setQ] = useState(search);
 
-  function goTo(periodo: string, text: string) {
+  function goTo(periodo: string, text: string, sort?: string) {
     const params = new URLSearchParams();
     if (periodo !== LoyaltyPeriod.MONTH) params.set("period", periodo);
     const trimmed = text.trim().toUpperCase();
     if (trimmed) params.set("q", trimmed);
+    if (sort && sort !== "gasto") params.set("sortBy", sort);
     const qs = params.toString();
     router.replace(`/customers-ranking${qs ? `?${qs}` : ""}`);
   }
@@ -72,6 +80,37 @@ export function CustomersRankingClient({
   const [redeemPoints, setRedeemPoints] = useState("");
   const [redeemDesc, setRedeemDesc] = useState("");
   const [redeemBusy, setRedeemBusy] = useState(false);
+
+  // ===== Canjes (rewards) =====
+  const [rewardsFor, setRewardsFor] = useState<CustomerRankingRow | null>(null);
+  const [rewards, setRewards] = useState<{
+    id: string;
+    type: string;
+    pointsUsed: number;
+    description: string;
+    createdAt: string;
+    ruleName: string | null;
+    orderId: string | null;
+    orderDaySeq: number | null;
+  }[] | null>(null);
+  const [rewardsBusy, setRewardsBusy] = useState(false);
+
+  async function handleViewRewards(row: CustomerRankingRow) {
+    setRewardsFor(row);
+    setRewardsBusy(true);
+    try {
+      const data = await listCustomerRewards(row.customerId);
+      setRewards(data);
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: errText(e),
+      });
+    } finally {
+      setRewardsBusy(false);
+    }
+  }
 
   async function handleRedeem() {
     if (!redeemFor) return;
@@ -159,20 +198,37 @@ export function CustomersRankingClient({
           <div>
             <h2 className="text-xl font-bold">Clientes frecuentes</h2>
             <p className="text-sm text-muted-foreground">
-              Top 10 por gasto cobrado ({period === LoyaltyPeriod.MONTH ? "mes actual" : period === LoyaltyPeriod.DAYS_30 ? "últimos 30 días" : "histórico"}).
+              Top 10 por {sortBy === "visitas" ? "recurrencia" : "gasto"} cobrado ({period === LoyaltyPeriod.MONTH ? "mes actual" : period === LoyaltyPeriod.DAYS_30 ? "últimos 30 días" : "histórico"}).
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {Object.values(LoyaltyPeriod).map((p) => (
               <Button
                 key={p}
                 variant={period === p ? "default" : "outline"}
                 size="sm"
-                onClick={() => goTo(p, q)}
+                onClick={() => goTo(p, q, sortBy)}
               >
                 {LoyaltyPeriodLabel[p]}
               </Button>
             ))}
+            <div className="flex items-center gap-1 ml-2 border-l border-slate-700 pl-2">
+              <span className="text-sm text-muted-foreground">Ordenar:</span>
+              <Button
+                variant={sortBy === "gasto" ? "default" : "outline"}
+                size="sm"
+                onClick={() => goTo(period, q, "gasto")}
+              >
+                Gasto
+              </Button>
+              <Button
+                variant={sortBy === "visitas" ? "default" : "outline"}
+                size="sm"
+                onClick={() => goTo(period, q, "visitas")}
+              >
+                Visitas
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -236,18 +292,27 @@ export function CustomersRankingClient({
                         : "—"}
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={row.points <= 0}
-                        onClick={() => {
-                          setRedeemFor(row);
-                          setRedeemPoints("");
-                          setRedeemDesc("");
-                        }}
-                      >
-                        Canjear
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewRewards(row)}
+                        >
+                          Ver canjes
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={row.points <= 0}
+                          onClick={() => {
+                            setRedeemFor(row);
+                            setRedeemPoints("");
+                            setRedeemDesc("");
+                          }}
+                        >
+                          Canjear
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -364,6 +429,59 @@ export function CustomersRankingClient({
               }
             >
               {redeemBusy ? "Canjeando…" : "Canjear"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Dialog de canjes ===== */}
+      <Dialog open={rewardsFor !== null} onOpenChange={(o) => !o && setRewardsFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Canjes de {rewardsFor?.customerName}</DialogTitle>
+            <DialogDescription>
+              Historial de canjes de puntos registrados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {rewardsBusy ? (
+              <p className="text-center text-muted-foreground">Cargando…</p>
+            ) : rewards === null ? (
+              <p className="text-center text-muted-foreground">Sin canjes registrados.</p>
+            ) : rewards.length === 0 ? (
+              <p className="text-center text-muted-foreground">Sin canjes registrados.</p>
+            ) : (
+              rewards.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 p-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold capitalize">
+                      {CustomerRewardTypeLabel[r.type as keyof typeof CustomerRewardTypeLabel] ?? r.type}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.description}
+                      {r.ruleName && ` · Regla: ${r.ruleName}`}
+                      {r.orderDaySeq && ` · Ticket #${r.orderDaySeq}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleString("es-BO", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                  <span className="font-mono font-bold text-destructive">
+                    −{r.pointsUsed} pts
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRewardsFor(null)} disabled={rewardsBusy}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

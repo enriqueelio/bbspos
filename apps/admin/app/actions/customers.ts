@@ -197,17 +197,25 @@ export async function updatePensionadoAccount(input: {
     data: { pensionType, creditLimit },
   });
 
+  revalidatePath("/customers");
   revalidatePath("/pensionados");
 }
 
+function parsePaymentMethod(value: string): PaymentMethodType {
+  if (value !== PaymentMethod.EFECTIVO && value !== PaymentMethod.QR) {
+    throw new Error("El abono debe registrarse en Efectivo o QR.");
+  }
+  return value as PaymentMethodType;
+}
+
 /** Convierte un cliente de mostrador en pensionado creando su cuenta corriente.
- *  El saldo arranca en cero: la conversión es el momento de abrir la cuenta, no
- *  de mover plata. Para tener saldo a favor o deuda hay que usar "Recargar
- *  Saldo" / "Pagar Deuda" desde /pensionados, que sí lo deja asentado en el libro. */
+ *  Permite saldo inicial (crea asiento RECARGA o PAGO_DEUDA en el libro). */
 export async function convertToPensionado(input: {
   customerId: string;
   pensionType: string;
   creditLimit?: number;
+  initialBalance?: number;
+  paymentMethod?: string;
 }) {
   await requireAdminSession();
 
@@ -216,6 +224,10 @@ export async function convertToPensionado(input: {
     pensionType === PensionType.POSTPAGO
       ? Math.max(0, Math.trunc(input.creditLimit ?? 0))
       : 0;
+  const initialBalance = Math.trunc(input.initialBalance ?? 0);
+  const paymentMethod = input.paymentMethod
+    ? parsePaymentMethod(input.paymentMethod)
+    : PaymentMethod.EFECTIVO;
 
   const customer = await prisma.customer.findUnique({
     where: { id: input.customerId },
@@ -228,8 +240,24 @@ export async function convertToPensionado(input: {
     throw new Error(`${customer.name} ya es pensionado.`);
   }
 
-  await prisma.customerAccount.create({
-    data: { customerId: customer.id, pensionType, creditLimit, balance: 0 },
+  await prisma.$transaction(async (tx) => {
+    const account = await tx.customerAccount.create({
+      data: { customerId: customer.id, pensionType, creditLimit, balance: initialBalance },
+    });
+    if (initialBalance !== 0) {
+      const ledgerType =
+        pensionType === PensionType.POSTPAGO
+          ? CustomerLedgerType.PAGO_DEUDA
+          : CustomerLedgerType.RECARGA;
+      await tx.customerLedger.create({
+        data: {
+          accountId: account.id,
+          type: ledgerType,
+          amount: Math.abs(initialBalance),
+          paymentMethod,
+        },
+      });
+    }
   });
 
   revalidatePath("/customers");
@@ -329,5 +357,83 @@ export async function addCustomerFunds(input: {
     }),
   ]);
 
+  revalidatePath("/customers");
   revalidatePath("/pensionados");
+}
+
+/** Obtiene el detalle completo de un cliente para la ficha:
+ *  identidad, cuenta (si existe), ledger, y pedidos fidelizables recientes. */
+export async function getCustomerDetail(customerId: string) {
+  await requireAdminSession();
+
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: {
+      account: {
+        include: {
+          ledger: {
+            orderBy: { createdAt: "desc" },
+            take: 50,
+          },
+        },
+      },
+      orders: {
+        where: {
+          status: "ENTREGADO",
+          paidAt: { not: null },
+        },
+        orderBy: { deliveredAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          seq: true,
+          daySeq: true,
+          total: true,
+          paymentMethod: true,
+          deliveredAt: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  if (!customer) return null;
+
+  return {
+    id: customer.id,
+    name: customer.name,
+    ci: customer.ci,
+    phone: customer.phone,
+    createdAt: customer.createdAt.toISOString(),
+    totalVisits: customer.totalVisits,
+    totalSpent: customer.totalSpent,
+    points: customer.points,
+    lastVisitAt: customer.lastVisitAt?.toISOString() ?? null,
+    account: customer.account
+      ? {
+          id: customer.account.id,
+          pensionType: customer.account.pensionType,
+          balance: customer.account.balance,
+          creditLimit: customer.account.creditLimit,
+          ledger: customer.account.ledger.map((l) => ({
+            id: l.id,
+            accountId: l.accountId,
+            type: l.type as CustomerLedgerType,
+            amount: l.amount,
+            paymentMethod: l.paymentMethod,
+            orderId: l.orderId,
+            createdAt: l.createdAt.toISOString(),
+          })),
+        }
+      : null,
+    recentOrders: customer.orders.map((o) => ({
+      id: o.id,
+      seq: o.seq,
+      daySeq: o.daySeq,
+      total: o.total,
+      paymentMethod: o.paymentMethod,
+      deliveredAt: o.deliveredAt?.toISOString() ?? null,
+      status: o.status,
+    })),
+  };
 }

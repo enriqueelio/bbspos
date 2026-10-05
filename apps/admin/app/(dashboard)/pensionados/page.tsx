@@ -1,10 +1,10 @@
 import { prisma } from "@bbspos/db";
 import { type CustomerLedgerType } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
-import { PensionadosClient, type PensionadoCustomer } from "./pensionados-client";
+import { PensionadosClient, type PensionadoCustomer, type PensionadosKPIs } from "./pensionados-client";
 
 export const metadata = {
-  title: "Pensionados (Cuentas Corrientes) — BBSPOS Admin",
+  title: "Cuentas Pensionadas — BBSPOS Admin",
 };
 
 export default async function PensionadosPage() {
@@ -24,8 +24,6 @@ export default async function PensionadosPage() {
   const data: PensionadoCustomer[] = customers.map((c) => ({
     id: c.id,
     name: c.name,
-    ci: c.ci,
-    phone: c.phone ?? "",
     pensionType: c.account?.pensionType ?? "PREPAGO",
     balance: c.account?.balance ?? 0,
     creditLimit: c.account?.creditLimit ?? 0,
@@ -41,9 +39,20 @@ export default async function PensionadosPage() {
     })) ?? [],
   }));
 
+  // KPIs
+  const totalSaldoAFavor = data
+    .filter((c) => c.pensionType === "PREPAGO" && c.balance > 0)
+    .reduce((sum, c) => sum + c.balance, 0);
+  const totalDeudaPorCobrar = data
+    .filter((c) => c.pensionType === "POSTPAGO" && c.balance < 0)
+    .reduce((sum, c) => sum + Math.abs(c.balance), 0);
+
+  const kpis: PensionadosKPIs = { totalSaldoAFavor, totalDeudaPorCobrar };
+
   return (
     <PensionadosClient
       customers={data}
+      kpis={kpis}
       currentUserRole={session.user.role}
     />
   );

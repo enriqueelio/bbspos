@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, UserPlus } from "lucide-react";
+import { Pencil, Sparkles, UserPlus } from "lucide-react";
 import {
   Badge,
   Button,
@@ -9,6 +9,8 @@ import {
   CardContent,
   Input,
   Label,
+  UserIcon,
+  cn,
 } from "@bbspos/ui";
 import {
   RoleLabel,
@@ -21,9 +23,7 @@ import {
   type StaffUser,
   type IconKey,
   ICON_CATALOG,
-  ICON_EMOJI,
   ICON_LABELS,
-  iconEmojiOf,
 } from "@bbspos/types";
 import {
   createUser,
@@ -159,16 +159,16 @@ export function UsersClient({
                           setNotice(null);
                           setDialog({ kind: "edit", user });
                         }}
-                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-muted text-base leading-none transition-colors hover:bg-accent"
+                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-muted transition-colors hover:bg-accent"
                       >
-                        {iconEmojiOf(user.iconKey)}
+                        <UserIcon iconKey={user.iconKey} />
                       </button>
                     ) : (
                       <span
                         title={`${user.name} · ${RoleLabel[user.role]}`}
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-base leading-none"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted"
                       >
-                        {iconEmojiOf(user.iconKey)}
+                        <UserIcon iconKey={user.iconKey} />
                       </span>
                     )}
                   </td>
@@ -436,31 +436,64 @@ function UserDialog({
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="u-icon">Icono</Label>
-              <div className="flex h-9 items-center rounded-md border border-input bg-card px-3 text-sm">
-                <span className="flex w-7 items-center justify-center text-base leading-none">
-                  {iconKey ? ICON_EMOJI[iconKey] : "✨"}
+              <Label>Icono</Label>
+              <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-card px-3 text-sm">
+                {iconKey ? (
+                  <UserIcon iconKey={iconKey} />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-primary" />
+                )}
+                <span>
+                  {iconKey ? ICON_LABELS[iconKey] : "Automático (asignar uno libre)"}
                 </span>
-                <select
-                  id="u-icon"
-                  className="flex-1 rounded-md border-0 bg-transparent px-1 text-sm shadow-none [&>option]:text-foreground"
-                  value={iconKey}
-                  onChange={(e) => setIconKey(e.target.value as IconKey | "")}
+              </div>
+              {/* Selector visual: el <select> nativo abría su lista con fondo del SO
+                  y rompía el tema oscuro de la app. */}
+              <div className="grid grid-cols-6 gap-1.5 rounded-md border border-border p-2">
+                <button
+                  type="button"
+                  onClick={() => setIconKey("")}
+                  aria-pressed={iconKey === ""}
+                  title="Automático (asignar uno libre)"
+                  className={cn(
+                    "flex h-9 items-center justify-center rounded-md border transition-colors",
+                    iconKey === ""
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-transparent bg-muted hover:bg-accent",
+                  )}
                 >
-                  <option value="">✨ Automático (asignar uno libre)</option>
-                  {ICON_CATALOG.map((key) => {
-                    const owner = occupied.get(key);
-                    return (
-                      <option key={key} value={key} disabled={!!owner}>
-                        {ICON_EMOJI[key]} {ICON_LABELS[key]}
-                        {owner ? ` — ocupado (${owner})` : ""}
-                      </option>
-                    );
-                  })}
-                </select>
+                  <Sparkles className="h-4 w-4" />
+                </button>
+                {ICON_CATALOG.map((key) => {
+                  const owner = occupied.get(key);
+                  const selected = iconKey === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      disabled={!!owner}
+                      onClick={() => setIconKey(key)}
+                      aria-pressed={selected}
+                      title={
+                        owner
+                          ? `${ICON_LABELS[key]} — ocupado por ${owner}`
+                          : ICON_LABELS[key]
+                      }
+                      className={cn(
+                        "flex h-9 items-center justify-center rounded-md border transition-colors",
+                        selected
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-transparent bg-muted hover:bg-accent",
+                        owner && "cursor-not-allowed opacity-40 hover:bg-muted",
+                      )}
+                    >
+                      <UserIcon iconKey={key} />
+                    </button>
+                  );
+                })}
               </div>
               <p className="text-xs text-muted-foreground">
-                Los íconos de otros usuarios activos aparecen deshabilitados.
+                Los íconos de otros usuarios activos aparecen atenuados y deshabilitados.
               </p>
             </div>
 

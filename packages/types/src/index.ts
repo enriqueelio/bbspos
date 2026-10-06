@@ -608,7 +608,9 @@ export interface CashierDailyData {
 }
 
 export function formatOrderCode(seq: number | null | undefined): string {
-  return String(seq ?? 0).padStart(3, "0").slice(-3);
+  // Ticket visible: 2 dígitos con cero (#01…#99); desde #100 se muestra el
+  // número real.
+  return String(seq ?? 0).padStart(2, "0");
 }
 
 export function findDrinkPrice(

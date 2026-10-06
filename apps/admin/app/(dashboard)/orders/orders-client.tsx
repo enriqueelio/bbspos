@@ -13,6 +13,7 @@ import {
   DialogTitle,
   Input,
   Label,
+  UserIcon,
   useToast,
 } from "@bbspos/ui";
 import {
@@ -22,7 +23,6 @@ import {
   RoleLabel,
   ShiftLabel,
   ShiftList,
-  iconEmojiOf,
   type Order,
   type OrderStatus,
   type Shift,
@@ -119,9 +119,9 @@ function AccordionRow({
           {order.userId ? (
             <span
               title={`${order.userName ?? "—"}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`}
-              className="mr-1.5"
+              className="mr-1.5 inline-flex align-middle"
             >
-              {iconEmojiOf(order.userIconKey)}
+              <UserIcon iconKey={order.userIconKey} />
             </span>
           ) : null}
           {order.userName || "—"}
@@ -213,8 +213,11 @@ function OrderDetail({
         {order.userId && (
           <p className="flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-muted-foreground">
             Creado por:
-            <span title={`${order.userName ?? "—"}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`}>
-              {iconEmojiOf(order.userIconKey)}
+            <span
+              title={`${order.userName ?? "—"}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`}
+              className="inline-flex items-center"
+            >
+              <UserIcon iconKey={order.userIconKey} />
             </span>
             <span className="font-bold text-white">
               {order.userName ?? "—"}

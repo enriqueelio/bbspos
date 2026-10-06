@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  UserIcon,
   cn,
 } from "@bbspos/ui";
 import {
@@ -33,7 +34,6 @@ import {
   OrderTypeList,
   Role,
   RoleLabel,
-  iconEmojiOf,
   type Order,
   type Role as RoleType,
 } from "@bbspos/types";
@@ -227,7 +227,7 @@ function DeliveryTypeIcon({
 
 function UserOrderIcon({
   order,
-  className = "",
+  className,
 }: {
   order: Order;
   className?: string;
@@ -240,9 +240,9 @@ function UserOrderIcon({
   return (
     <span
       title={tooltip}
-      className={`inline-flex shrink-0 items-center justify-center leading-none ${className}`}
+      className="inline-flex shrink-0 items-center justify-center leading-none"
     >
-      {iconEmojiOf(order.userIconKey)}
+      <UserIcon iconKey={order.userIconKey} className={className} />
     </span>
   );
 }
@@ -748,11 +748,6 @@ function OrderCard({
   const isEditing = editingOrderId !== null && editingOrderId === order.id;
   // Finalizado = cobrado Y entregado. Se auto-contrae (acordeón cerrado).
   const isFinished = Boolean(order.paidAt && order.deliveredAt);
-  // Y anulado también es un cierre, no una espera: el pedido no vuelve a la
-  // cocina, así que su punto de demora deja de ser una alarma de "corre que se
-  // tarda" aunque siga mostrando que se tardó. Por eso el punto no parpadea
-  // en el Historial; la demora se calcula igual para saber si debe verse.
-  const isAnulado = order.status === OrderStatus.ANULADO;
   // En modo compact (cola del 20%) TODOS los pedidos nacen contraídos y cada
   // tarjeta se expande/contrae manualmente al hacer clic.
   const isOpen = expandedId === order.id;
@@ -810,9 +805,9 @@ function OrderCard({
         >
           <div className="flex min-w-0 items-center gap-1.5">
             <span
-              className={`shrink-0 font-black text-white ${
-                compact ? "text-sm" : "text-lg"
-              }`}
+              className={`shrink-0 font-black ${
+                demora > 0 ? "text-red-500" : "text-white"
+              } ${compact ? "text-sm" : "text-lg"}`}
             >
               #{formatOrderCode(ticketOf(order))}
             </span>
@@ -843,18 +838,9 @@ function OrderCard({
                   Reserva {horaReserva(order)}
                 </span>
               )
-            // El punto de demora deja de parpadear cuando el pedido ya se cerró (entregado
-              // o anulado): parpadeando pide una acción, y en el Historial ya
-              // no hay nada que hacer. El color sigue marcando la demora real.
-              ) : (
-                demora > 0 && (
-                  <div
-                    className={`h-2 w-2 shrink-0 rounded-full bg-red-500 ${
-                      isFinished || isAnulado ? "" : "animate-pulse"
-                    }`}
-                  />
-                )
-              )}
+            // El punto rojo de demora se reemplazó por el propio texto del
+            // ticket en rojo (arriba): menos ruido visual en la tarjeta.
+              ) : null}
             {!inReservas && order.customerName && (
               <span
                 className={`truncate font-black ${
@@ -889,9 +875,11 @@ function OrderCard({
                 order.status !== OrderStatus.ANULADO
               }
             />
+            {/* Mismo tamaño que DeliveryTypeIcon en cada estado, para que la
+                pareja quede simétrica. */}
             <UserOrderIcon
               order={order}
-              className={compact ? "text-sm" : "text-lg"}
+              className={compact ? "h-3.5 w-3.5" : "h-5 w-5"}
             />
           </div>
         </button>
@@ -961,26 +949,13 @@ function OrderCard({
                   </>
                 )}
           </p>
-          {order.userId && (
-            <p
-              className={`flex flex-wrap items-center gap-x-1.5 font-semibold text-slate-400 ${
-                compact ? "text-[11px]" : "text-sm"
-              }`}
-            >
-              Creado por:
-              <UserOrderIcon
-                order={order}
-                className={compact ? "text-xs" : "text-sm"}
-              />
-              <span className="font-bold text-slate-300">
-                {order.userName ?? "—"}
-                {order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}
-              </span>
-            </p>
-          )}
         </div>
         {compact && (
-          <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
+          <div className="flex shrink-0 items-center gap-1.5">
+            <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
+            {/* DeliveryTypeMenu usa iconClassName h-5 w-5 por defecto. */}
+            <UserOrderIcon order={order} className="h-5 w-5" />
+          </div>
         )}
         </div>
       </CardHeader>
@@ -1030,6 +1005,7 @@ function OrderCard({
               }`}
             >
               <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
+              <UserOrderIcon order={order} className="h-5 w-5" />
               {showPaymentIcon && order.paymentMethod && (
                 <PaymentMethodIcon order={order} className="h-6 w-6" />
               )}

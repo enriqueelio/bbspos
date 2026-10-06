@@ -1,14 +1,18 @@
 import { prisma } from "@bbspos/db";
 import { type CustomerLedgerType } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
-import { PensionadosClient, type PensionadoCustomer, type PensionadosKPIs } from "./pensionados-client";
+import {
+  PensionadosClient,
+  type PensionadoCustomer,
+  type PensionadosKPIs,
+} from "./pensionados-client";
 
 export const metadata = {
   title: "Cuentas Pensionadas — BBSPOS Admin",
 };
 
 export default async function PensionadosPage() {
-  const [session, customers] = await Promise.all([
+  const [session, customers, availableClients] = await Promise.all([
     getRequiredSession(),
     prisma.customer.findMany({
       where: { account: { isNot: null } },
@@ -18,6 +22,12 @@ export default async function PensionadosPage() {
           include: { ledger: { orderBy: { createdAt: "desc" }, take: 100 } },
         },
       },
+    }),
+    // Clientes de mostrador (sin cuenta): candidatos a abrir cuenta pensionada.
+    prisma.customer.findMany({
+      where: { account: { is: null } },
+      orderBy: [{ name: "asc" }],
+      select: { id: true, name: true, ci: true },
     }),
   ]);
 
@@ -54,6 +64,7 @@ export default async function PensionadosPage() {
       customers={data}
       kpis={kpis}
       currentUserRole={session.user.role}
+      availableClients={availableClients}
     />
   );
 }

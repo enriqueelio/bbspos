@@ -168,8 +168,8 @@ export function CustomersClient({
   }
 
   function getBadgeLabel(pensionType: PensionTypeType | null): string {
-    if (!pensionType) return "Normal";
-    return `Pensionado · ${PensionTypeLabel[pensionType]}`;
+    if (!pensionType) return "Mostrador";
+    return PensionTypeLabel[pensionType];
   }
 
   function renderBalance(customer: ClientCustomer) {
@@ -198,7 +198,7 @@ export function CustomersClient({
           <h1 className="text-xl font-bold text-white">Clientes</h1>
           <p className="text-muted-foreground">
             Directorio unificado: clientes de mostrador y pensionados.
-            Usa &ldquo;Activar cuenta pensionada&rdquo; para abrir cuenta corriente.
+            Abre la ficha para gestionar la cuenta corriente.
           </p>
         </div>
         {isAdmin && (
@@ -285,49 +285,35 @@ export function CustomersClient({
                   </td>
                   <td className="px-4 py-2">{renderBalance(customer)}</td>
                   <td className="px-4 py-2">
-                    <div className="flex flex-wrap justify-end gap-2">
+                    <div className="flex justify-end gap-1">
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
+                        title="Ver ficha"
+                        aria-label="Ver ficha"
                         onClick={() => handleOpenDetail(customer)}
                         disabled={detailLoading === customer.id}
+                        className="h-8 w-8"
                       >
-                        <Eye className="mr-1 h-4 w-4" />
-                        {detailLoading === customer.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : "Ver ficha"}
+                        {detailLoading === customer.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                       </Button>
                       <Button
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
+                        title="Editar"
+                        aria-label="Editar"
                         onClick={() => {
                           setNotice(null);
                           setFormDialog({ kind: "edit", customer });
                         }}
+                        className="h-8 w-8"
                       >
-                        <Pencil className="mr-1 h-4 w-4" /> Editar
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                      {customer.pensionType === null ? (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setNotice(null);
-                            setFormDialog({ kind: "activate", customer });
-                          }}
-                        >
-                          <Wallet className="mr-1 h-4 w-4" />
-                          Activar cuenta pensionada
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setNotice(null);
-                            // TODO: navigate to /pensionados or open fund dialog
-                          }}
-                        >
-                          <Wallet className="mr-1 h-4 w-4" /> Gestionar cuenta
-                        </Button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -337,6 +323,19 @@ export function CustomersClient({
         </CardContent>
       </Card>
 
+      {detailDialog && (
+        <CustomerDetailModal
+          customer={detailDialog.customer}
+          detail={detailDialog.detail}
+          onClose={() => setDetailDialog(null)}
+          onNotice={setNotice}
+          onRequestActivate={() => {
+            setNotice(null);
+            setFormDialog({ kind: "activate", customer: detailDialog.customer });
+          }}
+        />
+      )}
+
       {formDialog && (
         <ClientFormDialog
           dialog={formDialog}
@@ -344,6 +343,11 @@ export function CustomersClient({
           onDone={(message) => {
             setNotice(message);
             setFormDialog(null);
+            // Si la ficha está abierta (p. ej. tras activar la cuenta),
+            // refresca su detalle para que refleje el cambio.
+            if (detailDialog) {
+              void handleOpenDetail(detailDialog.customer);
+            }
           }}
         />
       )}
@@ -584,11 +588,13 @@ function CustomerDetailModal({
   detail,
   onClose,
   onNotice,
+  onRequestActivate,
 }: {
   customer: ClientCustomer;
   detail: CustomerDetail;
   onClose: () => void;
   onNotice: (msg: string) => void;
+  onRequestActivate: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("resumen");
   const [fundDialog, setFundDialog] = useState<{ customer: ClientCustomer; account: NonNullable<CustomerDetail["account"]> } | null>(null);
@@ -651,7 +657,6 @@ function CustomerDetailModal({
             value="cuenta"
             onClick={() => setActiveTab("cuenta")}
             data-state={activeTab === "cuenta" ? "active" : "inactive"}
-            disabled={!detail.account}
           >
             Cuenta
           </TabsTrigger>
@@ -678,7 +683,7 @@ function CustomerDetailModal({
                 <div className="rounded-lg border border-border bg-muted/40 p-4">
                   <p className="text-sm text-muted-foreground">Creado el</p>
                   <p className="font-mono text-lg">
-                    {new Date(detail.createdAt).toLocaleDateString("es-MX", {
+                    {new Date(detail.createdAt).toLocaleString("es-MX", {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}
@@ -688,8 +693,8 @@ function CustomerDetailModal({
                   <p className="text-sm text-muted-foreground">Estado</p>
                   <Badge variant={detail.account ? (detail.account.pensionType === PensionType.PREPAGO ? "success" : "warning") : "default"}>
                     {detail.account
-                      ? `Pensionado · ${PensionTypeLabel[detail.account.pensionType]}`
-                      : "Cliente Normal"}
+                      ? PensionTypeLabel[detail.account.pensionType]
+                      : "Mostrador"}
                   </Badge>
                 </div>
               </div>
@@ -758,6 +763,19 @@ function CustomerDetailModal({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === "cuenta" && !detail.account && (
+            <div className="rounded-lg border border-border bg-muted/40 p-6 text-center space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Este cliente no tiene cuenta corriente: paga al momento
+                (mostrador).
+              </p>
+              <Button size="sm" onClick={onRequestActivate}>
+                <Wallet className="mr-1 h-4 w-4" />
+                Activar cuenta pensionada
+              </Button>
             </div>
           )}
 

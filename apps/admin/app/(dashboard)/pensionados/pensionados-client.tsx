@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet, ScrollText, UserMinus } from "lucide-react";
+import { Plus, Wallet, ScrollText, UserMinus } from "lucide-react";
 import { Badge, Button, Card, CardContent, Input, Label } from "@bbspos/ui";
 import {
   PensionType as PensionTypeValue,
@@ -12,6 +12,7 @@ import {
   type PensionType,
 } from "@bbspos/types";
 import {
+  convertToPensionado,
   updatePensionadoAccount,
 } from "@/app/actions/customers";
 import { Modal } from "@/components/shared/Modal";
@@ -36,6 +37,13 @@ export interface PensionadosKPIs {
   totalDeudaPorCobrar: number;
 }
 
+/** Cliente de mostrador (sin cuenta) candidato a abrir cuenta pensionada. */
+export interface AvailableClient {
+  id: string;
+  name: string;
+  ci: string | null;
+}
+
 type FundDialogState = { customer: PensionadoCustomer } | null;
 type LedgerDialogState = { customer: PensionadoCustomer } | null;
 type UnmarkDialogState = { customer: PensionadoCustomer } | null;
@@ -47,15 +55,18 @@ export function PensionadosClient({
   customers,
   kpis,
   currentUserRole,
+  availableClients,
 }: {
   customers: PensionadoCustomer[];
   kpis: PensionadosKPIs;
   currentUserRole: string;
+  availableClients: AvailableClient[];
 }) {
   const [fundDialog, setFundDialog] = useState<FundDialogState>(null);
   const [ledgerDialog, setLedgerDialog] = useState<LedgerDialogState>(null);
   const [unmarkDialog, setUnmarkDialog] = useState<UnmarkDialogState>(null);
   const [formDialog, setFormDialog] = useState<FormDialogState>(null);
+  const [addOpen, setAddOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -71,6 +82,18 @@ export function PensionadosClient({
             Panel financiero: saldos, recargas, pagos de deuda y límites de crédito.
           </p>
         </div>
+        {isAdmin && (
+          <Button
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setNotice(null);
+              setAddOpen(true);
+            }}
+          >
+            <Plus className="mr-1 h-4 w-4" /> Agregar Pensionado
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -212,6 +235,18 @@ export function PensionadosClient({
         </CardContent>
       </Card>
 
+      {addOpen && (
+        <AddPensionadoDialog
+          clients={availableClients}
+          onClose={() => setAddOpen(false)}
+          onDone={(message) => {
+            setNotice(message);
+            setAddOpen(false);
+          }}
+          onError={setError}
+        />
+      )}
+
       {formDialog && (
         <EditAccountDialog
           dialog={formDialog}
@@ -349,6 +384,173 @@ function EditAccountDialog({
           </Button>
           <Button type="submit" disabled={saving}>
             {saving ? "Guardando…" : "Cambiar modalidad"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** Modal "Abrir Cuenta Pensionada": convierte un cliente de mostrador en
+ *  pensionado vía convertToPensionado (requiere sesión admin). */
+function AddPensionadoDialog({
+  clients,
+  onClose,
+  onDone,
+  onError,
+}: {
+  clients: AvailableClient[];
+  onClose: () => void;
+  onDone: (message: string) => void;
+  onError: (msg: string) => void;
+}) {
+  const [customerId, setCustomerId] = useState("");
+  const [pensionType, setPensionType] = useState<PensionType>(
+    PensionTypeValue.PREPAGO,
+  );
+  const [initialBalance, setInitialBalance] = useState("");
+  const [creditLimit, setCreditLimit] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const client = clients.find((c) => c.id === customerId);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!client) {
+      setLocalError("Selecciona un cliente de mostrador.");
+      return;
+    }
+    setSaving(true);
+    setLocalError(null);
+    runAction(async () => {
+      await convertToPensionado({
+        customerId: client.id,
+        pensionType,
+        creditLimit:
+          pensionType === PensionTypeValue.POSTPAGO && creditLimit
+            ? parseInt(creditLimit, 10)
+            : undefined,
+        initialBalance:
+          pensionType === PensionTypeValue.PREPAGO && initialBalance
+            ? parseInt(initialBalance, 10)
+            : undefined,
+      });
+      const saldoNote =
+        pensionType === PensionTypeValue.PREPAGO && initialBalance
+          ? ` con recarga inicial de ${formatPrice(parseInt(initialBalance, 10))}`
+          : "";
+      onDone(
+        `Cuenta pensionada abierta para "${client.name}" (${PensionTypeLabel[pensionType]})${saldoNote}.`,
+      );
+    }, (msg) => {
+      onError(msg);
+      setLocalError(msg);
+      setSaving(false);
+    });
+  }
+
+  return (
+    <Modal>
+      <h2 className="text-lg font-bold">Abrir Cuenta Pensionada</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1">
+          <Label htmlFor="p-client">Cliente</Label>
+          {clients.length === 0 ? (
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              No hay clientes de mostrador disponibles: todos ya tienen cuenta
+              o aún no hay clientes registrados.
+            </p>
+          ) : (
+            <select
+              id="p-client"
+              required
+              className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+              value={customerId}
+              onChange={(e) => {
+                setCustomerId(e.target.value);
+                setLocalError(null);
+              }}
+            >
+              <option value="" disabled>
+                Selecciona un cliente…
+              </option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.ci ? ` · CI ${c.ci}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor="p-type">Modalidad</Label>
+          <select
+            id="p-type"
+            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm shadow-sm [&>option]:bg-card [&>option]:text-foreground"
+            value={pensionType}
+            onChange={(e) =>
+              setPensionType(e.target.value as PensionType)
+            }
+          >
+            {PensionTypeList.map((t) => (
+              <option key={t} value={t}>
+                {PensionTypeLabel[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {pensionType === PensionTypeValue.PREPAGO && (
+          <div className="space-y-1">
+            <Label htmlFor="p-balance">Recarga inicial (Bs, opcional)</Label>
+            <Input
+              id="p-balance"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={initialBalance}
+              onChange={(e) => setInitialBalance(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        )}
+
+        {pensionType === PensionTypeValue.POSTPAGO && (
+          <div className="space-y-1">
+            <Label htmlFor="p-credit">
+              Límite de crédito (Bs, 0 = sin límite)
+            </Label>
+            <Input
+              id="p-credit"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              value={creditLimit}
+              onChange={(e) => setCreditLimit(e.target.value)}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              El postpago no genera fidelización: sus consumos a cuenta no
+              suman visitas, gasto ni puntos.
+            </p>
+          </div>
+        )}
+
+        {localError && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {localError}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={saving || !client}>
+            {saving ? "Abriendo…" : "Abrir cuenta"}
           </Button>
         </div>
       </form>

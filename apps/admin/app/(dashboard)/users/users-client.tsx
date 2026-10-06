@@ -19,6 +19,9 @@ import {
   type Role,
   type Shift,
   type StaffUser,
+  ICON_CATALOG,
+  ICON_LABELS,
+  ICON_COLORS,
 } from "@bbspos/types";
 import {
   createUser,
@@ -271,6 +274,7 @@ function UserDialog({
   const [username, setUsername] = useState(target?.username ?? "");
   const [role, setRole] = useState<Role>(target?.role ?? "CAJERO");
   const [shift, setShift] = useState<Shift>(target?.shift ?? "SIN_TURNO");
+  const [iconKey, setIconKey] = useState<IconKey>(target?.iconKey ?? ICON_CATALOG[0]);
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -287,10 +291,11 @@ function UserDialog({
           name,
           role,
           shift,
+          iconKey,
           newPassword: newPassword || undefined,
         });
       } else {
-        await createUser({ name, username, password, role, shift });
+        await createUser({ name, username, password, role, shift, iconKey });
       }
       onClose();
     }, (msg) => {
@@ -381,6 +386,30 @@ function UserDialog({
                   ))}
                 </select>
               )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="u-icon">Icono</Label>
+              <div className="flex h-9 items-center rounded-md border border-input bg-card px-3 text-sm">
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-md bg-muted px-2 text-sm"
+                  style={{ color: ICON_COLORS[iconKey] }}
+                >
+                  {iconKey}
+                </span>
+                <select
+                  id="u-icon"
+                  className="flex-1 rounded-md border-0 bg-transparent px-1 text-sm shadow-none [&>option]:text-foreground"
+                  value={iconKey}
+                  onChange={(e) => setIconKey(e.target.value as IconKey)}
+                >
+                  {ICON_CATALOG.map((key) => (
+                    <option key={key} value={key}>
+                      {ICON_LABELS[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {isEdit ? (

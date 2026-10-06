@@ -1,0 +1,605 @@
+Necesito implementar un sistema de IDENTIDAD VISUAL ÚNICA POR USUARIO en BBSPOS.
+
+OBJETIVO
+========
+
+Actualmente la APP CAJERO recibe pedidos creados por diferentes usuarios:
+
+- CAJERO 1
+- CAJERO 2
+- MESERO 1
+- MESERO 2
+- etc.
+
+Todos esos pedidos aparecen en la misma cola de pedidos del cajero.
+
+Necesito que cada usuario tenga un ICONO ÚNICO que permita identificar visualmente quién creó cada pedido.
+
+El icono debe aparecer en la tarjeta del pedido, al lado del icono que actualmente está ubicado a la derecha del pedido.
+
+MUY IMPORTANTE:
+EL ICONO NO DEBE TENER NINGUNA RELACIÓN CON COMIDA, BEBIDAS, COCINA, RESTAURANTES NI PRODUCTOS DEL POS.
+
+La finalidad del icono es representar a una PERSONA/USUARIO, no a un producto.
+
+====================================================
+1. MODELO DE USUARIO
+====================================================
+
+Inspecciona el modelo User existente.
+
+Agregar un campo persistente para almacenar el icono del usuario, por ejemplo:
+
+iconKey
+
+La base de datos debe guardar solamente una clave estable.
+
+NO guardar:
+- SVG
+- HTML
+- JSX
+- imágenes completas
+
+Ejemplos:
+
+"cat"
+"dog"
+"fox"
+"panda"
+"lion"
+
+La UI se encargará de convertir iconKey en el icono visual correspondiente.
+
+====================================================
+2. CATÁLOGO DE ICONOS
+====================================================
+
+Crear un catálogo centralizado de iconos DISPONIBLES PARA USUARIOS.
+
+IMPORTANTE:
+Los iconos NO deben tener relación con:
+- comida;
+- bebidas;
+- platos;
+- cocina;
+- cubiertos;
+- restaurantes;
+- productos del catálogo.
+
+NO utilizar:
+- café
+- hamburguesa
+- pizza
+- vaso
+- cuchara
+- plato
+- pastel
+- helado
+- comida de cualquier tipo
+
+PREFERENCIA:
+Utilizar animales y otros símbolos claramente identificables.
+
+Ejemplo de catálogo inicial:
+
+Animales:
+- cat
+- dog
+- fox
+- panda
+- lion
+- tiger
+- bear
+- rabbit
+- penguin
+- koala
+- monkey
+- owl
+- turtle
+- elephant
+- whale
+- dolphin
+- shark
+- butterfly
+- bee
+- fish
+
+También se pueden incluir algunos elementos neutros de naturaleza o identidad si el catálogo de iconos disponible en el proyecto lo permite.
+
+IMPORTANTE:
+No es necesario utilizar literalmente estos nombres si la librería de iconos existente tiene equivalentes adecuados.
+
+Priorizar iconos:
+- fáciles de distinguir visualmente;
+- simples;
+- consistentes entre sí;
+- reconocibles a pequeño tamaño;
+- adecuados para pantalla de POS;
+- sin relación semántica con comida.
+
+Preferentemente utilizar iconos existentes de lucide-react u otra librería ya presente en el proyecto.
+
+NO instalar una librería innecesaria si el proyecto ya dispone de una solución adecuada.
+
+====================================================
+3. REGLA DE UNICIDAD
+====================================================
+
+UN ICONO NO PUEDE REPETIRSE ENTRE DOS USUARIOS ACTIVOS.
+
+Ejemplo:
+
+Carlos -> 🦊
+María  -> 🐼
+Pedro  -> 🦉
+
+No puede existir:
+
+Carlos -> 🦊
+María  -> 🦊
+
+La validación debe existir en BACKEND.
+
+No confiar únicamente en la UI.
+
+Si se intenta seleccionar un icono ya utilizado:
+
+Mostrar un mensaje claro:
+
+"Este icono ya está asignado a otro usuario."
+
+====================================================
+4. ASIGNACIÓN DE ICONO AL CREAR USUARIO
+====================================================
+
+Al crear un usuario:
+
+- si el administrador selecciona un icono, validar disponibilidad;
+- si no selecciona ninguno, asignar automáticamente un icono libre.
+
+Nunca debe existir un usuario ACTIVO sin icono.
+
+El sistema debe buscar automáticamente un icono disponible.
+
+Ejemplo:
+
+Crear usuario Carlos
+↓
+icono seleccionado: 🦊
+↓
+guardar
+
+Si no selecciona icono:
+
+Crear usuario
+↓
+buscar primer icono libre
+↓
+asignarlo
+↓
+guardar
+
+====================================================
+5. ADMIN → USUARIOS
+====================================================
+
+En la administración de usuarios mostrar una columna:
+
+ICONO
+
+Ejemplo:
+
+CARLOS
+CAJERO
+
+[ 🦊 ]
+
+[ Cambiar icono ]
+
+Al hacer clic en "Cambiar icono":
+
+abrir selector visual.
+
+Ejemplo conceptual:
+
+┌─────────────────────────────────────┐
+│ SELECCIONAR ICONO                   │
+│                                     │
+│ 🐱  🐶  🦊  🐼  🦁  🐯              │
+│ 🐻  🐰  🐧  🐨  🐵  🦉              │
+│ 🐢  🐘  🐋  🐬  🦋  🐝              │
+│                                     │
+└─────────────────────────────────────┘
+
+Los iconos ya utilizados por otros usuarios activos deben aparecer:
+- deshabilitados;
+- o claramente marcados como ocupados.
+
+Ejemplo:
+
+🦊
+Carlos
+
+🐼
+María
+
+🦉
+Disponible
+
+Esto permite al administrador saber qué iconos están ocupados.
+
+====================================================
+6. NO MEZCLAR ICONOS DE USUARIO CON ICONOS DE PRODUCTO
+====================================================
+
+Este punto es fundamental.
+
+Los iconos de usuario pertenecen exclusivamente a la identidad del empleado.
+
+No deben reutilizarse para:
+- categorías;
+- productos;
+- bebidas;
+- platos;
+- pedidos;
+- estados.
+
+Ejemplo:
+
+Correcto:
+[🦊] Carlos
+
+Incorrecto:
+[🍔] Carlos
+
+El icono 🦊 significa "Carlos", no comida, producto o categoría.
+
+====================================================
+7. PEDIDOS / COLA DEL CAJERO
+====================================================
+
+Cada Order ya tiene un usuario creador.
+
+NO crear una nueva relación de usuario para esto.
+
+Utilizar la relación existente Order -> User.
+
+Al renderizar una tarjeta de pedido en la cola de CAJERO:
+
+Actualmente existe un icono a la derecha del encabezado del pedido.
+
+Agregar inmediatamente al lado el icono único del usuario que creó el pedido.
+
+Ejemplo:
+
+#001 CARLOS                 [icono pedido] [🦊]
+
+#002 MARIA                  [icono pedido] [🐼]
+
+#003 PEDRO                  [icono pedido] [🦉]
+
+El icono debe ser:
+- pequeño;
+- reconocible;
+- consistente;
+- visualmente separado del icono funcional del pedido.
+
+====================================================
+8. DIFERENCIAR LOS DOS ICONOS
+====================================================
+
+Debe quedar visualmente claro que:
+
+ICONO 1 = estado/acción/tipo del pedido
+ICONO 2 = usuario que creó el pedido
+
+No mezclarlos.
+
+Ejemplo:
+
+#001 CARLOS      [icono pedido] [🦊]
+
+El segundo icono es siempre el usuario.
+
+====================================================
+9. IDENTIDAD VISUAL DEL USUARIO
+====================================================
+
+Si:
+
+CARLOS = 🦊
+
+cada pedido creado por Carlos debe mostrar siempre:
+
+🦊
+
+No generar un icono diferente por pedido.
+
+No calcular icono a partir del nombre.
+
+No usar el nombre para crear un avatar dinámico.
+
+La fuente de verdad debe ser:
+
+User.iconKey
+
+====================================================
+10. DETALLE DEL PEDIDO
+====================================================
+
+Cuando se abra el detalle del pedido, mostrar también:
+
+Creado por:
+[icono] Nombre del usuario
+
+Ejemplo:
+
+Creado por:
+[🦊] Carlos
+
+Opcionalmente:
+
+[🦊] Carlos · CAJERO
+
+====================================================
+11. TOOLTIP
+====================================================
+
+Al pasar el mouse sobre el icono:
+
+mostrar:
+
+Carlos · CAJERO
+
+o:
+
+Carlos
+CAJERO
+
+El tooltip debe permitir identificar al usuario sin necesidad de memorizar inmediatamente el icono.
+
+====================================================
+12. CAJERO DEBE SEGUIR TENIENDO UNA COLA GLOBAL
+====================================================
+
+La APP CAJERO debe continuar mostrando TODOS los pedidos.
+
+Ejemplo:
+
+MESERO 1 -> Pedido #001 -> cola global
+MESERO 2 -> Pedido #002 -> cola global
+CAJERO 2 -> Pedido #003 -> cola global
+
+Todos aparecen en CAJERO.
+
+El icono solamente identifica quién creó el pedido.
+
+NO:
+- separar colas por usuario;
+- filtrar pedidos por usuario;
+- ocultar pedidos según rol;
+- cambiar el flujo actual.
+
+====================================================
+13. HISTORIAL
+====================================================
+
+Si el pedido pasa a HISTORIAL:
+
+mantener el icono del usuario creador.
+
+La identidad visual debe acompañar al pedido durante todo su ciclo de vida.
+
+====================================================
+14. COLORES
+====================================================
+
+El icono debe funcionar principalmente como forma/símbolo.
+
+No depender exclusivamente del color para identificar usuarios.
+
+Los colores existentes del POS deben conservar su significado actual:
+
+- pendiente;
+- aceptado;
+- entregado;
+- anulado.
+
+No cambiar esos colores.
+
+====================================================
+15. USUARIOS EXISTENTES
+====================================================
+
+Existen usuarios creados antes de esta funcionalidad.
+
+Implementar una estrategia segura para asignar iconos a todos los usuarios activos existentes.
+
+Pasos esperados:
+
+1. detectar usuarios activos sin iconKey;
+2. buscar iconos libres;
+3. asignarlos;
+4. verificar que no existan duplicados.
+
+Si no hay suficientes iconos disponibles, informar claramente y no crear usuarios adicionales sin icono.
+
+====================================================
+16. USUARIOS INACTIVOS
+====================================================
+
+Regla recomendada:
+
+La unicidad se aplica principalmente a usuarios ACTIVOS.
+
+Si un usuario queda inactivo:
+
+su icono puede quedar disponible nuevamente.
+
+Ejemplo:
+
+Carlos -> 🦊
+Carlos queda inactivo
+↓
+🦊 vuelve a estar disponible
+
+No obstante, verificar primero si existen requisitos de auditoría/historial que hagan preferible mantener la asociación histórica.
+
+====================================================
+17. VALIDACIONES
+====================================================
+
+CASO 1:
+Carlos tiene 🦊.
+
+Crear pedido desde Carlos.
+
+Resultado:
+el pedido muestra 🦊.
+
+CASO 2:
+María tiene 🐼.
+
+Crear pedido desde María.
+
+Resultado:
+el pedido muestra 🐼.
+
+CASO 3:
+Intentar asignar 🦊 a Pedro.
+
+Debe rechazarse porque 🦊 ya pertenece a Carlos.
+
+CASO 4:
+Crear nuevo usuario sin elegir icono.
+
+El sistema debe asignar automáticamente un icono libre.
+
+CASO 5:
+Dos pedidos creados por usuarios distintos aparecen juntos en CAJERO.
+
+Cada uno debe mostrar su icono correspondiente.
+
+CASO 6:
+Un usuario crea varios pedidos.
+
+Todos deben mostrar exactamente el mismo icono.
+
+CASO 7:
+El pedido pasa de:
+RECIBIDO
+→ ACEPTADO
+→ ENTREGADO
+
+El icono del creador no debe cambiar.
+
+====================================================
+18. INVESTIGACIÓN DEL CÓDIGO
+====================================================
+
+Antes de modificar:
+
+1. Inspeccionar modelo User en Prisma.
+2. Inspeccionar modelo Order.
+3. Inspeccionar relación Order -> User.
+4. Localizar cómo se crean usuarios.
+5. Localizar cómo se actualizan usuarios.
+6. Localizar componente de Admin > Usuarios.
+7. Localizar componente exacto que renderiza las tarjetas de pedidos en CAJERO.
+8. Verificar cómo se obtiene actualmente el usuario creador del pedido.
+9. Verificar si los pedidos históricos tienen userId.
+
+No asumir nombres de archivos.
+
+No crear una segunda relación si ya existe una relación User -> Order.
+
+====================================================
+19. ARQUITECTURA RECOMENDADA
+====================================================
+
+Centralizar el catálogo.
+
+Por ejemplo:
+
+packages/types/src/user-icons.ts
+
+o un lugar equivalente ya utilizado por el proyecto.
+
+Debe existir una sola definición:
+
+iconKey -> icon component / metadata
+
+Ejemplo conceptual:
+
+{
+  key: "fox",
+  label: "Zorro",
+  icon: ...
+}
+
+Esto debe ser reutilizable desde:
+
+- Admin > Usuarios
+- tarjeta de pedido
+- historial
+- detalle de pedido
+- tooltip
+
+No duplicar el catálogo en diferentes componentes.
+
+====================================================
+20. CRITERIOS DE ACEPTACIÓN
+====================================================
+
+[ ] Existe un catálogo de iconos seleccionables para usuarios.
+
+[ ] Los iconos no tienen relación con comida, bebidas o productos.
+
+[ ] Preferentemente son animales y otros símbolos neutrales.
+
+[ ] Cada usuario activo tiene exactamente un iconKey.
+
+[ ] Dos usuarios activos nunca comparten iconKey.
+
+[ ] Backend valida la unicidad.
+
+[ ] Admin > Usuarios permite elegir/cambiar icono.
+
+[ ] Los iconos ocupados aparecen como no disponibles.
+
+[ ] Si no se selecciona icono al crear usuario, se asigna uno libre automáticamente.
+
+[ ] Los pedidos de CAJERO muestran el icono del usuario creador.
+
+[ ] El icono aparece junto al icono existente de la tarjeta.
+
+[ ] El icono identifica al creador y no al cliente.
+
+[ ] CAJERO continúa mostrando todos los pedidos de todos los usuarios.
+
+[ ] No se crean colas separadas por usuario.
+
+[ ] El icono acompaña al pedido durante todo su ciclo.
+
+[ ] El detalle del pedido muestra icono + nombre del creador.
+
+[ ] Existe tooltip con nombre/rol.
+
+[ ] Los pedidos históricos siguen siendo compatibles.
+
+[ ] No se modifica la lógica de ventas.
+
+[ ] No se modifica la lógica de cobro.
+
+[ ] No se modifica la lógica de producción.
+
+[ ] No se cambia el significado de los colores del POS.
+
+[ ] Ejecutar typecheck.
+
+[ ] Ejecutar lint.
+
+[ ] Revisar el diff antes de finalizar.
+
+NO HACER REFACTORS GENERALES.
+NO CAMBIAR FUNCIONALIDADES NO RELACIONADAS.

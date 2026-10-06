@@ -223,6 +223,27 @@ function DeliveryTypeIcon({
   );
 }
 
+function UserOrderIcon({
+  userId,
+}: {
+  userId: string | undefined;
+}) {
+  if (!userId) return null;
+  // Mostrar ícono por defecto basado en userId (hash simple)
+  // Los íconos reales vienen del modelo User.iconKey
+  // Por ahora mostramos un ícono genérico "usuario"
+  const defaultIcons = ["🦊", "🐼", "🦉", "🐱", "🐶", "🐻"];
+  const idx = Math.abs(userId.charCodeAt(0)) % defaultIcons.length;
+  return (
+    <span
+      className="ml-1 flex h-4 w-4 items-center justify-center rounded-md bg-muted text-xs"
+      style={{ color: "#6B7280" }}
+    >
+      {defaultIcons[idx]}
+    </span>
+  );
+}
+
 // Icono del método de pago de la tarjeta. "Dividido" no existe como método en
 // BD: se detecta cuando el pedido tiene un segundo método con su monto.
 const PAYMENT_ICONS = {
@@ -855,6 +876,7 @@ function OrderCard({
               }`}
             >
               {reservation ? horaReserva(order) : horaCreacion(order)}
+              <UserOrderIcon userId={order.userId} />
             </span>
             <DeliveryTypeIcon
               orderType={order.orderType}

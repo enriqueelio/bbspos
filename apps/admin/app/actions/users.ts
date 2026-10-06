@@ -22,6 +22,18 @@ function parseShift(value: string): ShiftType {
   return value as ShiftType;
 }
 
+/** Retorna true si el iconKey ya está asignado a un usuario activo. */
+async function isIconKeyTaken(iconKey: string, excludeUserId?: string): Promise<boolean> {
+  const taken = await prisma.user.findFirst({
+    where: {
+      active: true,
+      iconKey,
+      ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+    },
+  });
+  return !!taken;
+}
+
 async function requireAdminSession() {
   const session = await getRequiredSession();
   if (
@@ -107,6 +119,7 @@ export async function createUser(input: {
   password: string;
   role: string;
   shift: string;
+  iconKey?: string;
 }) {
   const session = await requireAdminSession();
 
@@ -115,6 +128,15 @@ export async function createUser(input: {
   const password = validatePassword(input.password);
   const role = parseRole(input.role);
   const shift = parseShift(input.shift);
+  let iconKey = input.iconKey ?? ICON_CATALOG[0]; // ícono por defecto si no se provee
+
+  // Validar unicidad del ícono (excluir al propio usuario si es edición)
+  if (iconKey) {
+    const taken = await isIconKeyTaken(iconKey);
+    if (taken) {
+      throw new Error("Este ícono ya está asignado a otro usuario activo. Elija uno distinto.");
+    }
+  }
 
   if (!rolesAssignableBy(session.user.role).includes(role)) {
     throw new Error("No tienes permisos para asignar ese rol.");
@@ -139,6 +161,7 @@ export async function createUser(input: {
       role,
       shift,
       active: true,
+      iconKey,
     },
   });
 
@@ -150,6 +173,7 @@ export async function updateUser(input: {
   name: string;
   role: string;
   shift: string;
+  iconKey?: string;
   newPassword?: string;
 }) {
   const session = await requireAdminSession();
@@ -157,6 +181,7 @@ export async function updateUser(input: {
   const name = validateName(input.name);
   const role = parseRole(input.role);
   const shift = parseShift(input.shift);
+  const iconKey = input.iconKey ?? undefined;
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
@@ -171,6 +196,14 @@ export async function updateUser(input: {
     !rolesAssignableBy(session.user.role).includes(role)
   ) {
     throw new Error("No tienes permisos para asignar ese rol.");
+  }
+
+  // Validar unicidad del ícono (excluir al propio usuario que está siendo editado)
+  if (iconKey && iconKey !== user.iconKey) {
+    const taken = await isIconKeyTaken(iconKey, user.id);
+    if (taken) {
+      throw new Error("Este ícono ya está asignado a otro usuario activo. Elija uno distinto.");
+    }
   }
 
   await assertUserEditAllowed({
@@ -192,6 +225,7 @@ export async function updateUser(input: {
       name,
       role,
       shift,
+      ...(iconKey !== undefined ? { iconKey } : {}),
       ...(input.newPassword
         ? { password: await hash(validatePassword(input.newPassword), 10) }
         : {}),

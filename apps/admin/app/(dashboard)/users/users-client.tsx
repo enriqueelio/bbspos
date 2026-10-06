@@ -19,9 +19,11 @@ import {
   type Role,
   type Shift,
   type StaffUser,
+  type IconKey,
   ICON_CATALOG,
+  ICON_EMOJI,
   ICON_LABELS,
-  ICON_COLORS,
+  iconEmojiOf,
 } from "@bbspos/types";
 import {
   createUser,
@@ -130,6 +132,7 @@ export function UsersClient({
             <thead>
               <tr className="border-b bg-muted/40 text-left">
                 <th className="px-4 py-2 font-medium">Nombre</th>
+                <th className="px-4 py-2 font-medium">Icono</th>
                 <th className="px-4 py-2 font-medium">Usuario</th>
                 <th className="px-4 py-2 font-medium">Rol</th>
                 <th className="px-4 py-2 font-medium">Turno</th>
@@ -144,6 +147,29 @@ export function UsersClient({
                     {user.name}
                     {user.id === currentUserId && (
                       <span className="ml-2 text-xs text-muted-foreground">(tú)</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    {canManage(user) ? (
+                      <button
+                        type="button"
+                        title={`${user.name} · ${RoleLabel[user.role]}`}
+                        aria-label={`Cambiar icono de ${user.name}`}
+                        onClick={() => {
+                          setNotice(null);
+                          setDialog({ kind: "edit", user });
+                        }}
+                        className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-muted text-base leading-none transition-colors hover:bg-accent"
+                      >
+                        {iconEmojiOf(user.iconKey)}
+                      </button>
+                    ) : (
+                      <span
+                        title={`${user.name} · ${RoleLabel[user.role]}`}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-muted text-base leading-none"
+                      >
+                        {iconEmojiOf(user.iconKey)}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-2">{user.username}</td>
@@ -240,6 +266,7 @@ export function UsersClient({
       {dialog.kind !== "none" && (
         <UserDialog
           dialog={dialog}
+          users={users}
           roleOptions={roleOptions}
           roleLocked={
             dialog.kind === "edit" ? !canEditRole(dialog.user) : false
@@ -256,12 +283,14 @@ export function UsersClient({
 
 function UserDialog({
   dialog,
+  users,
   roleOptions,
   roleLocked,
   shiftLocked,
   onClose,
 }: {
-  dialog: Exclude<DialogState, { kind: "none" }>;
+  dialog: DialogState;
+  users: StaffUser[];
   roleOptions: Role[];
   roleLocked: boolean;
   shiftLocked: boolean;
@@ -270,11 +299,22 @@ function UserDialog({
   const isEdit = dialog.kind === "edit";
   const target = isEdit ? dialog.user : null;
 
+  // iconos.txt §5: íconos tomados por otros usuarios activos → deshabilitados.
+  const occupied = new Map<string, string>();
+  for (const u of users) {
+    if (u.active && u.iconKey && u.id !== target?.id) {
+      occupied.set(u.iconKey, u.name);
+    }
+  }
+
   const [name, setName] = useState(target?.name ?? "");
   const [username, setUsername] = useState(target?.username ?? "");
   const [role, setRole] = useState<Role>(target?.role ?? "CAJERO");
   const [shift, setShift] = useState<Shift>(target?.shift ?? "SIN_TURNO");
-  const [iconKey, setIconKey] = useState<IconKey>(target?.iconKey ?? ICON_CATALOG[0]);
+  // "" = Automático (§4: al crear, asignar un ícono libre automáticamente).
+  const [iconKey, setIconKey] = useState<IconKey | "">(
+    target?.iconKey ? (target.iconKey as IconKey) : ""
+  );
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -291,11 +331,18 @@ function UserDialog({
           name,
           role,
           shift,
-          iconKey,
+          iconKey: iconKey || undefined,
           newPassword: newPassword || undefined,
         });
       } else {
-        await createUser({ name, username, password, role, shift, iconKey });
+        await createUser({
+          name,
+          username,
+          password,
+          role,
+          shift,
+          iconKey: iconKey || undefined,
+        });
       }
       onClose();
     }, (msg) => {
@@ -391,25 +438,30 @@ function UserDialog({
             <div className="space-y-1">
               <Label htmlFor="u-icon">Icono</Label>
               <div className="flex h-9 items-center rounded-md border border-input bg-card px-3 text-sm">
-                <span
-                  className="flex h-5 w-5 items-center justify-center rounded-md bg-muted px-2 text-sm"
-                  style={{ color: ICON_COLORS[iconKey] }}
-                >
-                  {iconKey}
+                <span className="flex w-7 items-center justify-center text-base leading-none">
+                  {iconKey ? ICON_EMOJI[iconKey] : "✨"}
                 </span>
                 <select
                   id="u-icon"
                   className="flex-1 rounded-md border-0 bg-transparent px-1 text-sm shadow-none [&>option]:text-foreground"
                   value={iconKey}
-                  onChange={(e) => setIconKey(e.target.value as IconKey)}
+                  onChange={(e) => setIconKey(e.target.value as IconKey | "")}
                 >
-                  {ICON_CATALOG.map((key) => (
-                    <option key={key} value={key}>
-                      {ICON_LABELS[key]}
-                    </option>
-                  ))}
+                  <option value="">✨ Automático (asignar uno libre)</option>
+                  {ICON_CATALOG.map((key) => {
+                    const owner = occupied.get(key);
+                    return (
+                      <option key={key} value={key} disabled={!!owner}>
+                        {ICON_EMOJI[key]} {ICON_LABELS[key]}
+                        {owner ? ` — ocupado (${owner})` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Los íconos de otros usuarios activos aparecen deshabilitados.
+              </p>
             </div>
 
             {isEdit ? (

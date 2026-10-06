@@ -15,7 +15,7 @@ model User {
   role             Role        @default(CAJERO)
   shift            Shift       @default(SIN_TURNO)
   active           Boolean     @default(true)
-  iconKey          String?     @default(null)
+  iconKey          String?
   createdAt        DateTime    @default(now())
   orders           Order[]
   cancelledOrders  Order[]     @relation("OrderCanceledBy")

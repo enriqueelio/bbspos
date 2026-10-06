@@ -32,6 +32,8 @@ import {
   OrderType,
   OrderTypeList,
   Role,
+  RoleLabel,
+  iconEmojiOf,
   type Order,
   type Role as RoleType,
 } from "@bbspos/types";
@@ -224,22 +226,23 @@ function DeliveryTypeIcon({
 }
 
 function UserOrderIcon({
-  userId,
+  order,
+  className = "",
 }: {
-  userId: string | undefined;
+  order: Order;
+  className?: string;
 }) {
-  if (!userId) return null;
-  // Mostrar ícono por defecto basado en userId (hash simple)
-  // Los íconos reales vienen del modelo User.iconKey
-  // Por ahora mostramos un ícono genérico "usuario"
-  const defaultIcons = ["🦊", "🐼", "🦉", "🐱", "🐶", "🐻"];
-  const idx = Math.abs(userId.charCodeAt(0)) % defaultIcons.length;
+  // iconos.txt §9: la fuente de verdad es User.iconKey, nunca un hash.
+  if (!order.userId) return null;
+  const tooltip = order.userName
+    ? `${order.userName}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`
+    : undefined;
   return (
     <span
-      className="ml-1 flex h-4 w-4 items-center justify-center rounded-md bg-muted text-xs"
-      style={{ color: "#6B7280" }}
+      title={tooltip}
+      className={`inline-flex shrink-0 items-center justify-center leading-none ${className}`}
     >
-      {defaultIcons[idx]}
+      {iconEmojiOf(order.userIconKey)}
     </span>
   );
 }
@@ -876,7 +879,6 @@ function OrderCard({
               }`}
             >
               {reservation ? horaReserva(order) : horaCreacion(order)}
-              <UserOrderIcon userId={order.userId} />
             </span>
             <DeliveryTypeIcon
               orderType={order.orderType}
@@ -886,6 +888,10 @@ function OrderCard({
                 order.status !== OrderStatus.ENTREGADO &&
                 order.status !== OrderStatus.ANULADO
               }
+            />
+            <UserOrderIcon
+              order={order}
+              className={compact ? "text-sm" : "text-lg"}
             />
           </div>
         </button>
@@ -955,6 +961,23 @@ function OrderCard({
                   </>
                 )}
           </p>
+          {order.userId && (
+            <p
+              className={`flex flex-wrap items-center gap-x-1.5 font-semibold text-slate-400 ${
+                compact ? "text-[11px]" : "text-sm"
+              }`}
+            >
+              Creado por:
+              <UserOrderIcon
+                order={order}
+                className={compact ? "text-xs" : "text-sm"}
+              />
+              <span className="font-bold text-slate-300">
+                {order.userName ?? "—"}
+                {order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}
+              </span>
+            </p>
+          )}
         </div>
         {compact && (
           <DeliveryTypeMenu order={order} clock={clock} compact={compact} />

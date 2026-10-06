@@ -28,6 +28,8 @@ function toPlainOrder(order: {
   deliveryType: string | null;
   notes: string | null;
   customerId: string | null;
+  userId: string | null;
+  user: { name: string; role: string; iconKey: string | null } | null;
   total: number;
   createdAt: Date;
   acceptedAt: Date | null;
@@ -68,6 +70,10 @@ function toPlainOrder(order: {
       (order.deliveryType as Order["orderType"]) ?? OrderType.LLEVAR,
     notes: order.notes,
     customerId: order.customerId,
+    userId: order.userId,
+    userName: order.user?.name ?? null,
+    userRole: (order.user?.role as Role | null) ?? null,
+    userIconKey: order.user?.iconKey ?? null,
     total: order.total,
     createdAt: order.createdAt.toISOString(),
     acceptedAt: order.acceptedAt?.toISOString() ?? null,
@@ -123,6 +129,7 @@ async function getQueueData() {
       },
       include: {
         items: { include: { toppings: true } },
+        user: { select: { name: true, role: true, iconKey: true } },
       },
       // Los pedidos más recientes primero: el que acaba de entrar queda arriba.
       orderBy: [{ createdAt: "desc" }, { seq: "desc" }],

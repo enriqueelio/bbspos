@@ -21,6 +21,7 @@
     "verify:customer-account": "tsx scripts/verify-migration.ts",
     "fix:accepted-at": "tsx scripts/fix-inverted-accepted-at.ts",
     "fix:postpago-loyalty": "tsx scripts/fix-postpago-loyalty.ts",
+    "icons:assign": "tsx scripts/assign-user-icons.ts",
     "menu-day-cleanup": "tsx scripts/menu-day-cleanup-worker.ts",
     "telegram-alert": "tsx scripts/telegram-alert-worker.ts",
     "rename-toppings": "tsx scripts/rename-toppings.mjs",

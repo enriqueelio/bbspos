@@ -1,3 +1,16 @@
+/** Catálogo centralizado de íconos para identificación de usuarios (iconos.txt §2/§19).
+ *  Única definición de iconKey -> metadata visual; reutilizable desde:
+ *  - Admin > Usuarios
+ *  - tarjeta de pedido (cajero)
+ *  - historial y detalle de pedido
+ *  - tooltip
+ *
+ *  Restricciones (definidas en iconos.txt):
+ *  - No tienen relación con comida, bebidas o productos.
+ *  - Preferentemente animales y símbolos neutros.
+ *  - La unicidad entre usuarios activos se valida en backend.
+ */
+
 export const ICON_CATALOG = [
   "cat",
   "dog",
@@ -52,7 +65,7 @@ export const ICON_COLORS: Record<IconKey, string> = {
   fox: "#ED8936",
   panda: "#83C5BE",
   lion: "#F9A825",
-  tiger: "#E64B35C",
+  tiger: "#E64B35",
   bear: "#6F42C1",
   rabbit: "#00C853",
   penguin: "#495057",
@@ -68,3 +81,32 @@ export const ICON_COLORS: Record<IconKey, string> = {
   bee: "#F59E0B",
   fish: "#14B8A6",
 };
+
+/** Única fuente iconKey -> glifo visual (iconos.txt §19). */
+export const ICON_EMOJI: Record<IconKey, string> = {
+  cat: "🐱",
+  dog: "🐶",
+  fox: "🦊",
+  panda: "🐼",
+  lion: "🦁",
+  tiger: "🐯",
+  bear: "🐻",
+  rabbit: "🐰",
+  penguin: "🐧",
+  koala: "🐨",
+  monkey: "🐵",
+  owl: "🦉",
+  turtle: "🐢",
+  elephant: "🐘",
+  whale: "🐋",
+  dolphin: "🐬",
+  shark: "🦈",
+  butterfly: "🦋",
+  bee: "🐝",
+  fish: "🐟",
+};
+
+/** Emoji para un iconKey arbitrario; claves desconocidas o nulas → persona neutra. */
+export function iconEmojiOf(key?: string | null): string {
+  return key && key in ICON_EMOJI ? ICON_EMOJI[key as IconKey] : "👤";
+}

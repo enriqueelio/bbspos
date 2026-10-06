@@ -18,6 +18,7 @@ export default async function UsersPage() {
         role: true,
         shift: true,
         active: true,
+        iconKey: true,
       },
     }),
   ]);

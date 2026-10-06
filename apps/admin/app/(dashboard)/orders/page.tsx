@@ -23,7 +23,7 @@ export default async function OrdersPage({
   const rawOrders = await prisma.order.findMany({
     include: {
       items: { include: { toppings: true } },
-      user: { select: { name: true, shift: true } },
+      user: { select: { name: true, shift: true, role: true, iconKey: true } },
       canceledBy: { select: { name: true, role: true } },
       discountedBy: { select: { name: true, role: true } },
     },
@@ -59,6 +59,8 @@ export default async function OrdersPage({
     userId: o.userId,
     userName: o.user?.name ?? null,
     userShift: (o.user?.shift as Order["userShift"]) ?? null,
+    userRole: o.user?.role ?? null,
+    userIconKey: o.user?.iconKey ?? null,
     paymentMethod: o.paymentMethod ?? null,
     paymentMethod2: o.paymentMethod2 ?? null,
     paymentAmount2: o.paymentAmount2 ?? null,

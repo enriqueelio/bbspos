@@ -344,6 +344,7 @@ export interface StaffUser {
   role: Role;
   shift: Shift;
   active: boolean;
+  iconKey: string | null;
 }
 
 export function formatDurationMinutes(minutes: number): string {
@@ -572,6 +573,9 @@ export interface Order {
   userId?: string | null;
   userName?: string | null;
   userShift?: Shift | null;
+  /** Rol e icono del usuario creador (iconos.txt §9: fuente de verdad User.iconKey). */
+  userRole?: Role | null;
+  userIconKey?: string | null;
   paymentMethod?: PaymentMethod | null;
   paymentMethod2?: PaymentMethod | null;
   paymentAmount2?: number | null;
@@ -1100,85 +1104,5 @@ export interface UpdatePensionadoAccountInput {
   creditLimit?: number;
 }
 
-/** Catálogo centralizado de íconos para identificación de usuarios.
- *  Definido aquí para ser reutilizable desde:
- *  - Admin > Usuarios
- *  - tarjeta de pedido (cajero)
- *  - historial y detalle de pedido
- *  - tooltip
- * 
- *  Restricciones (definidas en iconos.txt):
- *  - No tienen relación con comida, bebidas o productos.
- *  - Preferentemente animales y símbolos neutros.
- *  - Unicidad enforcada en backend.
- */
-export const ICON_CATALOG = [
-  "cat",
-  "dog",
-  "fox",
-  "panda",
-  "lion",
-  "tiger",
-  "bear",
-  "rabbit",
-  "penguin",
-  "koala",
-  "monkey",
-  "owl",
-  "turtle",
-  "elephant",
-  "whale",
-  "dolphin",
-  "shark",
-  "butterfly",
-  "bee",
-  "fish",
-] as const;
-
-export type IconKey = (typeof ICON_CATALOG)[number];
-
-export const ICON_LABELS: Record<IconKey, string> = {
-  cat: "Gato",
-  dog: "Perro",
-  fox: "Zorro",
-  panda: "Panda",
-  lion: "León",
-  tiger: "Tigre",
-  bear: "Oso",
-  rabbit: "Conejo",
-  penguin: "Pinguino",
-  koala: "Koala",
-  monkey: "Mono",
-  owl: "Búho",
-  turtle: "Tortuga",
-  elephant: "Elefante",
-  whale: "Ballena",
-  dolphin: "Delfín",
-  shark: "Tiburón",
-  butterfly: "Mariposa",
-  bee: "Abeja",
-  fish: "Pez",
-};
-
-export const ICON_COLORS: Record<IconKey, string> = {
-  cat: "#F687B3",
-  dog: "#4A90E2",
-  fox: "#ED8936",
-  panda: "#83C5BE",
-  lion: "#F9A825",
-  tiger: "#E64B35",
-  bear: "#6F42C1",
-  rabbit: "#00C853",
-  penguin: "#495057",
-  koala: "#A97CA6",
-  monkey: "#FCB324",
-  owl: "#6C757D",
-  turtle: "#20C997",
-  elephant: "#FBBF24",
-  whale: "#3B82F6",
-  dolphin: "#06B6D4",
-  shark: "#B91C1C",
-  butterfly: "#EC4899",
-  bee: "#F59E0B",
-  fish: "#14B8A6",
-};
+/** Catálogo centralizado de íconos de usuario: ver ./user-icons.ts (§19). */
+export * from "./user-icons";

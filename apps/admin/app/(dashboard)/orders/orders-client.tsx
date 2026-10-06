@@ -22,6 +22,7 @@ import {
   RoleLabel,
   ShiftLabel,
   ShiftList,
+  iconEmojiOf,
   type Order,
   type OrderStatus,
   type Shift,
@@ -115,6 +116,14 @@ function AccordionRow({
           {order.customerName || "—"}
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-sm text-slate-300">
+          {order.userId ? (
+            <span
+              title={`${order.userName ?? "—"}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`}
+              className="mr-1.5"
+            >
+              {iconEmojiOf(order.userIconKey)}
+            </span>
+          ) : null}
           {order.userName || "—"}
         </td>
         <td className="whitespace-nowrap px-4 py-3 text-right font-mono text-sm font-bold text-emerald-400">
@@ -200,6 +209,19 @@ function OrderDetail({
   return (
     <>
       <div className="space-y-4">
+        {/* Creador del pedido (iconos.txt §10) */}
+        {order.userId && (
+          <p className="flex flex-wrap items-center gap-x-1.5 text-sm font-semibold text-muted-foreground">
+            Creado por:
+            <span title={`${order.userName ?? "—"}${order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}`}>
+              {iconEmojiOf(order.userIconKey)}
+            </span>
+            <span className="font-bold text-white">
+              {order.userName ?? "—"}
+              {order.userRole ? ` · ${RoleLabel[order.userRole]}` : ""}
+            </span>
+          </p>
+        )}
         {/* Metadata row */}
         {(order.paidAt ||
           order.deliveredAt ||

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@bbspos/db";
 import { hash } from "bcryptjs";
-import { Role, Shift, type Role as RoleType, type Shift as ShiftType } from "@bbspos/types";
+import { Role, Shift, ICON_CATALOG, type Role as RoleType, type Shift as ShiftType } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -32,6 +32,23 @@ async function isIconKeyTaken(iconKey: string, excludeUserId?: string): Promise<
     },
   });
   return !!taken;
+}
+
+/** Primer ícono del catálogo que no esté en uso por ningún usuario activo
+ *  (iconos.txt §4: crear usuario sin elegir ícono ⇒ asignar uno libre). */
+async function pickFreeIconKey(): Promise<string> {
+  const rows = await prisma.user.findMany({
+    where: { active: true, NOT: { iconKey: null } },
+    select: { iconKey: true },
+  });
+  const taken = new Set(rows.map((r) => r.iconKey));
+  const free = ICON_CATALOG.find((k) => !taken.has(k));
+  if (!free) {
+    throw new Error(
+      "No hay íconos disponibles: todos están en uso por usuarios activos."
+    );
+  }
+  return free;
 }
 
 async function requireAdminSession() {
@@ -128,14 +145,11 @@ export async function createUser(input: {
   const password = validatePassword(input.password);
   const role = parseRole(input.role);
   const shift = parseShift(input.shift);
-  let iconKey = input.iconKey ?? ICON_CATALOG[0]; // ícono por defecto si no se provee
+  // iconos.txt §4: si no eligió ícono, asignar automáticamente el primero libre.
+  const iconKey = input.iconKey || (await pickFreeIconKey());
 
-  // Validar unicidad del ícono (excluir al propio usuario si es edición)
-  if (iconKey) {
-    const taken = await isIconKeyTaken(iconKey);
-    if (taken) {
-      throw new Error("Este ícono ya está asignado a otro usuario activo. Elija uno distinto.");
-    }
+  if (await isIconKeyTaken(iconKey)) {
+    throw new Error("Este ícono ya está asignado a otro usuario activo. Elija uno distinto.");
   }
 
   if (!rolesAssignableBy(session.user.role).includes(role)) {
@@ -181,7 +195,7 @@ export async function updateUser(input: {
   const name = validateName(input.name);
   const role = parseRole(input.role);
   const shift = parseShift(input.shift);
-  const iconKey = input.iconKey ?? undefined;
+  let iconKey = input.iconKey || undefined;
 
   const user = await prisma.user.findUnique({
     where: { id: input.userId },
@@ -189,6 +203,11 @@ export async function updateUser(input: {
 
   if (!user) {
     throw new Error("Usuario no encontrado.");
+  }
+
+  // iconos.txt §4: un usuario activo nunca queda sin ícono.
+  if (!user.iconKey && !iconKey) {
+    iconKey = await pickFreeIconKey();
   }
 
   if (

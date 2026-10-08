@@ -721,7 +721,8 @@ export function PosTerminal({
   // superior del catálogo (fuera de esta barra) para acceso rápido; se oculta
   // tras las 16:00.
   const catalogPanes = useMemo(() => {
-    const panes: { key: CatalogPane; label: string }[] = [];
+    const panes: { key: CatalogPane; label: string; imageUrl: string | null }[] =
+      [];
     for (const c of MENU_PANE_ORDER) {
       if (c === MenuCategory.SANDWICH) {
         const merged = catalog.cartaItems.some(
@@ -730,15 +731,27 @@ export function PosTerminal({
             i.category === MenuCategory.PANINI,
         );
         if (merged) {
-          panes.push({ key: SANDWICHES_PANE, label: PANE_TITLE[SANDWICHES_PANE]! });
+          panes.push({
+            key: SANDWICHES_PANE,
+            label: PANE_TITLE[SANDWICHES_PANE]!,
+            imageUrl: catalog.categoryImages?.[SANDWICHES_PANE] ?? null,
+          });
         }
         continue;
       }
       if (catalog.cartaItems.some((i) => i.category === c)) {
-        panes.push({ key: c, label: PANE_LABEL_SHORT[c] ?? MenuCategoryLabel[c] });
+        panes.push({
+          key: c,
+          label: PANE_LABEL_SHORT[c] ?? MenuCategoryLabel[c],
+          imageUrl: catalog.categoryImages?.[c] ?? null,
+        });
       }
     }
-    panes.push({ key: BUBAS_PANE, label: "Bubbas" });
+    panes.push({
+      key: BUBAS_PANE,
+      label: "Bubbas",
+      imageUrl: catalog.categoryImages?.[BUBAS_PANE] ?? null,
+    });
     return panes;
   }, [catalog]);
 

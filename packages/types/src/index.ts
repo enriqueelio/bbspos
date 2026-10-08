@@ -192,6 +192,11 @@ export interface Catalog {
   menuItems: MenuItemView[];
   /** Platazos de la carta fija (categorías distintas de ALMUERZO). */
   cartaItems: MenuItemView[];
+  /** Imagen de fondo de las tarjetas de categoría de la barra del POS del
+   *  cajero, por clave de pane (MenuCategory + "BUBAS" + "SANDWICHES"). Sin
+   *  entrada (o null) la tarjeta se dibuja con su ícono. Solo el cajero la
+   *  llena; mesero y store no la necesitan. */
+  categoryImages?: Record<string, string | null>;
 }
 
 export interface DrinkSelection {

@@ -90,10 +90,18 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *
  *  La fila cambia de layout según el estado. Sin categoría seleccionada
  *  (`activeKey === null`) es una cuadrícula de 5 columnas y todas las tarjetas
- *  ocupan su celda, que es la lectura uniforme de un vistazo. Al abrir una
- *  categoría pasa a flex: la tarjeta abierta se mide por su contenido y las
- *  demás son cuadrados fijos que no crecen, agrupados sin los huecos que dejaba
- *  la retícula al encogerse.
+ *  ocupan su celda, que es la lectura uniforme de un vistazo. En ese estado
+ *  inicial la tarjeta mide 128px de alto y puede llevar una imagen de fondo
+ *  (configurable desde el admin en Menú → Categorías): la foto ocupa la parte
+ *  superior (flex-1) y el ícono + nombre quedan anclados abajo en una franja
+ *  oscura fija, como una etiqueta que separa el texto de la foto. Sin imagen
+ *  configurada la tarjeta conserva su fondo oscuro y se centra el ícono, con
+ *  el mismo alto para que la grilla quede uniforme. Al abrir una categoría
+ *  pasa a flex: la tarjeta abierta se mide por su contenido y las demás son
+ *  cuadrados de 48px que no crecen, agrupados sin los huecos que dejaba la
+ *  retícula al encogerse. La barra baja de 128px a 48px al abrir y los
+ *  productos suben: es el tradeoff aceptado a cambio de tarjetas
+ *  protagonistas en la lectura inicial.
  *
  *  `transition-colors`, y no `transition-all`, por una razón medida. La tarjeta
  *  del estado inicial lleva `w-full`, o sea `width: 100%`: un porcentaje que se
@@ -115,14 +123,14 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *  mismo tratamiento que ya reciben los campos de texto del POS. */
 const CATEGORY_CARD = {
   base: "inline-flex items-center justify-center gap-2 rounded-xl border text-xs font-bold capitalize tracking-wide transition-colors duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
-  // Todas las tarjetas miden 48px de alto en los tres estados (inicial, abierta
-  // y encogida) a propósito. Con la abierta en 56px, abrir una categoría hacía
-  // crecer la barra 8px y empujaba los productos hacia abajo; con la fila fija
-  // el alto, abrir y cerrar no mueve nada y el cambio de tamaño se lee como un
-  // estado más, no como un empujón.
-  //
   // Cuadrícula (estado inicial): la tarjeta ocupa su celda y queda uniforme.
-  expandedIdle: "h-12 w-full px-2",
+  // Con imagen usa `expandedIdleImage` (p-0, el layout interno es flex-col a
+  // sangre completa); sin imagen lleva este con padding y el ícono centrado.
+  // Los otros dos estados siguen midiendo 48px: abrir/cerrar es instantáneo
+  // (solo cambian colores) y la barra encoge de un salto sin arrastrar una
+  // transición.
+  expandedIdle: "h-32 w-full px-2",
+  expandedIdleImage: "h-32 w-full p-0",
   // Flex (con categoría abierta): la abierta se mide por su texto y las demás son
   // cuadrados fijos. `w-full` y `justify-self-center` sobran aquí: en flex el
   // ancho lo fija el propio cuadrado. `h-12` en vez de `min-h-12` para que el
@@ -141,7 +149,7 @@ export function PosCategoryBar({
   onSwitch,
   onBack,
 }: {
-  panes: { key: string; label: string }[];
+  panes: { key: string; label: string; imageUrl?: string | null }[];
   /** Categoría abierta, o null cuando la fila está en su estado inicial. */
   activeKey: string | null;
   onSwitch: (key: string) => void;
@@ -171,6 +179,12 @@ export function PosCategoryBar({
           // "Volver", así que el `onClick` no cambia: la barra no distingue
           // abrir de cerrar, el estado decide.
           const showLabel = isIdle || selected;
+          // La imagen es solo del estado inicial: en los otros estados la
+          // tarjeta es un cuadrado de 48px y la foto no entra.
+          const bgUrl =
+            isIdle && pane.imageUrl
+              ? pane.imageUrl.replace(/^\/images\/menu\//, "/api/menu-image/")
+              : null;
           return (
             <button
               key={pane.key}
@@ -182,22 +196,58 @@ export function PosCategoryBar({
               className={`${CATEGORY_CARD.base} ${
                 showLabel
                   ? isIdle
-                    ? CATEGORY_CARD.expandedIdle
+                    ? bgUrl
+                      ? CATEGORY_CARD.expandedIdleImage
+                      : CATEGORY_CARD.expandedIdle
                     : CATEGORY_CARD.expandedActive
                   : CATEGORY_CARD.collapsed
               } ${selected ? CATEGORY_CARD.selected : CATEGORY_CARD.idle}`}
             >
-              {Icon && (
-                <Icon
-                  className={`h-4 w-4 shrink-0 ${
-                    selected
-                      ? "text-white"
-                      : (PANE_ICON_COLOR[pane.key] ?? "text-slate-400")
-                  }`}
-                />
-              )}
-              {showLabel && (
-                <span className="leading-tight line-clamp-2">{pane.label}</span>
+              {bgUrl ? (
+                // Con imagen la tarjeta es flex-col a sangre completa: la foto
+                // ocupa todo el espacio superior (flex-1) y el ícono + nombre
+                // quedan anclados abajo en una franja oscura fija, como una
+                // etiqueta. El alto de la tarjeta (128px) deja ~96px de foto y
+                // ~32px de franja, y el mismo alto se usa sin imagen para que
+                // la grilla quede uniforme.
+                <span className="flex h-full w-full flex-col overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={bgUrl}
+                    alt=""
+                    aria-hidden
+                    className="min-h-0 w-full flex-1 object-cover"
+                  />
+                  <span className="flex shrink-0 items-center justify-center gap-2 bg-slate-900/90 px-2 py-2">
+                    {Icon && (
+                      <Icon
+                        className={`h-4 w-4 shrink-0 ${
+                          PANE_ICON_COLOR[pane.key] ?? "text-slate-400"
+                        }`}
+                      />
+                    )}
+                    <span className="leading-tight line-clamp-2">
+                      {pane.label}
+                    </span>
+                  </span>
+                </span>
+              ) : (
+                <>
+                  {Icon && (
+                    <Icon
+                      className={`h-4 w-4 shrink-0 ${
+                        selected
+                          ? "text-white"
+                          : (PANE_ICON_COLOR[pane.key] ?? "text-slate-400")
+                      }`}
+                    />
+                  )}
+                  {showLabel && (
+                    <span className="leading-tight line-clamp-2">
+                      {pane.label}
+                    </span>
+                  )}
+                </>
               )}
             </button>
           );

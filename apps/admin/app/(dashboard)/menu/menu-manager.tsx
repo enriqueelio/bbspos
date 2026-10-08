@@ -61,7 +61,12 @@ import {
   updateSize,
   updateTopping,
 } from "@/app/actions/catalog";
-import { removeProductImage, saveProductImage } from "@/app/actions/product-image";
+import {
+  removeCategoryImage,
+  removeProductImage,
+  saveCategoryImage,
+  saveProductImage,
+} from "@/app/actions/product-image";
 
 export type ProductImageEntity =
   | "menuItem"
@@ -185,6 +190,140 @@ export function ProductImageField({
   );
 }
 
+/** Campo de imagen de una tarjeta de categoría del POS: mismo patrón que
+ *  ProductImageField pero sin entidad/fila propia (la clave es el pane, ej.
+ *  "MILANESA" o "BUBAS"). El recorte que hace el server action es 16:9, igual
+ *  que la tarjeta del estado inicial. */
+export function CategoryImageField({
+  catKey,
+  label,
+  imageUrl,
+}: {
+  catKey: string;
+  label: string;
+  imageUrl: string | null;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  const previewSrc = imageUrl
+    ? imageUrl.replace(/^\/images\/menu\//, "/api/menu-image/")
+    : null;
+
+  async function handleFile(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    try {
+      await saveCategoryImage({ key: catKey, file });
+      toast({
+        title: "Imagen guardada",
+        description: `La imagen de "${label}" se optimizó y guardó.`,
+      });
+      router.refresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo guardar la imagen",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove() {
+    setBusy(true);
+    try {
+      await removeCategoryImage({ key: catKey });
+      toast({ title: "Imagen eliminada" });
+      router.refresh();
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo quitar la imagen",
+        description: e instanceof Error ? e.message : "Ocurrió un error.",
+        duration: 100000,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-slate-800 p-3">
+      <span className="text-sm font-semibold">{label}</span>
+      {previewSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={previewSrc}
+          alt={`Imagen de ${label}`}
+          className="aspect-video w-full rounded-lg border border-slate-800 object-cover"
+        />
+      ) : (
+        <div className="flex aspect-video w-full items-center justify-center rounded-lg border border-dashed border-slate-700 text-muted-foreground">
+          <ImageIcon className="h-6 w-6" />
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          handleFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {busy ? "Procesando..." : previewSrc ? "Cambiar" : "Subir imagen"}
+        </Button>
+        {previewSrc && (
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy}
+            onClick={handleRemove}
+          >
+            Quitar
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Tarjetas de la barra del POS del cajero, en el mismo orden en que las
+ *  ve el cajero (MENU_PANE_ORDER del terminal): SANDWICH+PANINI fusionados
+ *  como SANDWICHES y Bubbas al final. */
+const CATEGORY_PANES: { key: string; label: string }[] = [
+  { key: MenuCategory.MILANESA, label: "Milanesas" },
+  { key: "SANDWICHES", label: "Sandwiches" },
+  { key: MenuCategory.HAMBURGUESA, label: "Burgers" },
+  { key: MenuCategory.LOMO, label: "Lomos" },
+  { key: MenuCategory.POLLO, label: "Pollos" },
+  { key: MenuCategory.ALITA, label: "Alitas" },
+  { key: MenuCategory.ENSALADA, label: "Ensaladas" },
+  { key: MenuCategory.PIQUEO, label: "Piqueos" },
+  { key: MenuCategory.COMPARTIR, label: "Compartir" },
+  { key: MenuCategory.KIDS, label: "Kids" },
+  { key: MenuCategory.POSTRE, label: "Heladería" },
+  { key: MenuCategory.WAFFLE, label: "Wafles" },
+  { key: MenuCategory.PANCAKE, label: "Pancakes" },
+  { key: MenuCategory.EXTRAS, label: "Extras" },
+  { key: MenuCategory.BEBIDA, label: "Bebidas" },
+  { key: "BUBAS", label: "Bubbas" },
+];
+
 export interface MenuItemAdminView {
   id: string;
   name: string;
@@ -210,6 +349,7 @@ const MENU_TABS = [
   { key: "cafeteria", label: "Cafetería" },
   { key: "bubas", label: "Bubas" },
   { key: "salsas", label: "Salsas Alitas" },
+  { key: "categorias", label: "Categorías" },
 ] as const;
 
 type MenuTabKey = (typeof MENU_TABS)[number]["key"];
@@ -713,6 +853,7 @@ export function MenuManager({
   drinkPrices,
   menuItems,
   alitaSauces,
+  categoryImages,
 }: {
   currentUserRole: Role;
   sizes: Size[];
@@ -722,6 +863,8 @@ export function MenuManager({
   drinkPrices: DrinkPrice[];
   menuItems: MenuItemAdminView[];
   alitaSauces: AlitaSauceAdminView[];
+  /** Imagen de fondo de las tarjetas de categoría del POS, por clave de pane. */
+  categoryImages: Record<string, string | null>;
 }) {
   const isSuperAdmin = currentUserRole === Role.SUPER_ADMIN;
   const [sizeForm, setSizeForm] = useState({ name: "", oz: "" });
@@ -1794,6 +1937,26 @@ export function MenuManager({
                 </p>
               )}
               </div>
+        </div>
+      )}
+
+      {activeTab === "categorias" && (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Imagen de fondo de cada tarjeta de la barra del POS del cajero.
+            Visible solo en el estado inicial (sin categoría abierta); sin
+            imagen, la tarjeta se dibuja con su ícono.
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {CATEGORY_PANES.map((pane) => (
+              <CategoryImageField
+                key={pane.key}
+                catKey={pane.key}
+                label={pane.label}
+                imageUrl={categoryImages[pane.key] ?? null}
+              />
+            ))}
+          </div>
         </div>
       )}
       </div>

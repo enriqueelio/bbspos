@@ -50,8 +50,16 @@ export async function getPosCatalog(
   const jar = await cookies();
   const cartId = cartIdArg ?? jar.get(CART_ID_COOKIE)?.value ?? null;
 
-  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems] =
-    await Promise.all([
+  const [
+    sizes,
+    flavors,
+    bobaTypes,
+    drinkPrices,
+    toppings,
+    menuItems,
+    cartaItems,
+    categoryConfigs,
+  ] = await Promise.all([
       prisma.size.findMany({
         where: { available: true },
         orderBy: { oz: "asc" },
@@ -72,6 +80,7 @@ export async function getPosCatalog(
       }),
       todayMenuItems(),
       cartaMenuItems(),
+      prisma.categoryConfig.findMany(),
     ]);
 
   const toMenuItemView = (
@@ -130,6 +139,10 @@ export async function getPosCatalog(
     toppings,
     menuItems: menuItems.map((mi) => toMenuItemView(mi, lunchStock.get(mi.id) ?? null)),
     cartaItems: cartaItems.map((mi) => toMenuItemView(mi)),
+    // Imágenes de fondo de las tarjetas de categoría de la barra del POS.
+    categoryImages: Object.fromEntries(
+      categoryConfigs.map((c) => [c.key, c.imageUrl]),
+    ),
   };
 }
 

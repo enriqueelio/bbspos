@@ -5,7 +5,7 @@ import { mkdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
 import sharp from "sharp";
 import { prisma } from "@bbspos/db";
-import { Role } from "@bbspos/types";
+import { Role, MenuCategory } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 const MENU_IMAGES_DIR = join(
@@ -107,5 +107,86 @@ export async function removeProductImage(input: {
 
   await unlink(join(MENU_IMAGES_DIR, `${entity}-${id}.webp`)).catch(() => {});
   await updateImageUrl(entity, id, null);
+  revalidatePath("/menu");
+}
+
+// ===== Imágenes de categoría (tarjetas de la barra del POS del cajero) =====
+
+/** Claves válidas de CategoryConfig: los valores del enum del menú más las
+ *  pseudo-categorías del cajero (BUBAS y SANDWICHES fusionado). */
+const CATEGORY_KEYS = new Set<string>([
+  ...Object.values(MenuCategory),
+  "BUBAS",
+  "SANDWICHES",
+]);
+
+/** Guarda la imagen de fondo de una tarjeta de categoría del POS. Mismo
+ *  tratamiento que la foto de producto: WebP optimizado en el directorio
+ *  compartido, ahora con recorte 16:9 (la tarjeta del estado inicial es
+ *  apaisada) y la clave normalizada a minúsculas para el nombre del archivo. */
+export async function saveCategoryImage(input: {
+  key: string;
+  file: File;
+}): Promise<{ imageUrl: string }> {
+  await requireAdminSession();
+  const { key, file } = input;
+
+  if (!CATEGORY_KEYS.has(key)) {
+    throw new Error("Categoría inválida.");
+  }
+  if (!file || file.size === 0) {
+    throw new Error("No se recibió ninguna imagen.");
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("La imagen supera los 5 MB.");
+  }
+
+  let optimized: Buffer;
+  try {
+    optimized = await sharp(await file.arrayBuffer())
+      .rotate()
+      .resize(640, 360, { fit: "cover" })
+      .webp({ quality: 80 })
+      .toBuffer();
+  } catch {
+    throw new Error(
+      "No se pudo procesar la imagen. Usa JPG, PNG o WebP válidos.",
+    );
+  }
+
+  await mkdir(MENU_IMAGES_DIR, { recursive: true });
+  const filename = `category-${key.toLowerCase()}.webp`;
+  await writeFile(join(MENU_IMAGES_DIR, filename), optimized);
+
+  const imageUrl = `/images/menu/${filename}`;
+  await prisma.categoryConfig.upsert({
+    where: { key },
+    create: { key, imageUrl },
+    update: { imageUrl },
+  });
+  revalidatePath("/menu");
+  return { imageUrl };
+}
+
+/** Elimina la imagen de una categoría: borra el archivo y limpia el campo. */
+export async function removeCategoryImage(input: {
+  key: string;
+}): Promise<void> {
+  await requireAdminSession();
+  const { key } = input;
+
+  if (!CATEGORY_KEYS.has(key)) {
+    throw new Error("Categoría inválida.");
+  }
+
+  await unlink(
+    join(MENU_IMAGES_DIR, `category-${key.toLowerCase()}.webp`),
+  ).catch(() => {});
+  // upsert por si nunca se guardó una imagen para esta categoría (no hay fila).
+  await prisma.categoryConfig.upsert({
+    where: { key },
+    create: { key, imageUrl: null },
+    update: { imageUrl: null },
+  });
   revalidatePath("/menu");
 }

@@ -329,6 +329,15 @@ model PrinterConfig {
   updatedAt    DateTime @updatedAt
 }
 
+// Imagen de fondo de una tarjeta de categoría de la barra del POS (estado
+// inicial). Una fila por pane: los valores del enum MenuCategory más las
+// pseudo-categorías del cajero "BUBAS" y "SANDWICHES". Sin fila (o sin
+// imageUrl) la tarjeta se dibuja con su ícono, como siempre.
+model CategoryConfig {
+  key      String  @id
+  imageUrl String?
+}
+
 // Cantidad diaria de un plato del Menú del Día: una fila por (plato, jornada).
 // `planned` es lo que la cocina prepara (null = nadie lo programó todavía) y
 // `lowThreshold` el aviso de stock bajo, ajustable por plato y día. El vendido

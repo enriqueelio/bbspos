@@ -15,22 +15,31 @@ export default async function MenuPage() {
   const session = await getRequiredSession();
   const currentUserRole = session.user.role as Role;
 
-  const [sizes, flavors, bobaTypes, toppings, drinkPrices, menuItems, alitaSauces] =
-    await Promise.all([
-      prisma.size.findMany({ orderBy: { oz: "asc" } }),
-      prisma.flavor.findMany({
-        include: { categories: true },
-        orderBy: { name: "asc" },
-      }),
-      prisma.bobaType.findMany({ orderBy: { name: "asc" } }),
-      prisma.topping.findMany({ orderBy: { name: "asc" } }),
-      prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
-      prisma.menuItem.findMany({
-        include: { options: { orderBy: { name: "asc" } } },
-        orderBy: [{ category: "asc" }, { name: "asc" }],
-      }),
-      prisma.alitaSauce.findMany({ orderBy: { name: "asc" } }),
-    ]);
+  const [
+    sizes,
+    flavors,
+    bobaTypes,
+    toppings,
+    drinkPrices,
+    menuItems,
+    alitaSauces,
+    categoryConfigs,
+  ] = await Promise.all([
+    prisma.size.findMany({ orderBy: { oz: "asc" } }),
+    prisma.flavor.findMany({
+      include: { categories: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.bobaType.findMany({ orderBy: { name: "asc" } }),
+    prisma.topping.findMany({ orderBy: { name: "asc" } }),
+    prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
+    prisma.menuItem.findMany({
+      include: { options: { orderBy: { name: "asc" } } },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    }),
+    prisma.alitaSauce.findMany({ orderBy: { name: "asc" } }),
+    prisma.categoryConfig.findMany(),
+  ]);
 
   // La cantidad de la jornada y el histórico son del cajero: el POS programa,
   // ajusta y aparta. Aquí el admin solo elige qué almuerzos se ofrecen hoy.
@@ -67,6 +76,9 @@ export default async function MenuPage() {
         name: s.name,
         available: s.available,
       }))}
+      categoryImages={Object.fromEntries(
+        categoryConfigs.map((c) => [c.key, c.imageUrl]),
+      )}
     />
   );
 }

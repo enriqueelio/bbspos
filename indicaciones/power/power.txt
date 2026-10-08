@@ -1,0 +1,451 @@
+QUIERO QUE CORRIJAS Y NORMALICES EL PROCESO DE VALIDACIÓN DEL PROYECTO BBSPOS EN WINDOWS.
+
+CONTEXTO DEL PROYECTO
+=====================
+
+El proyecto está ubicado en:
+
+C:\Users\lelio\Documents\bbspos
+
+Es un monorepo con pnpm + Turborepo + TypeScript + Next.js.
+
+IMPORTANTE:
+Estoy trabajando en WINDOWS POWERSHELL 5.1.
+
+El problema actual es que algunos comandos generados o ejecutados utilizan sintaxis Bash/Linux que PowerShell 5.1 no soporta.
+
+Ejemplo de comando problemático:
+
+cd "C:\Users\lelio\Documents\bbspos" && npx tsc --noEmit --project packages\db\tsconfig.json 2>&1 | head -20
+
+PowerShell devuelve:
+
+El token '&&' no es un separador de instrucciones válido en esta versión.
+
+Esto significa que hay que normalizar la forma en la que ejecutas los comandos.
+
+====================================================
+1. REGLA FUNDAMENTAL: WINDOWS POWERSHELL 5.1
+====================================================
+
+A partir de ahora:
+
+TODOS LOS COMANDOS QUE GENERES O EJECUTES DEBEN SER COMPATIBLES CON WINDOWS POWERSHELL 5.1.
+
+NO utilizar sintaxis exclusiva de Bash/Linux.
+
+NO utilizar:
+
+&&
+||
+head
+tail
+grep
+cat
+rm
+mv
+cp
+sed
+awk
+export
+source
+
+No asumir que existen comandos Unix.
+
+====================================================
+2. EQUIVALENCIAS POWERSHELL
+====================================================
+
+Usar estas equivalencias:
+
+Bash:
+cd ruta
+
+PowerShell:
+Set-Location "ruta"
+
+También se puede usar:
+
+cd "ruta"
+
+pero NO combinar con &&.
+
+--------------------------------------------
+
+Bash:
+comando1 && comando2
+
+PowerShell 5.1:
+
+comando1
+comando2
+
+o, si realmente hace falta condicionar:
+
+comando1
+if ($LASTEXITCODE -eq 0) {
+    comando2
+}
+
+--------------------------------------------
+
+Bash:
+head -20
+
+PowerShell:
+
+Select-Object -First 20
+
+--------------------------------------------
+
+Bash:
+tail -20
+
+PowerShell:
+
+Select-Object -Last 20
+
+--------------------------------------------
+
+Bash:
+cat archivo.txt
+
+PowerShell:
+
+Get-Content "archivo.txt"
+
+--------------------------------------------
+
+Bash:
+grep "texto" archivo
+
+PowerShell:
+
+Select-String -Pattern "texto" -Path "archivo"
+
+--------------------------------------------
+
+Bash:
+rm archivo
+
+PowerShell:
+
+Remove-Item "archivo"
+
+--------------------------------------------
+
+Bash:
+cp origen destino
+
+PowerShell:
+
+Copy-Item "origen" "destino"
+
+--------------------------------------------
+
+Variables:
+
+NO usar:
+
+export VAR=valor
+
+Usar:
+
+$env:VAR="valor"
+
+====================================================
+3. NO USAR "&&" EN NINGÚN COMANDO
+====================================================
+
+Este punto es obligatorio.
+
+Nunca generes:
+
+cd "C:\..." && comando
+
+En su lugar:
+
+Set-Location "C:\..."
+comando
+
+====================================================
+4. VALIDACIÓN DEL PROYECTO
+====================================================
+
+Antes de hacer modificaciones de código:
+
+1. Ir al directorio raíz:
+
+Set-Location "C:\Users\lelio\Documents\bbspos"
+
+2. Confirmar que estamos en el proyecto correcto.
+
+3. Revisar package.json y los scripts existentes.
+
+4. Revisar pnpm-workspace.yaml.
+
+5. No inventar comandos si el proyecto ya tiene scripts definidos.
+
+====================================================
+5. TYPECHECK
+====================================================
+
+La forma preferida de comprobar TypeScript en este proyecto es:
+
+pnpm -r typecheck
+
+NO inventar primero:
+
+npx tsc ...
+
+si el proyecto ya dispone del script typecheck.
+
+Ejecutar:
+
+Set-Location "C:\Users\lelio\Documents\bbspos"
+pnpm -r typecheck
+
+Si necesitas limitar la salida:
+
+pnpm -r typecheck 2>&1 | Select-Object -First 100
+
+Si el comando termina con errores:
+
+NO ocultarlos.
+
+Identifica los errores reales de TypeScript.
+
+====================================================
+6. LINT
+====================================================
+
+Ejecutar:
+
+Set-Location "C:\Users\lelio\Documents\bbspos"
+pnpm -r lint
+
+Para limitar salida:
+
+pnpm -r lint 2>&1 | Select-Object -First 100
+
+====================================================
+7. NO CONFUNDIR ERROR DE SHELL CON ERROR DE TYPESCRIPT
+====================================================
+
+Si aparece:
+
+ParserError
+Unexpected token
+El token '&&' no es un separador
+The term 'head' is not recognized
+
+ESO NO ES UN ERROR DEL PROYECTO.
+
+Es un error del shell/comando.
+
+Primero corregir el comando para PowerShell.
+
+Solo después analizar:
+- TSxxxx
+- ESLint
+- Next.js
+- Prisma
+- runtime
+
+====================================================
+8. PROCESO DE DIAGNÓSTICO
+====================================================
+
+Cuando haya errores:
+
+PASO 1:
+Ejecutar correctamente el comando en PowerShell 5.1.
+
+PASO 2:
+Capturar el primer error real.
+
+PASO 3:
+Identificar:
+- archivo;
+- línea;
+- columna;
+- código del error;
+- causa.
+
+PASO 4:
+Inspeccionar el contexto del código.
+
+PASO 5:
+Corregir solo lo necesario.
+
+PASO 6:
+Volver a ejecutar typecheck.
+
+PASO 7:
+Volver a ejecutar lint.
+
+PASO 8:
+Si aparecen errores nuevos causados por el cambio, corregirlos.
+
+NO hacer cambios generales sin relación con el error.
+
+====================================================
+9. FORMATO DE COMANDOS
+====================================================
+
+Cuando necesites ejecutar varios comandos, escríbelos así:
+
+Set-Location "C:\Users\lelio\Documents\bbspos"
+
+pnpm -r typecheck
+
+pnpm -r lint
+
+NO así:
+
+cd "C:\Users\lelio\Documents\bbspos" && pnpm -r typecheck && pnpm -r lint
+
+====================================================
+10. MANEJO DE CÓDIGOS DE SALIDA
+====================================================
+
+Después de un comando importante puedes consultar:
+
+$LASTEXITCODE
+
+Ejemplo:
+
+pnpm -r typecheck
+$LASTEXITCODE
+
+Si necesitas condicionar otro comando:
+
+pnpm -r typecheck
+
+if ($LASTEXITCODE -eq 0) {
+    pnpm -r lint
+}
+
+====================================================
+11. PROBLEMAS DE CODIFICACIÓN
+====================================================
+
+Actualmente algunos mensajes aparecen con caracteres dañados:
+
+l nea
+Car cter
+
+Eso puede ser un problema de encoding de la consola.
+
+NO modificar archivos del proyecto solamente por esos caracteres.
+
+Si necesitas mostrar texto legible temporalmente:
+
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+Hazlo solo si es necesario y no lo conviertas en un cambio permanente del proyecto.
+
+====================================================
+12. NO MODIFICAR LA CONFIGURACIÓN GLOBAL DE WINDOWS
+====================================================
+
+NO cambiar:
+- ExecutionPolicy
+- configuración global de PowerShell
+- PATH global
+- variables de entorno permanentes
+- configuración del sistema
+
+salvo que sea absolutamente necesario y se solicite explícitamente.
+
+El objetivo es hacer compatible el proceso del proyecto, no modificar Windows.
+
+====================================================
+13. REGLAS PARA EL DESARROLLO
+====================================================
+
+Antes de editar código:
+
+- inspeccionar el archivo;
+- entender el contexto;
+- identificar dependencia;
+- modificar lo mínimo necesario.
+
+No hacer refactors generales.
+
+No cambiar funcionalidades no relacionadas.
+
+No cambiar:
+- lógica de negocio;
+- modelos de datos;
+- autenticación;
+- pagos;
+- caja;
+- pedidos;
+- inventario;
+
+salvo que el error concreto esté relacionado.
+
+====================================================
+14. VERIFICACIÓN FINAL
+====================================================
+
+Al terminar cualquier cambio:
+
+1. Ejecutar:
+
+Set-Location "C:\Users\lelio\Documents\bbspos"
+
+2. Ejecutar:
+
+pnpm -r typecheck
+
+3. Si pasa:
+
+pnpm -r lint
+
+4. Revisar el resultado completo.
+
+5. Confirmar que no queden errores nuevos.
+
+6. Revisar el diff:
+
+git diff --stat
+git diff
+
+Para comandos Git también utilizar sintaxis compatible con PowerShell.
+
+====================================================
+15. OBJETIVO
+====================================================
+
+Quiero que a partir de ahora OpenCode trabaje correctamente dentro de:
+
+Windows
++
+PowerShell 5.1
++
+pnpm
++
+Turborepo
++
+TypeScript
++
+Next.js
++
+Prisma
+
+y que nunca vuelva a generar comandos Bash/Linux incompatibles con mi entorno.
+
+PRIORIDAD:
+
+1. Comandos compatibles con PowerShell 5.1.
+2. Detectar errores reales del proyecto.
+3. Corregirlos de forma segura.
+4. Validar nuevamente con typecheck y lint.
+5. No introducir cambios innecesarios.
+
+ANTES DE HACER CUALQUIER CAMBIO, EXPLICA BREVEMENTE:
+- qué comando vas a ejecutar;
+- por qué;
+- y confirma que es compatible con Windows PowerShell 5.1.

@@ -112,7 +112,7 @@ const TICKET_FONT_PT = 12;
 /** Despacha un ticket: si el driver activo es "virtual-png" se renderiza el
  *  texto como imagen PNG en la carpeta configurada; si es una impresora de
  *  Windows se envía por ese medio con letra grande y negritas, ajustada
- *  para que la línea más larga quepa en el ancho del rollo térmico de 80mm. */
+ *  para que la línea más larga quepa en el ancho imprimible del driver. */
 export async function printText(
   settings: PrinterSettings,
   text: string,
@@ -138,18 +138,37 @@ export async function printText(
     "$doc = New-Object System.Drawing.Printing.PrintDocument",
     `$doc.PrinterSettings.PrinterName = '${safeName}'`,
     "$doc.DefaultPageSettings.Landscape = $false",
-    "$paperW = 315; $found = $false",
-    "foreach ($ps in $doc.PrinterSettings.PaperSizes) { if ($ps.Width -ge 300 -and $ps.Width -le 340) { $doc.DefaultPageSettings.PaperSize = $ps; $paperW = $ps.Width; $found = $true; break } }",
-    "if (-not $found) { $doc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize('Custom80mm', 315, 10000); $paperW = 315 }",
+    // Ancho imprimible real: el PaperSize por defecto del driver (la LR2000
+    // expone "Print width 72mm" = 284 hundredths). No se crea un tamaño
+    // ficticio de 80mm; si el default no es de rollo se elige el form del
+    // driver más cercano al rollo configurado.
+    "$targetW = " + Math.round((settings.paperWidthMm || 80) / 25.4 * 100),
+    "$paperW = 0",
+    "$defaultW = $doc.DefaultPageSettings.PaperSize.Width",
+    "if ($defaultW -ge 220 -and $defaultW -le 340) { $paperW = $defaultW }",
+    "else {",
+    "  $best = $null; $bestD = [int]::MaxValue",
+    "  foreach ($ps in $doc.PrinterSettings.PaperSizes) {",
+    "    if ($ps.Width -ge 220 -and $ps.Width -le 340) { $d = [Math]::Abs($ps.Width - $targetW); if ($d -lt $bestD) { $best = $ps; $bestD = $d } }",
+    "  }",
+    "  if ($best -ne $null) { $doc.DefaultPageSettings.PaperSize = $best; $paperW = $best.Width }",
+    "  elseif ($defaultW -gt 0) { $paperW = $defaultW }",
+    "  else { $paperW = $targetW; $doc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize('Custom', $paperW, 10000) }",
+    "}",
     "$margins = New-Object System.Drawing.Printing.Margins(2, 2, 2, 2)",
     "$doc.DefaultPageSettings.Margins = $margins",
     "$probeG = [System.Drawing.Graphics]::FromImage((New-Object System.Drawing.Bitmap(10, 10)))",
     "$fmt = [System.Drawing.StringFormat]::GenericTypographic",
     "$fProbe = New-Object System.Drawing.Font('Consolas', 12, [System.Drawing.FontStyle]::Bold)",
     "$cw = $probeG.MeasureString(([string]'0' * 20), $fProbe, 0, $fmt).Width / 20",
-    `$availW = $paperW - 4`,
-    `$size = [Math]::Min(${TICKET_FONT_PT}, $availW / ($maxLen * $cw) * 12)`,
-    "if ($size -lt 4) { $size = 4 }",
+    // px de la sonda -> hundredths-of-inch: unidad homogénea con $paperW.
+    "$cwH = $cw / $probeG.DpiX * 100",
+    // 2% de holgura sobre el ancho del form + 5% extra contra la zona muerta
+    // del borde derecho (el cabezal no imprime el milímetro extremo).
+    `$availW = ($paperW - 4) * 0.98`,
+    `$safeWidth = $availW * 0.95`,
+    `$size = [Math]::Min([double]${TICKET_FONT_PT}, [double]($safeWidth / ($maxLen * $cwH) * 12))`,
+    "if ($size -lt 4) { $size = [double]4 }",
     "$font = New-Object System.Drawing.Font('Consolas', $size, [System.Drawing.FontStyle]::Bold)",
     "$script:i = 0",
     "$handler = [System.Drawing.Printing.PrintPageEventHandler]{",
@@ -165,6 +184,44 @@ export async function printText(
     "}",
     "$doc.add_PrintPage($handler)",
     "try { $doc.Print() } finally { $doc.remove_PrintPage($handler) }",
+    // El texto viaja como trabajo GDI y el driver no emite ESC/POS: el corte se
+    // envía como un segundo trabajo RAW al mismo puerto (feed + GS V B, parcial).
+    "try {",
+    "  Add-Type @'",
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public class TicketRawCut {",
+    "  [DllImport(\"winspool.drv\", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool StartDocPrinter(IntPtr h, int l, ref DocInfo d);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool WritePrinter(IntPtr h, IntPtr b, int c, out int w);",
+    "  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct DocInfo {",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pDatatype;",
+    "  }",
+    "}",
+    "'@",
+    "  $hCut = [IntPtr]::Zero",
+    `  if ([TicketRawCut]::OpenPrinter('${safeName}', [ref]$hCut, [IntPtr]::Zero)) {`,
+    "    $dci = New-Object TicketRawCut+DocInfo",
+    "    $dci.pDocName = 'corte'; $dci.pDatatype = 'RAW'",
+    "    [TicketRawCut]::StartDocPrinter($hCut, 1, [ref]$dci) | Out-Null",
+    "    [TicketRawCut]::StartPagePrinter($hCut) | Out-Null",
+    "    $cut = [byte[]](0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00)",
+    "    $pCut = [Runtime.InteropServices.Marshal]::AllocHGlobal($cut.Length)",
+    "    [Runtime.InteropServices.Marshal]::Copy($cut, 0, $pCut, $cut.Length)",
+    "    $nCut = 0",
+    "    [TicketRawCut]::WritePrinter($hCut, $pCut, $cut.Length, [ref]$nCut) | Out-Null",
+    "    [Runtime.InteropServices.Marshal]::FreeHGlobal($pCut)",
+    "    [TicketRawCut]::EndPagePrinter($hCut) | Out-Null",
+    "    [TicketRawCut]::EndDocPrinter($hCut) | Out-Null",
+    "    [TicketRawCut]::ClosePrinter($hCut) | Out-Null",
+    "  }",
+    "} catch { }",
   ].join("\n");
   await runPowerShell(script);
 }
@@ -219,9 +276,9 @@ interface ComandaOrder {
 
 // Ancho de la comanda en columnas de texto.
 // Se subió de 30 a 34 para que el precio quepa en la misma línea que el ítem.
-// El tamaño de letra NO cambia mientras la impresora acepte ~34 chars a 12pt;
-// si en la impresora real la letra sale muy chica, bajá este número (32 o 30)
-// para agrandarla (ver la fórmula `Math.Min(12, $availW/($maxLen*$cw)*12)` en printText).
+// El tamaño de letra se escala dinámicamente para que las 34 col entren en el
+// ancho imprimible que reporta el driver; si la letra queda muy chica, bajá
+// este número (32 o 30) — fórmula en printText: Math.Min(12, $availW/($maxLen*$cwH)*12).
 const WIDTH = 34;
 
 function repeat(ch: string, count: number): string {

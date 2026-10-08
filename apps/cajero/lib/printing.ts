@@ -62,14 +62,24 @@ function runPowerShell(script: string, input?: string): Promise<string> {
 
 const TICKET_FONT_PT = 12;
 
+// Modo debug del gavetero: al cobrar en EFECTIVO marca el ticket con una línea
+// testigo e imprime el suceso en consola, para validar la lógica condicional
+// sin el gavetero físico. Poner `true` solo mientras se prueba en local.
+const DRAWER_DEBUG = false;
+const DRAWER_MARKER = "*** [TEST: GAVETERO ABIERTO] ***";
+
 /** Despacha un ticket: si el driver activo es "virtual-png" se renderiza la
  *  comanda como imagen PNG en la carpeta configurada; si es una impresora de
  *  Windows se envía por ese medio con letra grande y negritas, ajustada
- *  para que la línea más larga quepa en el ancho imprimible del driver. */
+ *  para que la línea más larga quepa en el ancho imprimible del driver.
+ *  `openDrawer` antepone el pulso ESC/POS de gavetero (ESC p, pin 2) al corte:
+ *  SOLO el cajero lo activa al cobrar en EFECTIVO; las comandas de cocina y
+ *  cualquier otro ticket jamás llevan ese comando. */
 export async function printText(
   settings: PrinterSettings,
   text: string,
   job?: PrintJobMeta,
+  openDrawer = false,
 ): Promise<void> {
   if (settings.driver === "virtual-png") {
     await printVirtualPng(settings, text, job);
@@ -80,6 +90,12 @@ export async function printText(
     throw new Error("Falta el nombre de la impresora de Windows.");
   }
   const safeName = printerName.replace(/'/g, "''");
+  // Testigo impreso: solo cuando se abre el gavetero (openDrawer true). Si es
+  // false o indefinido (comandas de cocina, QR, tarjeta...) el ticket sale en
+  // blanco, sin línea testigo y sin log de consola.
+  if (openDrawer && DRAWER_DEBUG) {
+    text += (text.length > 0 && !text.endsWith("\n") ? "\n" : "") + DRAWER_MARKER + "\n";
+  }
   const b64 = Buffer.from(text, "utf8").toString("base64");
   const script = [
     "Add-Type -AssemblyName System.Drawing",
@@ -164,7 +180,7 @@ export async function printText(
     "    $dci.pDocName = 'corte'; $dci.pDatatype = 'RAW'",
     "    [TicketRawCut]::StartDocPrinter($hCut, 1, [ref]$dci) | Out-Null",
     "    [TicketRawCut]::StartPagePrinter($hCut) | Out-Null",
-    "    $cut = [byte[]](0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00)",
+    "    $cut = [byte[]](" + (openDrawer ? "0x1B, 0x70, 0x00, 0x19, 0xFA, " : "") + "0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00)",
     "    $pCut = [Runtime.InteropServices.Marshal]::AllocHGlobal($cut.Length)",
     "    [Runtime.InteropServices.Marshal]::Copy($cut, 0, $pCut, $cut.Length)",
     "    $nCut = 0",
@@ -173,6 +189,66 @@ export async function printText(
     "    [TicketRawCut]::EndPagePrinter($hCut) | Out-Null",
     "    [TicketRawCut]::EndDocPrinter($hCut) | Out-Null",
     "    [TicketRawCut]::ClosePrinter($hCut) | Out-Null",
+    "  }",
+    "} catch { }",
+  ].join("\n");
+  await runPowerShell(script);
+  if (openDrawer && DRAWER_DEBUG) {
+    console.log("🗄️ [GAVETERO] Comando de apertura ejecutado");
+  }
+}
+
+/** Abre el gavetero (pulso RAW ESC p, pin 2 ~50 ms) sin imprimir texto ni
+ *  cortar papel. Se dispara SOLO al cobrar un pedido en EFECTIVO en caja;
+ *  las comandas de cocina y cualquier otro ticket jamás pasan por aquí.
+ *  Con `DRAWER_DEBUG` activo, en vez del pulso suelto se imprime un slip de
+ *  prueba con la línea testigo + corte + pulso, para validar sin gavetero. */
+export async function openCashDrawer(settings: PrinterSettings): Promise<void> {
+  if (settings.driver === "virtual-png") return;
+  const printerName = settings.printerName;
+  if (!printerName) {
+    throw new Error("Falta el nombre de la impresora de Windows.");
+  }
+  if (DRAWER_DEBUG) {
+    await printText(settings, "", { title: "gavetero" }, true);
+    return;
+  }
+  const safeName = printerName.replace(/'/g, "''");
+  const script = [
+    "try {",
+    "  Add-Type @'",
+    "using System;",
+    "using System.Runtime.InteropServices;",
+    "public class TicketRawDrawer {",
+    "  [DllImport(\"winspool.drv\", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool OpenPrinter(string n, out IntPtr h, IntPtr d);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool ClosePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool StartDocPrinter(IntPtr h, int l, ref DocInfo d);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool EndDocPrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool StartPagePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool EndPagePrinter(IntPtr h);",
+    "  [DllImport(\"winspool.drv\", SetLastError=true)] public static extern bool WritePrinter(IntPtr h, IntPtr b, int c, out int w);",
+    "  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)] public struct DocInfo {",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pDocName;",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile;",
+    "    [MarshalAs(UnmanagedType.LPWStr)] public string pDatatype;",
+    "  }",
+    "}",
+    "'@",
+    "  $hCut = [IntPtr]::Zero",
+    `  if ([TicketRawDrawer]::OpenPrinter('${safeName}', [ref]$hCut, [IntPtr]::Zero)) {`,
+    "    $dci = New-Object TicketRawDrawer+DocInfo",
+    "    $dci.pDocName = 'gavetero'; $dci.pDatatype = 'RAW'",
+    "    [TicketRawDrawer]::StartDocPrinter($hCut, 1, [ref]$dci) | Out-Null",
+    "    [TicketRawDrawer]::StartPagePrinter($hCut) | Out-Null",
+    "    $pulse = [byte[]](0x1B, 0x70, 0x00, 0x19, 0xFA)",
+    "    $pCut = [Runtime.InteropServices.Marshal]::AllocHGlobal($pulse.Length)",
+    "    [Runtime.InteropServices.Marshal]::Copy($pulse, 0, $pCut, $pulse.Length)",
+    "    $nCut = 0",
+    "    [TicketRawDrawer]::WritePrinter($hCut, $pCut, $pulse.Length, [ref]$nCut) | Out-Null",
+    "    [Runtime.InteropServices.Marshal]::FreeHGlobal($pCut)",
+    "    [TicketRawDrawer]::EndPagePrinter($hCut) | Out-Null",
+    "    [TicketRawDrawer]::EndDocPrinter($hCut) | Out-Null",
+    "    [TicketRawDrawer]::ClosePrinter($hCut) | Out-Null",
     "  }",
     "} catch { }",
   ].join("\n");

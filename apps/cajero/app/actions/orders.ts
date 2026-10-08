@@ -19,12 +19,15 @@ import { accumulateCustomerLoyalty } from "@/app/actions/customers";
 import {
   formatComanda,
   getPrinterConfig,
+  openCashDrawer,
   printText,
 } from "@/lib/printing";
 
 /** Imprime la comanda de un pedido, best-effort: un fallo de impresora nunca
- *  debe romper la acción de cobro. Se usa al confirmar una reserva. */
-async function tryPrintComanda(orderId: string) {
+ *  debe romper la acción de cobro. Se usa al confirmar una reserva.
+ *  `openDrawer` antepone el pulso ESC/POS de gavetero AL TICKET (comanda), y
+ *  SOLO se pasa en true cuando se cobra en EFECTIVO. */
+async function tryPrintComanda(orderId: string, openDrawer = false) {
   try {
     const settings = await getPrinterConfig();
     if (!settings) return;
@@ -65,9 +68,21 @@ async function tryPrintComanda(orderId: string) {
         number: full.daySeq ?? full.seq,
         date: full.createdAt,
       },
+      openDrawer,
     );
   } catch (e) {
     console.error("No se pudo imprimir la comanda:", e);
+  }
+}
+
+/** Abre el gavetero al cobrar en EFECTIVO, best-effort: si la impresora o el
+ *  puerto fallan, el cobro sigue igual (igual filosofía que la comanda). */
+async function tryOpenCashDrawer() {
+  try {
+    const settings = await getPrinterConfig();
+    if (settings) await openCashDrawer(settings);
+  } catch (e) {
+    console.error("No se pudo abrir el gavetero:", e);
   }
 }
 
@@ -279,8 +294,14 @@ export async function acceptOrder(
 
   // Las reservas no imprimen al crearse: su comanda sale recién ahora, al
   // confirmarlas en caja (best-effort; un fallo de impresora no rompe el cobro).
+  // El gavetero SOLO se abre en el cobro en EFECTIVO y jamás en las comandas
+  // de cocina: si la reserva imprime aquí, el pulso va al final de ese ticket;
+  // si no hay ticket que imprimir, se manda un pulso RAW suelto.
+  const openDrawer = method === PaymentMethod.EFECTIVO;
   if (order.scheduledFor && !order.reservationConfirmed) {
-    await tryPrintComanda(orderId);
+    await tryPrintComanda(orderId, openDrawer);
+  } else if (openDrawer) {
+    await tryOpenCashDrawer();
   }
 
   revalidatePath("/");

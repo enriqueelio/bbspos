@@ -117,6 +117,7 @@ export async function printText(
   settings: PrinterSettings,
   text: string,
   job?: PrintJobMeta,
+  openDrawer = false,
 ): Promise<void> {
   if (settings.driver === "virtual-png") {
     await printVirtualPng(settings, text, job);
@@ -211,7 +212,7 @@ export async function printText(
     "    $dci.pDocName = 'corte'; $dci.pDatatype = 'RAW'",
     "    [TicketRawCut]::StartDocPrinter($hCut, 1, [ref]$dci) | Out-Null",
     "    [TicketRawCut]::StartPagePrinter($hCut) | Out-Null",
-    "    $cut = [byte[]](0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00)",
+    "    $cut = [byte[]](" + (openDrawer ? "0x1B, 0x70, 0x00, 0x19, 0xFA, " : "") + "0x1B, 0x64, 0x03, 0x1D, 0x56, 0x42, 0x00)",
     "    $pCut = [Runtime.InteropServices.Marshal]::AllocHGlobal($cut.Length)",
     "    [Runtime.InteropServices.Marshal]::Copy($cut, 0, $pCut, $cut.Length)",
     "    $nCut = 0",

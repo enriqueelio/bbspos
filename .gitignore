@@ -23,6 +23,10 @@ apps/store/printing.json
 # salida de la impresora térmica virtual PNG
 tickets-output/
 
+# bytecode Python generado al ejecutar scripts de los skills
+__pycache__/
+*.pyc
+
 # artefactos PWA generados por next-pwa en cada build (no versionar)
 apps/store/public/sw.js
 apps/store/public/workbox-*.js

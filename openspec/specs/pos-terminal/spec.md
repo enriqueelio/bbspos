@@ -221,17 +221,22 @@ El terminal SHALL proporcionar feedback visual en interacciones táctiles: boton
 
 ### Requirement: Sección Carta en la terminal
 
-El terminal SHALL mostrar una sección "Carta" además de la de Almuerzos, con una fila de pestañas por categoría de la carta (ej: SANDWICH, PIQUEO, MILANESA, POSTRE) y una cuadrícula de los platos disponibles de la categoría seleccionada. Cada plato SHALL mostrar su nombre, descripción y precio. Las categorías sin platos disponibles SHALL estar deshabilitadas.
+El terminal SHALL mostrar una sección "Carta" además de la de Almuerzos, con una barra de categorías entregada por el catálogo (categorías activas y visibles en barra, ordenadas como las haya ordenado el admin, sin valores fijos hardcodeados como SANDWICH, PIQUEO, MILANESA o POSTRE) y una cuadrícula de los platos disponibles de la categoría seleccionada. Cada tarjeta o pestaña de categoría SHALL mostrar su ícono y, cuando esté disponible, su color e imagen de la configuración de la categoría. Cada plato SHALL mostrar su nombre, descripción y precio. Las categorías sin platos disponibles SHALL estar deshabilitadas.
 
 #### Scenario: Tocar una categoría de la carta
 
-- **WHEN** el usuario toca una pestaña de categoría de la carta
+- **WHEN** el usuario toca una tarjeta o pestaña de categoría de la carta
 - **THEN** la categoría se resalta y la cuadrícula muestra los platos de la carta de esa categoría
+
+#### Scenario: La barra de categorías refleja el orden del admin
+
+- **WHEN** el admin cambia el orden o la visibilidad de las categorías de la carta
+- **THEN** la sección Carta del terminal muestra las categorías activas en ese mismo orden, sin las inactivas y sin duplicados
 
 #### Scenario: Categoría sin platos
 
 - **WHEN** una categoría de la carta no tiene platos disponibles
-- **THEN** la pestaña de categoría está deshabilitada con opacidad reducida
+- **THEN** la tarjeta o pestaña de categoría está deshabilitada con opacidad reducida
 
 #### Scenario: Plato de carta con variantes
 

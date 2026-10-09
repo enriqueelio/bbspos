@@ -8,7 +8,7 @@ Define el catálogo de platos del restaurante con una sección dedicada a "Almue
 
 ### Requirement: Gestión de platos con sección y precio fijo
 
-El sistema SHALL mantener un catálogo de platos, cada uno con nombre, sección/categoría (por defecto `ALMUERZO`), precio fijo en bolivianos, una descripción opcional, un conjunto opcional de variantes de precio y disponibilidad, y SHALL permitir al admin crear, editar, activar/desactivar y eliminar platos desde la gestión del menú. La gestión del menú del admin SHALL presentar los platos separados en dos bloques: **Almuerzos** (sección `ALMUERZO`, donde opera la bandera del Menú del Día) y **Platos a la carta** (secciones fijas distintas de `ALMUERZO`). El alta desde el bloque de almuerzos SHALL crear platos en la sección `ALMUERZO`; el alta desde el bloque de carta SHALL permitir elegir únicamente entre las secciones de la carta; la edición SHALL permitir mover un plato entre ambas secciones. Para un plato con variantes, cada variante SHALL tener su propio precio y el precio de exhibición del plato SHALL ser el menor de sus variantes.
+El sistema SHALL mantener un catálogo de platos, cada uno con nombre, sección/categoría (por defecto `ALMUERZO`), precio fijo en bolivianos, una descripción opcional, un conjunto opcional de variantes de precio y disponibilidad, y SHALL permitir al admin crear, editar, activar/desactivar y eliminar platos desde la gestión del menú. La gestión del menú del admin SHALL presentar los platos separados en dos bloques: **Almuerzos** (sección `ALMUERZO`, donde opera la bandera del Menú del Día) y **Platos a la carta** (las categorías activas de la carta, tomadas del catálogo de categorías administrable). El alta desde el bloque de almuerzos SHALL crear platos en la sección `ALMUERZO`; el alta desde el bloque de carta SHALL permitir elegir únicamente entre las categorías de la carta activas; la edición SHALL permitir mover un plato entre el bloque de almuerzos y cualquier categoría activa de la carta. Para un plato con variantes, cada variante SHALL tener su propio precio y el precio de exhibición del plato SHALL ser el menor de sus variantes. El sistema SHALL impedir asignar a un plato una categoría de la carta que esté desactivada o que no exista en el catálogo.
 
 #### Scenario: Admin crea un plato
 
@@ -42,8 +42,13 @@ El sistema SHALL mantener un catálogo de platos, cada uno con nombre, sección/
 
 #### Scenario: Admin mueve un plato de sección
 
-- **WHEN** el admin edita un plato y cambia su sección entre `ALMUERZO` y una sección de la carta
+- **WHEN** el admin edita un plato y cambia su sección entre `ALMUERZO` y una categoría activa de la carta
 - **THEN** el plato pasa a gestionarse en el bloque correspondiente y se ofrece según las reglas de su nueva sección
+
+#### Scenario: Categoría de carta desactivada no asignable
+
+- **WHEN** el admin intenta asignar un plato a una categoría de la carta desactivada o inexistente en el catálogo
+- **THEN** el sistema rechaza la asignación y el plato conserva su sección/`ALMUERZO` anterior
 
 ### Requirement: Menú del Día por jornada con auto-reset diario
 
@@ -71,7 +76,7 @@ El sistema SHALL mantener una bandera de Menú del Día por plato (`enMenuDelDia
 
 ### Requirement: Entrega de la carta fija a las terminales
 
-El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo público de la tienda— únicamente los platos disponibles de la carta (categorías distintas de `ALMUERZO`), cada uno con su nombre, descripción, categoría, precio (el menor de sus variantes si las tiene) y sus variantes; los platos de la carta no dependen de la bandera de Menú del Día y SHALL permanecer disponibles todas las jornadas.
+El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo público de la tienda— únicamente los platos disponibles de la carta (aquellos cuya categoría está activa en el catálogo de categorías y es distinta de `ALMUERZO`), cada uno con su nombre, descripción, categoría, precio (el menor de sus variantes si las tiene) y sus variantes; los platos de la carta no dependen de la bandera de Menú del Día y SHALL permanecer disponibles todas las jornadas mientras su categoría permanezca activa. Al desactivar una categoría de la carta, sus platos SHALL dejar de entregarse a las terminales y dejar de consultarse, sin eliminarse del catálogo.
 
 #### Scenario: La terminal muestra la carta
 
@@ -87,6 +92,11 @@ El sistema SHALL entregar a las terminales de mesero y cajero —y al catálogo 
 
 - **WHEN** el admin marca como no disponible un plato de la carta
 - **THEN** el plato deja de aparecer en la sección de Carta de las terminales
+
+#### Scenario: Categoría de carta desactivada
+
+- **WHEN** el admin desactiva una categoría de la carta con platos
+- **THEN** esos platos dejan de entregarse a las terminales y al catálogo público hasta que la categoría vuelva a activarse
 
 ### Requirement: Entrega del Menú del Día a las terminales
 

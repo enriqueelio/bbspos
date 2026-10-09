@@ -27,18 +27,18 @@
 - [x] 4.2 Reemplazar en `pos-terminal.tsx` `MENU_PANE_ORDER`, `PANE_LABEL_SHORT`, `PANE_TITLE` y la fusión virtual SANDWICH+PANINI por las `catalog.categories`; mantener la lógica `isBubas` y el pane de Menú del Día; verificar que la barra idle muestra las 5 columnas con el orden y labels del seed
 - [x] 4.3 Resolver ícono/color en `pos-category-bar.tsx` desde `iconName`/`color` con un mapa whitelist `Record<string, LucideIcon>` y el color como `style={{ color }}` (o tintes existentes); verificar que cada tarjeta muestra su ícono y tinte correctos sin imagen
 - [x] 4.4 Adaptar el mesero (tabs de texto) para iterar `catalog.categories` activas en vez de `MenuCategoryList`; verificar que el mesero muestra la misma lista ordenada sin cambiar su comportamiento
-- [ ] 4.5 Verificar integración en el navegador (punta a punta, cajero puerto 3002 y mesero 3003): estado inicial 5 columnas, apertura/volver de categoría, tarjeta con imagen, categoría desactivada ausente y sin cuentas de teclado; usar `corepack pnpm --filter @bbspos/cajero typecheck && lint`
+- [x] 4.5 Verificar integración en el navegador (punta a punta, cajero puerto 3002 y mesero 3003): estado inicial 5 columnas, apertura/volver de categoría, tarjeta con imagen, categoría desactivada ausente y sin cuentas de teclado; usar `corepack pnpm --filter @bbspos/cajero typecheck && lint`
 
 ## 5. Reportes
 
 - [x] 5.1 En `print-report.ts` (CATEGORY_ORDER:168) y `api/reports/daily/route.ts` (CATEGORY_ORDER:25) sustituir el array hardcodeado por `category.findMany({ orderBy: { order: "asc" } })` y usar `Category.name` para la etiqueta del desglose; verificar que el cierre diario lista las categorías en el orden de la BD
 - [x] 5.2 Aplicar el mapa de legado `{ SANDWICH: "SANDWICHES", PANINI: "SANDWICHES" }` al agrupar `menuItemCategory` en reportes diarios y de ventas por categoría; verificar con una consulta sobre tickets históricos pre-consolidación que se agrupan bajo "Sandwiches"
-- [ ] 5.3 Verificar los escenarios de la spec reports (desglose de carta, desglose sin mezclar bebidas/platillos, categoría desactivada con ventas en el periodo) ejecutando el endpoint con un dataset de prueba en dev.db
+- [x] 5.3 Verificar los escenarios de la spec reports (desglose de carta, desglose sin mezclar bebidas/platillos, categoría desactivada con ventas en el periodo) ejecutando el endpoint con un dataset de prueba en dev.db
 
 ## 6. Limpieza y verificación final
 
 - [x] 6.1 Buscar referencias residuales a `MenuCategory`, `MenuCategoryLabel`, `MenuCategoryList`, `CATEGORY_PANES` y `categoryImages` en todo el monorepo (grep) y eliminarlas o reemplazarlas por `Category`; verificar que no quedan usos
 - [x] 6.2 Ejecutar `pnpm -r typecheck` y `pnpm -r lint` sobre el monorepo y corregir errores y warnings relevantes (preexistente: `Topping` sin usar en pos-terminal.tsx:23)
 - [x] 6.3 Probar la migración sobre dev.db (backup previo): `migrate deploy`, `prisma generate` y `pnpm --filter @bbspos/db verify:cuenta` (invariantes del modelo) y `verify:customer-account` si aplica; verificar que la BD queda operativa
-- [ ] 6.4 Prueba funcional completa: abrir localhost:3001 (admin) → reordenar/crear/desactivar categorías; localhost:3002 (cajero) → barra e imagen/iconos; localhost:3003 (mesero) → tabs; reporte diario con ventas del día
-- [ ] 6.5 Commit del cambio (migración + seed + código + types; `dev.db` versionada como se venía haciendo) y push a master, con mensaje conventional en español siguiendo el estilo del repo
+- [x] 6.4 Prueba funcional completa: abrir localhost:3001 (admin) → reordenar/crear/desactivar categorías; localhost:3002 (cajero) → barra e imagen/iconos; localhost:3003 (mesero) → tabs; reporte diario con ventas del día
+- [x] 6.5 Commit del cambio (migración + seed + código + types; `dev.db` versionada como se venía haciendo) y push a master, con mensaje conventional en español siguiendo el estilo del repo

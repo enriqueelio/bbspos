@@ -30,16 +30,21 @@ type ToppingsRow = {
 // Desglose por categoría (COUNT DISTINCT de órdenes, unidades e ingresos por
 // producto) delegado por completo a SQLite. Las bebidas se agrupan por
 // flavorCategory; los platillos (carta y Menú del Día) por menuItemCategory.
+// Las claves históricas consolidadas (SANDWICH/PANINI → SANDWICHES) se
+// normalizan aquí para que la agrupación y el COUNT(DISTINCT) sean correctos.
+const NORMALIZED_MENU_CATEGORY = `CASE WHEN oi."menuItemCategory" IN ('SANDWICH', 'PANINI')
+              THEN 'SANDWICHES' ELSE oi."menuItemCategory" END`;
+
 const CATEGORY_SQL = `
   SELECT oi."flavorCategory" AS flavorCategory,
-         oi."menuItemCategory" AS menuItemCategory,
+         ${NORMALIZED_MENU_CATEGORY} AS menuItemCategory,
          COUNT(DISTINCT oi."orderId") AS orders,
          COALESCE(SUM(oi."quantity"), 0) AS units,
          COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
   FROM "OrderItem" oi
   JOIN "Order" o ON o.id = oi."orderId"
   WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
-  GROUP BY oi."flavorCategory", oi."menuItemCategory"
+  GROUP BY oi."flavorCategory", ${NORMALIZED_MENU_CATEGORY}
 `;
 
 // Ingreso por toppings (cada topping multiplicado por la cantidad del ítem).

@@ -19,6 +19,7 @@
     "verify:lunch-holds": "tsx scripts/verify-lunch-holds.ts",
     "verify:cuenta": "tsx scripts/verify-cuenta-solo-pensionados.ts",
     "verify:customer-account": "tsx scripts/verify-migration.ts",
+    "verify:daily-report-categories": "tsx scripts/verify-daily-report-categories.ts",
     "fix:accepted-at": "tsx scripts/fix-inverted-accepted-at.ts",
     "fix:postpago-loyalty": "tsx scripts/fix-postpago-loyalty.ts",
     "icons:assign": "tsx scripts/assign-user-icons.ts",

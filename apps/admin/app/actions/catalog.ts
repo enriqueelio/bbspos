@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma, setMenuDelDiaForToday } from "@bbspos/db";
-import { Role, type FlavorCategory, type MenuCategory } from "@bbspos/types";
+import { Role, type CategoryKey, type FlavorCategory } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 async function requireAdminSession() {
@@ -240,7 +240,7 @@ export async function saveDrinkPrices(input: {
 
 export async function createMenuItem(input: {
   name: string;
-  category: MenuCategory;
+  category: CategoryKey;
   price: number;
   description?: string | null;
   options?: { name: string; price: number }[];
@@ -281,7 +281,7 @@ export async function updateMenuItem(
   id: string,
   input: {
     name: string;
-    category: MenuCategory;
+    category: CategoryKey;
     price: number;
     available: boolean;
     description?: string | null;

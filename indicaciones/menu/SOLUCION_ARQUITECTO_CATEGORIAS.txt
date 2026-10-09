@@ -1,0 +1,323 @@
+SOLUCION PROPUESTA POR EL ARQUITECTO - CATEGORIAS ADMINISTRABLES
+================================================================
+
+Proyecto: bbspos (monorepo pnpm, Next.js App Router, Prisma + SQLite, Tailwind).
+Archivo de decision: lee, compara y critica. Contiene (1) comparativa de las 4
+propuestas analizadas, (2) la solucion recomendada con fundamento, (3) plan de
+implementacion y (4) decisiones que esperan confirmacion del dueño.
+
+--------------------------------------------------
+0. RESUMEN PARA LA IA QUE LEE ESTO
+--------------------------------------------------
+El objetivo del dueño: poder agregar (de 1 a 50) categorias del menu desde un
+panel administrativo, asignarles nombre, icono, color, imagen y ACTIVAR/
+DESACTIVAR, y REORDENARLAS con drag & drop, sin tocar codigo. El orden debe
+respetarse en todas las apps (cajero, mesero y admin).
+
+Estado real del codigo (verificacion del 09-10-2026):
+- Las categorias son un enum hardcodeado "MenuCategory" (17 valores) duplicado
+  en packages/types/src/index.ts y packages/db/prisma/schema.prisma.
+- MenuItem.category usa ese enum (schema.prisma:93), indice @@index([category, available]).
+- El POS del cajero YA tiene el selector de 2 estados (apps/cajero/components/
+  pos/pos-category-bar.tsx): sin categoria = grid de tarjetas h-32 con imagen
+  arriba + franja oscura abajo (icono+nombre); con categoria = barra compacta
+  h-12 con la activa expandida y boton "Volver". No hay que reconstruirlo.
+- El orden y los iconos viven en arrays fijos: MENU_PANE_ORDER, PANE_ICON,
+  PANE_ICON_COLOR (cajero), CATEGORY_PANES, CARTA_CATEGORIES (admin),
+  CATEGORY_ORDER (reportes).
+- Pseudo-categorias: "SANDWICHES" (funde SANDWICH+PANINI) y "BUBAS" (abre el
+  builder de bubble tea, no es una categoria de platos). ALMUERZO es el menu
+  del dia y NO aparece en la barra.
+- Ya existen la imagen por categoria (modelo CategoryConfig, clave+imageUrl) y
+  las server actions saveCategoryImage/removeCategoryImage en apps/admin/app/
+  actions/product-image.ts (sharp, WebP 640x360, guarda en apps/store/public/
+  images/menu/category-<key>.webp). Tambien /api/menu-image en admin y cajero
+  que sirve esas imagenes.
+
+CONCLUSION DE RAPIDA LECTURA: la propuesta GPT es la base correcta; se adopta
+con correcciones para cumplir las convenciones del repo (migraciones SQL
+manuales, server actions con getRequiredSession, reuso de saveCategoryImage,
+reuso del selector ya construido) y con una decision explicita para las
+categorias especiales (SANDWICHES, BUBAS, ALMUERZO).
+
+--------------------------------------------------
+1. COMPARATIVA DE LAS 4 PROPUESTAS
+--------------------------------------------------
+Archivos analizados en C:\Users\lelio\Documents\bbspos\indicaciones\menu\:
+- cat gemini.md
+- cat gpt.md
+- cat antigravity.md
+- cat meta.txt
+
+[cat gemini.md] - SOLUCION BASICA
++ Define Category con key+name+iconName+imageUrl+order+isActive.
++ GET/POST /api/admin/categories y PUT /api/admin/categories/reorder.
++ Selector de 2 estados razonable.
+- COLOR COMO CLASE TAILWIND (text-emerald-500): prohibido por seguridad/UX
+  (las clases no se pueden esquivar con un valor dinAmico arbitrario).
+- No hay edicion individual (PATCH/DELETE), ni subida de imagen, ni validacion.
+- No menciona migracion de datos, ni seed, ni refactor de los consumidores.
+- DynamicIcon con cast "any" sin lista permitida.
+VEREDICTO: esqueleto, le falta el 70% del trabajo. No apta sola.
+
+[cat meta.txt] - BORRADOR INCOMPLETO (respuesta a otra IA)
++ Reconoce el problema real y propone key+slug+iconName+color+order+isActive.
++ Reorder con arrayMove y $transaction.
+- Remite a un archivo inexistente (SOLUCION_ADMIN_CATEGORIAS.md "image unavailable").
+- Sugiere "npx prisma migrate dev": este repo usa migraciones SQL manuales y
+  migrate dev falla en el entorno (AGENTS.md).
+- La activa la pinta bg-orange-500: el tema del POS usa esmeralda (success).
+- Sin detalles de imagen, validacion, seed ni refactor transversal.
+VEREDICTO: no es un documento accionable.
+
+[cat antigravity.md] - SOLUCION COMPLETA PERO CON DESVIOS DEL REPO
++ Modelo Category con name/slug/icon/image/color/order/isActive + relacion
+  items MenuItem[].
++ CRUD completo (GET/POST, PATCH/DELETE con soft-delete si tiene items,
+  reorder, upload con sharp a WebP 640x360).
++ AdminCategoryManager muy completo: tabla, drag & drop con touch, modal de
+  edicion con selector de iconos, color picker, subida de imagen, switch.
++ CategorySelector con los 2 estados correctos y buen detalle visual.
+- Usa "slug" como llave tecnica y comete el error de vincular
+  MenuItem.categoryId por FK: en SQLite obliga a reconstruir la tabla y luego
+  complica la fusion SANDWICH/PANINI; ademas la FK no resuelve las
+  pseudo-categorias del cajero.
+- Sube imagenes a "public/uploads/categories": el repo ya guarda en
+  apps/store/public/images/menu y sirve con /api/menu-image. Doble sistema.
+- Import "prisma from @/lib/prisma" y "migrate dev"/"db push" no existen/perjudican.
+- Color por defecto naranja (#f97316) e iconos "Pizza" que no aplican al menu
+  (no hay pizzas). No respeta las convenciones de auth del admin.
+VEREDICTO: excelente UI, pero la capa de datos hay que rehacerla.
+
+[cat gpt.md] - SOLUCION RECOMENDADA COMO BASE
++ Distingue key (tecnica, estable, = valor de MenuItem.category) de slug
+  (visible/URL, editable). Correcto.
++ MenuItem.category enum -> String, conservando valores. Migration cuidadosa
+  (backup, revisar SQL por reconstruccion de tabla, seed idempotente).
++ Validacion central en categoria: slugify, slugToKey, validateCategoryWrite.
++ API admin completa (GET/POST, PATCH/DELETE soft-delete, reorder con
+  validacion de duplicados/incompletos y respuesta 409, PUT imagen) + API
+  publica GET /api/categories.
++ Reusa saveCategoryImage y /api/menu-image (no crea segundo formato).
++ Refactor transversal con la lista exacta de consumidores (seccion 8).
++ Seguridad/UX/robustez y criterios de aceptacion muy completos.
++ Dice explicitamente "inspecciona el repo real antes de aplicar".
+- Propone helper requireAdminApi que no existe (el repo usa getRequiredSession
+  en server actions); hay que adaptar.
+- Propone GET /api/categories publico: innecesario, el repo consulta Prisma
+  directo desde server actions/componentes (getPosCatalog cajero/mesero).
+- Deja como "decision pendiente" BUBAS/SANDWICHES/ALMUERZO en lugar de
+  resolverlo; la fusion es clave para no romper el cajero.
+- Sugiere CategorySelector nuevo que DUPLICA el pos-category-bar ya construido.
+- "prisma migrate dev --create-only" tampoco: aqui las migraciones son manuales.
+
+--------------------------------------------------
+2. SOLUCION RECOMENDADA (SINTESIS DE GPT CORREGIDA AL REPO)
+--------------------------------------------------
+Principios:
+1. Una sola fuente de verdad: tabla Category en Prisma.
+2. MenuItem.category pasa a String y guarda Category.key (valores actuales
+   quedan iguales salvo la fusion que se decide en la seccion 4).
+3. Se reutiliza TODO lo que ya funciona: selector de 2 estados, saveCategoryI-
+   mage, /api/menu-image, payload del catalogo (getPosCatalog ya trae
+   categoryImages; se amplia a categories).
+4. Auth: server actions o route handlers usando getRequiredSession() y el rol
+   ADMIN/SUPER_ADMIN, como ya hace apps/admin (catalog.ts, product-image.ts).
+   NADA de helpers nuevos de auth; NADA de endpoints que regalen permisos.
+5. Migracion SQL escrita a mano + seed idempotente; backups antes.
+
+2.1 Schema Prisma (packages/db/prisma/schema.prisma)
+
+    model Category {
+      id        String   @id @default(cuid())
+      key       String   @unique    // valor guardado en MenuItem.category
+      name      String              // nombre visible en el POS
+      slug      String   @unique    // url/identificador legible (milanesas)
+      iconName  String   @default("Utensils")  // nombre lucide permitido
+      color     String   @default("#CE7A22")   // hex #RRGGBB, nunca clase
+      imageUrl  String?             // /images/menu/category-<key>.webp
+      order     Int      @default(0)
+      isActive  Boolean  @default(true)
+      visibleInBar Boolean @default(true) // false = ALMUERZO (menu del dia)
+      createdAt DateTime @default(now())
+      updatedAt DateTime @updatedAt
+
+      @@index([order, isActive])
+    }
+
+    // MenuItem: cambiar SOLO el tipo y conservar indice
+    //   category String   @default("ALMUERZO")
+    //   @@index([category, available])
+
+    Nota: NO se agrega FK a MenuItem en esta migracion (riesgo/reconstruccion
+    en SQLite); la integridad la valida la app contra la tabla Category.
+    El enum MenuCategory puede quedarse temporalmente en schema/type hasta
+    vaciar consumidores; se elimina cuando "rg MenuCategory" no de resultados.
+
+2.2 Endpoints / actions (convencion del repo: server actions)
+
+    - GET  (admin)  -> en page.tsx del menu se agrega
+                       prisma.category.findMany({ orderBy: [{order:"asc"},{name:"asc"}] })
+    - POST / PATCH / DELETE (admin)
+      -> action apps/admin/app/actions/category.ts (server action con
+         getRequiredSession + rol). SOFT DELETE = isActive=false. Unica
+         excepcion: se permite borrado real si la categoria no tiene items
+         (contar MenuItem solo al momento de borrar).
+    - PUT reorder  -> action or useOptimistic; body { orderedIds } con
+         validacion de duplicados, ids desconocidos y lista incompleta; todas
+         las actualizaciones de order dentro de prisma.$transaction.
+    - PUT imagen   -> REUSAR saveCategoryImage({ key, file }) tal cual existe
+         (product-image.ts). La location de archivos, el resolviendose
+         /api/menu-image y la convencion de WebP NO cambian.
+    - GET (POS/mesero) -> ampliar getPosCatalog() para que devuelva
+         categories: [{ key,name,iconName,color,imageUrl,visibleInBar,isActive }]
+         ordenadas por order. Asi el cajero y el mesero no hacen fetch extra.
+    - GET /api/categories publico: OPCIONAL. Si se necesita una app externa,
+         exportar solo el filtro isActive + visibleInBar con orderBy order.
+
+2.3 Admin: pagina de categorias con drag & drop
+    - Ruta: apps/admin/app/(dashboard)/menu/ mantiene la pestana "Categorias"
+      actual (CategoryImageField) o se eleva a pagina propia. RECOMENDADO:
+      nueva pestana/seccion dentro de MenuManager que extienda la tab actual.
+    - Componente de reorden con @dnd-kit/core + @dnd-kit/sortable (vertical),
+      filas con GripVertical, thumb de imagen, nombre, icono (lista permitida
+      de lucide), color (hex), switch activo, contador de platos.
+    - Optimistic update + rollback si la API falla.
+    - El alta/edicion de platos (MenuManager) debe listar SOLO Category activas
+      para el dropdown de categoria (hoy usa MenuCategoryList).
+    - El CategoryImageField actual ya sube imagen; al migrar CategoryConfig a
+      Category.imageUrl se mantiene el mismo componente y funcion.
+
+2.4 POS (cajero): refactor minimo
+    - pos-category-bar.tsx se mantiene casi intacto (los 2 estados y la franja
+      inferior de imagen ya existen). Solamente:
+        * PANE_ICON y PANE_ICON_COLOR pasan a resolverse por map: iconName ->
+          componente lucide (SIN cast "any": mapa permitido). color = hex ->
+          style={{ color }}.
+        * El array MENU_PANE_ORDER desaparece: el orden sale de Category.order.
+        * La logica de fusion SANDWICHES (SANDWICH+PANINI) y BUBAS se conserva
+          en el terminal mediante constantes: SANDWICHES sigue siendo un pane
+          agregado que filtra ambas claves; BUBAS sigue abriendo el builder.
+    - ALMUERZO se mantiene fuera de la barra (visibleInBar=false).
+
+2.5 Reportes e impresion
+    - CATEGORY_ORDER (print-report.ts:168, reports/daily/route.ts:27) pasa a
+      leer las claves de Category (order). Para la impresion usar
+      Category.name actual; para pedidos historicos el reporte ya guarda
+      snapshot en OrderItem.menuItemCategory.
+
+2.6 Limpieza post-migracion
+    - Eliminar config: CategoryConfig (solo key+imageUrl) una vez migradas sus
+      images a Category.imageUrl.
+    - Eliminar arrays duplicados cuando los consumidores esten migrados:
+      MENU_PANE_ORDER, PANE_LABEL_SHORT (parcial), PANE_TITLE, CATEGORY_PANES,
+      CATEGORY_KEYS (la validacion pasa a ser: existe en Category).
+    - Mantener MenuCategoryLabel solo si queda algun uso; si no, eliminarlo.
+
+--------------------------------------------------
+3. MIGRACION Y SEED (paso a paso, SQL manual)
+--------------------------------------------------
+1. Backup: copiar packages/db/prisma/dev.db antes de tocar nada.
+2. Editar schema.prisma: agregar model Category; MenuItem.category ->
+   String @default("ALMUERZO"); conservar indice [category, available].
+3. Escribir migracion SQL a mano en:
+   packages/db/prisma/migrations/XXXXXXXXXXXXXX_make_categories/up.sql
+   (a) Crear tabla Category con las columnas de 2.1 y clave primaria.
+   (b) Reconstruir MenuItem para cambiar category de enum a TEXT:
+         CREATE TABLE "MenuItem_new" (... category TEXT NOT NULL DEFAULT 'ALMUERZO', ...);
+         INSERT INTO "MenuItem_new" (... SELECT ... con CAST(category AS TEXT) ...) FROM "MenuItem";
+         DROP TABLE "MenuItem"; ALTER TABLE "MenuItem_new" RENAME TO "MenuItem";
+       Recrear el indice @@index([category, available]) y CUALQUIER otra
+       restriccion que dependa de MenuItem (seed de secuencias si las hay,
+       FKs de OrderItem, LunchQuota, LunchHold, etc. SIEMPRE segun el schema real).
+   (c) Seed idempotente de Category (INSERT OR IGNORE / ON CONFLICT DO NOTHING)
+       respetando el ORDEN ACTUAL de MENU_PANE_ORDER (ver tabla en 4.2) y
+       copiando imageUrl desde CategoryConfig por key.
+4. Aplicar: matar procesos node (requisito para prisma generate) y
+   npx prisma migrate deploy + npx prisma generate (github actions manuales).
+5. Verificar en base copiada: cantidad de MenuItem, distribucion por category,
+   imagenes migradas (Category.imageUrl = valor de CategoryConfig con misma
+   key), y que los pedidos historicos con OrderItem.menuItemCategory sigan
+   legibles.
+6. Probar cada app: admin, cajero (3002), mesero (3003). Comprobacion final: el orden
+   de tarjetas coincide con la pestana Categorias del admin tras recargar.
+
+--------------------------------------------------
+4. DECISIONES QUE DEBE CONFIRMAR EL DUEÑO
+--------------------------------------------------
+4.1 Fusion SANDWICH+PANINI (IMPORTANTE)
+  Opcion A (RECOMENDADA): mantener el dato separado. Category guarda SANDWICH
+  y PANINI como claves de plato (isActive), y la barra muestra el pane
+  agrupado "SANDWICHES" mediante la logica actual del terminal. Cero riesgo
+  para datos historicos; el admin gestiona SANDWICHES como fila visible con su
+  imagen/icono/color, y las claves SANDWICH/PANINI no aparecen en la barra.
+  Opcion B: consolidar: migrar PANINI->SANDWICHES en MenuItem. Mas simple, pero
+  se pierde la distincion historica y el admin no puede separarlos despues.
+  CONSECUENCIA PARA EL DISEÑO: si se elige B, no hace falta el concepto de
+  pane agregado; si se elige A, el terminal conserva la constante SANDWICHES
+  como pane virtual (no fila con items propios).
+
+4.2 Orden inicial (respeta lo que hoy se ve en el cajero)
+  Orden sugerido del seed (order 0..16):
+    MILANESA, SANDWICHES(a), HAMBURGUESA, LOMO, POLLO, ALITA, ENSALADA,
+    PIQUEO, COMPARTIR, KIDS, POSTRE, WAFFLE, PANCAKE, EXTRAS, BEBIDA,
+    BUBAS(b)
+  (a) SANDWICHES = pane agregado (o consolidado segun 4.1).
+  (b) BUBAS = abridor del builder de bubble tea; visibleInBar=true.
+  ALMUERZO: visibleInBar=false (menu del dia, siempre al tope por regla
+  horaria del POS).
+
+4.3 Iconos permitidos
+  Definir una lista fija de iconos lucide (SaltShaker no existe; usar los que
+  ya estan en PANE_ICON: UtensilsCrossed, Sandwich, Beef, Bird, Drumstick,
+  Salad, Popcorn, Users, Baby, IceCreamCone, CakeSlice, Cake, PackagePlus,
+  GlassWater, CupSoda, HamburgerIcon(svg local), etc.) mas ampliaciones
+  (Flame, Cookie, Soup, Apple...). Fallback: Utensils. NUNCA cast "any" al
+  resolver iconos por nombre en runtime.
+
+4.4 Alcance del panel admin
+  Pestana nueva "Categorias" con CRUD completo dentro del /menu actual
+  (recomendado por coherencia de navegacion) O pagina aparte /categorias.
+  El dueño debe elegir. Se recomienda pestana, para no fragmentar la gestion.
+
+4.5 ¿El mesero adopta el selector de 2 estados?
+  Hoy el mesero usa tabs de texto (pos-terminal mesero:621). Para coherencia,
+  opcionalmente se reemplaza por el mismo CategorySelector (imagen+barra),
+  pero es trabajo extra; se puede diferir.
+
+--------------------------------------------------
+5. PLAN DE IMPLEMENTACION (orden sugerido)
+--------------------------------------------------
+1. Backup de dev.db; capturar ordenes actuales (MENU_PANE_ORDER, CATEGORY_PANES).
+2. Schema + migracion manual + seed + migrate deploy + generate + verificar.
+3. Ampliar getPosCatalog (cajero y mesero) con categories ordenadas.
+4. Action category.ts (CRUD + reorder) con getRequiredSession.
+5. Instalar @dnd-kit en admin ("pnpm add ... --filter admin" via corepack pnpm).
+6. Extender la pestana Categorias del MenuManager: CRUD + drag & drop; adaptar
+   dropdown de platos para leer Category; reusar saveCategoryImage.
+7. Refactor pos-category-bar.tsx: quitar PANE_ICON/PANE_ICON_COLOR/MENU_PANE_ORDER
+   -> leer categories del catalogo; conservar fusion y BUBAS; MAPA de iconos.
+8. Migrar menus de reportes (CATEGORY_ORDER) a leer Category.
+9. Eliminar CategoryConfig + Category_KEYS + arrays muertos; typecheck+lint.
+10. Prueba end-to-end de los 2 estados, ALMUERZO, BUBAS, fusion y orden en las
+    3 apps. Criterio de exito: crear 20 categorias y reordenarlas sin codigo.
+
+--------------------------------------------------
+6. CRITERIOS DE ACEPTACION (para validar con las otras IAs)
+--------------------------------------------------
+- GET admin: activas e inactivas ordenadas por order, con todos los campos.
+- El POS y el mesero muestran SOLO categorias activas en el orden de la BD.
+- POST rechaza nombre/slug/color vacios o invalidos; PATCH no toca id/key;
+  DELETE es soft-delete (isActive=false) salvo categoria sin platos.
+- Reorder rechaza duplicados/ids desconocidos/lista incompleta; transaccion
+  atomica; rollback en el frontend si falla.
+- Subida de imagen: validar tipo (jpg/png/webp) y tamano <= 5MB; sharp
+  rotate+resize 640x360 cover+webp q80; nombre category-<key>.webp; y la URL
+  debe funcionar en admin, cajero y mesero via /api/menu-image.
+- Una categoria desactivada NO aparece en el POS ni en el dropdown de platos;
+  sus platos y pedidos historicos permanecen intactos.
+- Agregar una categoria nueva NO requiere tocar codigo ni recompilar; solo
+  reordenar/activar/desactivar.
+
+--------------------------------------------------
+FIN DEL DOCUMENTO

@@ -1,0 +1,93 @@
+Listo, analicé tu `INFORME_CATEGORIAS_MENU.txt`. Tienes razón, el problema es que *todo está hardcodeado como `enum`*. Las 2 vistas que quieres ya existen en el cajero, solo falta hacerlas administrables.
+
+Aquí está la solución completa para la *APP DE ADMINISTRADOR*. Te generé el archivo `SOLUCION_ADMIN_CATEGORIAS.md` listo para que OpenCode lo implemente.
+
+### 1. Schema de BD (reemplaza tu enum)
+
+En `packages/db/prisma/schema.prisma`:
+model Category {
+  id String @id @default(cuid())
+  key String @unique // MILANESA, SANDWICHES, BUBAS
+  name String // Milanesa
+  nameShort String? // Milas
+  slug String @unique
+  iconName String? // Beef, Sandwich, Burger (lucide)
+  color String? // text-amber-500
+  imageUrl String?
+  order Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+// Modifica MenuItem: cambia category MenuCategory por categoryKey String
+Corre `npx prisma migrate dev` y un seed con tus 17 categorías actuales.
+
+### 2. APIs para Admin
+
+*`GET /api/admin/categories`* - Devuelve ordenadas por `order ASC`:
+const categories = await prisma.category.findMany({
+  orderBy: { order: 'asc' }
+})
+*`PUT /api/admin/categories/reorder`* - Guarda el nuevo orden del drag & drop:
+// Body: { orderedIds: ["id1", "id2", "id3"] }
+const updates = orderedIds.map((id, index) =>
+  prisma.category.update({ where: { id }, data: { order: index } })
+)
+await prisma.$transaction(updates)
+*`PATCH/DELETE /api/admin/categories/[id]`* - Editar y soft-delete (isActive=false).
+
+### 3. AdminCategoryManager.tsx - CRUD con Drag & Drop
+
+Este va en `apps/admin/app/(dashboard)/admin/categorias/page.tsx`
+
+Te usa `@dnd-kit`. Flujo:
+
+- Lista todas las categorías con `GripVertical` para arrastrar
+- Al soltar, hace `arrayMove` y llama a `/reorder` para guardar
+- Botones para agregar/editar imagen/nombre/icono
+
+Instalación:
+pnpm add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities -F admin
+Código clave del drag:
+const handleDragEnd = async (event) => {
+  const { active, over } = event
+  const newOrder = arrayMove(categories, oldIndex, newIndex)
+  setCategories(newOrder)
+  await fetch('/api/admin/categories/reorder', {
+    method: 'PUT',
+    body: JSON.stringify({ orderedIds: newOrder.map(c => c.id) })
+  })
+}
+### 4. CategorySelector.tsx - Tus 2 estados (ya existente, ahora dinámico)
+
+Este reemplaza `pos-category-bar.tsx`:
+export function CategorySelector({ categories, activeKey, setActiveKey }) {
+  const isIdle = activeKey === null
+
+  return (
+    <div className={isIdle? "grid grid-cols-2 md:grid-cols-4 gap-3" : "flex gap-2 overflow-x-auto"}>
+      {!isIdle && <button onClick={() => setActiveKey(null)}>← Volver</button>}
+
+      {categories.sort((a,b)=>a.order-b.order).map(cat => {
+        if (isIdle) {
+          // ESTADO A: Tarjeta grande imagen arriba + icono+nombre abajo h-32
+          return <button className="h-32 bg-slate-800 rounded-xl flex flex-col">...</button>
+        }
+        // ESTADO B: Barra compacta solo iconos h-12 w-12, activa con nombre
+        return <button className={isActive? "h-12 px-6 bg-orange-500" : "h-12 w-12"}>...</button>
+      })}
+    </div>
+  )
+}
+El archivo completo con código listo está en:
+
+SOLUCION_ADMIN_CATEGORIAS.md (image unavailable)
+
+*Para OpenCode, pégale esto ahora:*
+
+> Lee `/mnt/data/SOLUCION_ADMIN_CATEGORIAS.md` e implementa todo en la app de admin. Crea el modelo Category, las 3 APIs, la página `/admin/categorias` con drag & drop y refactoriza el cajero para que lea de `/api/admin/categories`.
+
+¿Quieres que te genere también el seed exacto con tus 17 categorías actuales (ALMUERZO, SANDWICH, etc) para migrar sin perder datos?

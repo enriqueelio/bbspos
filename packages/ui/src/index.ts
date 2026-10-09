@@ -18,3 +18,4 @@ export * from "./components/cart/cart-item";
 export * from "./components/cart/cart-summary";
 export { cn } from "./lib/utils";
 export * from "./components/user-icon";
+export * from "./icons/category-icons";

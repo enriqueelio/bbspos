@@ -5,7 +5,7 @@ import { mkdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
 import sharp from "sharp";
 import { prisma } from "@bbspos/db";
-import { Role, MenuCategory } from "@bbspos/types";
+import { Role } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 
 const MENU_IMAGES_DIR = join(
@@ -112,13 +112,16 @@ export async function removeProductImage(input: {
 
 // ===== Imágenes de categoría (tarjetas de la barra del POS del cajero) =====
 
-/** Claves válidas de CategoryConfig: los valores del enum del menú más las
- *  pseudo-categorías del cajero (BUBAS y SANDWICHES fusionado). */
-const CATEGORY_KEYS = new Set<string>([
-  ...Object.values(MenuCategory),
-  "BUBAS",
-  "SANDWICHES",
-]);
+/** Valida que la clave corresponda a una categoría registrada en el catálogo
+ *  (tabla Category) y devuelve su fila. Las categorías ya no son un enum: el
+ *  admin las crea desde el panel Categorías. */
+async function requireCategory(key: string) {
+  const category = await prisma.category.findUnique({ where: { key } });
+  if (!category) {
+    throw new Error("Categoría inválida.");
+  }
+  return category;
+}
 
 /** Guarda la imagen de fondo de una tarjeta de categoría del POS. Mismo
  *  tratamiento que la foto de producto: WebP optimizado en el directorio
@@ -131,9 +134,7 @@ export async function saveCategoryImage(input: {
   await requireAdminSession();
   const { key, file } = input;
 
-  if (!CATEGORY_KEYS.has(key)) {
-    throw new Error("Categoría inválida.");
-  }
+  await requireCategory(key);
   if (!file || file.size === 0) {
     throw new Error("No se recibió ninguna imagen.");
   }
@@ -159,10 +160,9 @@ export async function saveCategoryImage(input: {
   await writeFile(join(MENU_IMAGES_DIR, filename), optimized);
 
   const imageUrl = `/images/menu/${filename}`;
-  await prisma.categoryConfig.upsert({
+  await prisma.category.update({
     where: { key },
-    create: { key, imageUrl },
-    update: { imageUrl },
+    data: { imageUrl },
   });
   revalidatePath("/menu");
   return { imageUrl };
@@ -175,18 +175,13 @@ export async function removeCategoryImage(input: {
   await requireAdminSession();
   const { key } = input;
 
-  if (!CATEGORY_KEYS.has(key)) {
-    throw new Error("Categoría inválida.");
-  }
-
+  await requireCategory(key);
   await unlink(
     join(MENU_IMAGES_DIR, `category-${key.toLowerCase()}.webp`),
   ).catch(() => {});
-  // upsert por si nunca se guardó una imagen para esta categoría (no hay fila).
-  await prisma.categoryConfig.upsert({
+  await prisma.category.update({
     where: { key },
-    create: { key, imageUrl: null },
-    update: { imageUrl: null },
+    data: { imageUrl: null },
   });
   revalidatePath("/menu");
 }

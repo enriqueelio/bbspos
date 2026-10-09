@@ -2,8 +2,7 @@ import { prisma } from "@bbspos/db";
 import {
   FlavorCategoryLabel,
   FlavorCategoryList,
-  MenuCategoryLabel,
-  MenuCategoryList,
+  normalizeCategoryKey,
   type DailyReportData,
   type CategoryBreakdownRow,
 } from "@bbspos/types";
@@ -13,19 +12,6 @@ import { requireSession } from "@/lib/reports/guard";
 import { notCancelled } from "@/lib/reports/sales";
 import { buildCsv, csvResponse } from "@/lib/reports/csv";
 import { dayBounds, localDateKey } from "@/lib/reports/range";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ...FlavorCategoryLabel,
-  ...MenuCategoryLabel,
-};
-
-// Orden del desglose: categorías de bebidas y luego secciones de la carta
-// (las líneas de platillos llegan sin flavorCategory, se agrupan por
-// menuItemCategory).
-const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
-  ...FlavorCategoryList,
-  ...MenuCategoryList,
-];
 
 // Filas devueltas por las consultas SQL nativas (SQLite devuelve agregaciones
 // como números enteros grandes; se normalizan con Number()).
@@ -94,7 +80,7 @@ export async function GET(request: Request) {
     //  - anulaciones (order.count)
     //  - desglose por categoría e ingreso por toppings (SQL nativo)
     //  - desglose por método de pago (solo campos ligeros, sin items/toppings)
-    const [orderAgg, cancelledAgg, catRows, toppingsRows, payments] =
+    const [orderAgg, cancelledAgg, catRows, toppingsRows, payments, categories] =
       await Promise.all([
         prisma.order.aggregate({
           where: { createdAt: { gte, lt }, ...notCancelled },
@@ -115,7 +101,20 @@ export async function GET(request: Request) {
             total: true,
           },
         }),
+        prisma.category.findMany({ orderBy: { order: "asc" } }),
       ]);
+
+    // Orden del desglose: categorías de bebidas y luego las secciones de la
+    // carta tal como las administra el admin (tabla Category). Las líneas de
+    // platillos llegan sin flavorCategory, se agrupan por menuItemCategory.
+    const categoryOrder: string[] = [
+      ...FlavorCategoryList,
+      ...categories.map((c) => c.key),
+    ];
+    const categoryLabels = new Map<string, string>([
+      ...Object.entries(FlavorCategoryLabel),
+      ...categories.map((c) => [c.key, c.name] as const),
+    ]);
 
     const revenueTotal = Number(orderAgg._sum.total ?? 0);
     const ordersTotal = orderAgg._count._all;
@@ -124,9 +123,10 @@ export async function GET(request: Request) {
     const discountsTotal = Number(orderAgg._sum.discountAmount ?? 0);
 
     const byCategoryMap = new Map<string, CategoryBreakdownRow & { units: number }>();
-    for (const category of CATEGORY_ORDER) {
+    for (const category of categoryOrder) {
       byCategoryMap.set(category, {
         category,
+        label: categoryLabels.get(category) ?? category,
         orders: 0,
         units: 0,
         revenue: 0,
@@ -135,8 +135,11 @@ export async function GET(request: Request) {
     let itemsSold = 0;
     for (const row of catRows) {
       // Bebidas agrupan por flavorCategory; platillos (carta y Menú del Día)
-      // por menuItemCategory.
-      const key = row.flavorCategory ?? row.menuItemCategory ?? "ALMUERZO";
+      // por menuItemCategory. Las claves históricas (SANDWICH/PANINI) se
+      // consolidan en la categoría vigente.
+      const key = normalizeCategoryKey(
+        row.flavorCategory ?? row.menuItemCategory ?? "ALMUERZO",
+      );
       const units = Number(row.units);
       itemsSold += units;
       const entry = byCategoryMap.get(key);
@@ -183,9 +186,15 @@ export async function GET(request: Request) {
       avgTicket,
       itemsSold,
       toppingsRevenue,
-      byCategory: CATEGORY_ORDER.map((c) => {
+      byCategory: categoryOrder.map((c) => {
         const row = byCategoryMap.get(c)!;
-        return { category: row.category, orders: row.orders, units: row.units, revenue: row.revenue };
+        return {
+          category: row.category,
+          label: row.label,
+          orders: row.orders,
+          units: row.units,
+          revenue: row.revenue,
+        };
       }),
       paymentBreakdown,
       discountsTotal,
@@ -212,7 +221,7 @@ export async function GET(request: Request) {
         data.avgTicket,
         data.itemsSold,
         data.toppingsRevenue,
-        CATEGORY_LABELS[row.category] ?? row.category,
+        categoryLabels.get(row.category) ?? row.category,
         row.orders,
         row.units,
         row.revenue,

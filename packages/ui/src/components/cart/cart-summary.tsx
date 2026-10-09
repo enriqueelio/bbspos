@@ -1,5 +1,5 @@
 import type { CartItem } from "@bbspos/types";
-import { MenuCategoryLabel, cartItemUnitTotal, formatPrice } from "@bbspos/types";
+import { cartItemUnitTotal, formatPrice } from "@bbspos/types";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "../ui/card";
 
 export interface CartSummaryProps {
@@ -41,7 +41,7 @@ export function CartSummary({ items }: CartSummaryProps) {
               )}
               {item.kind === "MENU_ITEM" && (
                 <div className="pl-2 text-xs text-muted-foreground">
-                  {MenuCategoryLabel[item.category]}
+                  {item.categoryName}
                 </div>
               )}
             </div>

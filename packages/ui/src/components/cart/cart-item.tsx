@@ -1,7 +1,6 @@
 import type { CartItem } from "@bbspos/types";
 import {
   FlavorCategoryLabel,
-  MenuCategoryLabel,
   cartItemUnitTotal,
   formatPrice,
 } from "@bbspos/types";
@@ -36,7 +35,7 @@ export function CartItemRow({
           <div className="text-sm text-muted-foreground">
             {item.kind === "DRINK"
               ? `${FlavorCategoryLabel[item.category]} · ${item.bobaType.name}`
-              : MenuCategoryLabel[item.category]}
+              : item.categoryName}
           </div>
           {item.kind === "DRINK" && item.toppings.length > 0 && (
             <div className="mt-1 text-xs text-muted-foreground">

@@ -6,7 +6,6 @@ import {
   type PrintJobMeta,
   type PrinterSettings,
 } from "@bbspos/db";
-import { FlavorCategoryLabel, MenuCategoryLabel } from "@bbspos/types";
 
 export type { PrintJobMeta, PrinterSettings };
 
@@ -484,11 +483,6 @@ export function formatSummaryReport(data: {
   return `${lines.join("\n")}\n`;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  ...FlavorCategoryLabel,
-  ...MenuCategoryLabel,
-};
-
 const PAYMENT_LABELS: Record<string, string> = {
   EFECTIVO: "Efectivo",
   QR: "QR",
@@ -503,7 +497,7 @@ export function formatDailyReport(data: {
   avgTicket: number;
   itemsSold: number;
   toppingsRevenue: number;
-  byCategory: { category: string; orders: number; units: number; revenue: number }[];
+  byCategory: { category: string; label: string; orders: number; units: number; revenue: number }[];
   paymentBreakdown: { method: string; orders: number; revenue: number }[] | null;
   discountsTotal: number | null;
   cancellationsCount: number | null;
@@ -536,7 +530,7 @@ export function formatDailyReport(data: {
   lines.push(repeat("-", WIDTH));
   lines.push(centered("POR CATEGORIA"));
   for (const c of data.byCategory) {
-    lines.push(row(CATEGORY_LABELS[c.category] ?? c.category, money(c.revenue)));
+    lines.push(row(c.label, money(c.revenue)));
     lines.push(`   (${c.units} uni. / ${c.orders} pedidos)`);
   }
 

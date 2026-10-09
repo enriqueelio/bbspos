@@ -1,0 +1,72 @@
+Actúa como auditor senior de código Full Stack (Next.js + Prisma/Supabase + DnD).
+
+Tu tarea: Haz un informe ULTRA DETALLADO solo del SISTEMA DE CATEGORÍAS de la ruta http://localhost:3001/menu
+
+No me hagas un informe general del /menu, enfócate solo en categorías.
+
+1. AUDITORÍA PROFUNDA DE CATEGORÍAS - REVISA EN EL CÓDIGO:
+
+   A) ¿DÓNDE Y CÓMO ESTÁN DEFINIDAS HOY?
+   - ¿Están hardcodeadas en un array en el frontend?
+   - ¿Vienen de una BD? Si vienen de BD, encuentra el schema: ¿tiene tabla Category? ¿qué campos tiene? (id, name, slug, icon, image, order, isActive)
+   - ¿Cómo se hace el fetch? ¿Es estático o dinámico?
+
+   B) ¿SE PUEDEN AGREGAR MÁS CATEGORÍAS FÁCILMENTE?
+   - Si quiero agregar 20 categorías más mañana, ¿tengo que tocar código o puedo hacerlo desde un panel admin o BD?
+   - ¿El sistema soporta icono + imagen por categoría?
+   - ¿Qué pasa si una categoría no tiene imagen?
+
+   C) ¿SE PUEDEN ORDENAR A MI GUSTO? (ESTO ES CRÍTICO)
+   - Actualmente ¿el orden es por alfabeto, por id, o fijo?
+   - ¿Existe un campo `order`, `position`, `sortOrder` en la BD?
+   - ¿Cómo harías para que yo pueda arrastrar y soltar para reordenar?
+
+   D) FLUJO DE VISTA QUE QUIERO IMPLEMENTAR - ANALIZA SI ES VIABLE:
+   - Quiero esto: Estado 1 (sin categoría seleccionada) = Grid de tarjetas grandes, cada tarjeta con imagen arriba y abajo icono + nombre.
+   - Estado 2 (categoría seleccionada) = Barra compacta horizontal solo con iconos, y la activa expandida con icono + nombre.
+   - Al dar click de nuevo en la categoría activa o en un botón "Volver", debe regresar al Estado 1.
+   - ¿El estado actual `categoriaActiva` permite eso? ¿O hay que refactorizar?
+
+2. PROPUESTA DE SOLUCIÓN ESCALABLE - DAME CÓDIGO:
+
+   Diseña el sistema ideal de categorías para que sea 100% administrable:
+
+   a) Schema de BD propuesto para Category:
+   id, name, slug, iconName (lucide), imageUrl, color, order (int), isActive (bool), createdAt
+
+   b) Backend: ¿Cómo sería el endpoint GET /api/categories ordenado por `order` ASC?
+   Y un endpoint PUT /api/categories/reorder para guardar el nuevo orden al arrastrar.
+
+   c) Frontend Admin: Propón un componente simple en /admin/categorias donde pueda:
+   - Agregar / editar / desactivar categoría
+   - Subir imagen
+   - Reordenar con Drag & Drop (usa @dnd-kit/sortable)
+
+   d) Frontend Menu: Refactoriza app/menu/page.tsx para:
+   - Cargar categorías desde /api/categories
+   - Implementar los 2 estados que te pedí (tarjetas vs barra compacta)
+   - Que el orden visual respete el campo `order` de la BD y no el alfabético.
+
+3. GENERACIÓN DE ARCHIVO OBLIGATORIA - MUY IMPORTANTE:
+
+   Al final de tu análisis, GENERA 2 ARCHIVOS en la raíz del proyecto para que pueda compartirlo con otras IAs:
+
+   Archivo 1: /INFORME_CATEGORIAS_MENU.txt
+   - Un archivo de TEXTO PLANO, sin markdown complejo, con todo el informe resumido y detallado
+   - Debe ser legible para cualquier IA (ChatGPT, Claude, Gemini)
+   - Incluye: diagnóstico actual, problemas encontrados, schema propuesto, endpoints, lógica de los 2 estados, y checklist final
+   - Usa formato simple: Títulos en MAYÚSCULAS, guiones para listas
+
+   Archivo 2: /docs/INFORME_TECNICO_CATEGORIAS.md
+   - El informe completo en markdown con código, tablas y ejemplos
+   - Este es para documentación técnica
+
+   Confirma que los archivos fueron creados con fs.writeFileSync y muestra la ruta donde los guardaste.
+
+4. FORMATO DE RESPUESTA EN CHAT:
+
+   - Primero dame el diagnóstico rápido en el chat
+   - Luego dime: "Archivos generados: ..." con las rutas
+   - No omitas la generación de archivos, es requisito.
+
+Sé muy detallado y crítico. Quiero poder agregar 50 categorías y ordenarlas como yo quiera desde un panel.

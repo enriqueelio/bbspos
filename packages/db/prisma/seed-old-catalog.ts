@@ -1,4 +1,4 @@
-import { PrismaClient, MenuCategory } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -159,7 +159,7 @@ async function main() {
   picks.sort((a, b) => a.id - b.id);
 
   const existing = await prisma.menuItem.findMany({
-    where: { category: MenuCategory.ALMUERZO },
+    where: { category: "ALMUERZO" },
     select: { name: true },
   });
   const existingNames = new Set(existing.map((m) => m.name));
@@ -169,7 +169,7 @@ async function main() {
 
   for (const p of picks) {
     const data = {
-      category: MenuCategory.ALMUERZO,
+      category: "ALMUERZO",
       price: p.price,
       available: p.estado === 1,
       enMenuDelDia: false,
@@ -177,7 +177,7 @@ async function main() {
     };
     if (existingNames.has(p.name)) {
       await prisma.menuItem.updateMany({
-        where: { category: MenuCategory.ALMUERZO, name: p.name },
+        where: { category: "ALMUERZO", name: p.name },
         data,
       });
       updated++;
@@ -187,9 +187,9 @@ async function main() {
     }
   }
 
-  const total = await prisma.menuItem.count({ where: { category: MenuCategory.ALMUERZO } });
+  const total = await prisma.menuItem.count({ where: { category: "ALMUERZO" } });
   const totalAvailable = await prisma.menuItem.count({
-    where: { category: MenuCategory.ALMUERZO, available: true },
+    where: { category: "ALMUERZO", available: true },
   });
 
   console.log(`Productos parseados: ${products.length}`);

@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id               String      @id @default(cuid())
-  username         String      @unique
+  id               String           @id @default(cuid())
+  username         String           @unique
   name             String
   password         String
-  role             Role        @default(CAJERO)
-  shift            Shift       @default(SIN_TURNO)
-  active           Boolean     @default(true)
+  role             Role             @default(CAJERO)
+  shift            Shift            @default(SIN_TURNO)
+  active           Boolean          @default(true)
   iconKey          String?
-  createdAt        DateTime    @default(now())
+  createdAt        DateTime         @default(now())
   orders           Order[]
-  cancelledOrders  Order[]     @relation("OrderCanceledBy")
-  discountedOrders Order[]     @relation("OrderDiscountedBy")
+  cancelledOrders  Order[]          @relation("OrderCanceledBy")
+  discountedOrders Order[]          @relation("OrderDiscountedBy")
   redeemedRewards  CustomerReward[] @relation("CustomerRewardRedeemedBy")
   cashCloses       CashClose[]
 }
@@ -90,7 +90,8 @@ model Topping {
 model MenuItem {
   id             String           @id @default(cuid())
   name           String
-  category       MenuCategory     @default(ALMUERZO)
+  // Categoría de la carta: la clave de la tabla Category (catálogo admin).
+  category       String           @default("ALMUERZO")
   price          Int
   description    String?
   available      Boolean          @default(true)
@@ -138,14 +139,14 @@ model AlitaSauce {
 // El saldo es Int (Bs): positivo = saldo a favor (Prepago), negativo = deuda (Postpago).
 // creditLimit limita la deuda permitida de los Postpago (0 = sin límite).
 model CustomerAccount {
-  id           String           @id @default(cuid())
-  customerId   String           @unique
-  customer     Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  pensionType  PensionType      @default(PREPAGO)
-  balance      Int              @default(0)
-  creditLimit  Int              @default(0)
-  ledger       CustomerLedger[]
-  orders       Order[]
+  id          String           @id @default(cuid())
+  customerId  String           @unique
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  pensionType PensionType      @default(PREPAGO)
+  balance     Int              @default(0)
+  creditLimit Int              @default(0)
+  ledger      CustomerLedger[]
+  orders      Order[]
 
   @@index([customerId])
   @@index([pensionType])
@@ -173,13 +174,13 @@ model Customer {
 // Regla de lealtad configurable: nivel basado en gasto del mes, visitas del mes
 // o puntos acumulados. Al cambiar umbrales no se recalcula el histórico.
 model CustomerBenefitRule {
-  id          String             @id @default(cuid())
+  id          String           @id @default(cuid())
   name        String
   description String
-  metric      BenefitMetric      @default(SPEND_MONTH)
+  metric      BenefitMetric    @default(SPEND_MONTH)
   threshold   Int
-  active      Boolean            @default(true)
-  createdAt   DateTime           @default(now())
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
   rewards     CustomerReward[]
 
   @@index([metric, active])
@@ -188,19 +189,19 @@ model CustomerBenefitRule {
 // Otorgos y canjes de puntos de lealtad (bitácora de auditoría, patrón análogo
 // a CustomerLedger). pointsUsed es siempre positivo; el tipo da el sentido.
 model CustomerReward {
-  id            String             @id @default(cuid())
-  customerId    String
-  customer      Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  ruleId        String?
-  rule          CustomerBenefitRule? @relation(fields: [ruleId], references: [id])
-  type          CustomerRewardType
-  pointsUsed    Int
-  description   String
-  redeemedById  String?
-  redeemedBy    User?              @relation("CustomerRewardRedeemedBy", fields: [redeemedById], references: [id])
-  orderId       String?
-  order         Order?             @relation(fields: [orderId], references: [id])
-  createdAt     DateTime           @default(now())
+  id           String               @id @default(cuid())
+  customerId   String
+  customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  ruleId       String?
+  rule         CustomerBenefitRule? @relation(fields: [ruleId], references: [id])
+  type         CustomerRewardType
+  pointsUsed   Int
+  description  String
+  redeemedById String?
+  redeemedBy   User?                @relation("CustomerRewardRedeemedBy", fields: [redeemedById], references: [id])
+  orderId      String?
+  order        Order?               @relation(fields: [orderId], references: [id])
+  createdAt    DateTime             @default(now())
 
   @@index([customerId])
   @@index([createdAt])
@@ -211,29 +212,29 @@ model CustomerReward {
 // type: "RECARGA" (saldo a favor Prepago), "PAGO_DEUDA" (abono Postpago), "CONSUMO" (compra a cuenta).
 // amount siempre positivo; el sentido lo da el type. paymentMethod solo en abonos (RECARGA/PAGO_DEUDA).
 model CustomerLedger {
-  id            String           @id @default(cuid())
+  id            String          @id @default(cuid())
   accountId     String
-  account       CustomerAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account       CustomerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
   type          String
   amount        Int
   paymentMethod PaymentMethod?
   orderId       String?
-  order         Order?           @relation(fields: [orderId], references: [id])
-  createdAt     DateTime         @default(now())
+  order         Order?          @relation(fields: [orderId], references: [id])
+  createdAt     DateTime        @default(now())
 
   @@index([accountId])
   @@index([createdAt])
 }
 
 model Order {
-  id             String           @id @default(cuid())
-  seq            Int?             @unique
-  orderDate      String?
-  daySeq         Int?
-  status         OrderStatus      @default(RECIBIDO)
-  customerName   String?
-  deliveryType   DeliveryType?
-  notes          String?
+  id                   String           @id @default(cuid())
+  seq                  Int?             @unique
+  orderDate            String?
+  daySeq               Int?
+  status               OrderStatus      @default(RECIBIDO)
+  customerName         String?
+  deliveryType         DeliveryType?
+  notes                String?
   // Reserva: hora pactada de entrega. Mientras scheduledFor esté seteado y
   // reservationConfirmed=false el pedido vive en la pestaña RESERVAS sin
   // activar el reloj de producción; reserveLeadMin es cuántos minutos antes
@@ -241,34 +242,34 @@ model Order {
   scheduledFor         DateTime?
   reservationConfirmed Boolean          @default(false)
   reserveLeadMin       Int              @default(30)
-  total          Int
-  createdAt      DateTime         @default(now())
-  acceptedAt     DateTime?
-  paidAt         DateTime?
-  deliveredAt    DateTime?
-  items          OrderItem[]
-  userId         String?
-  user           User?            @relation(fields: [userId], references: [id])
-  paymentMethod  PaymentMethod?
-  paymentMethod2 PaymentMethod?
-  paymentAmount2 Int?
-  discountAmount Int              @default(0)
-  discountReason String?
-  discountedAt   DateTime?
-  discountedById String?
-  discountedBy   User?            @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
-  cancelledAt    DateTime?
-  cancelReason   String?
-  canceledById   String?
-  canceledBy     User?            @relation("OrderCanceledBy", fields: [canceledById], references: [id])
-  delayNotified  Boolean          @default(false)
-  tiempoEstimado Int              @default(10)
-  customerId     String?
-  customer       Customer?        @relation(fields: [customerId], references: [id])
-  accountId      String?          // Para pagos PENSION: referencia a CustomerAccount
-  account        CustomerAccount? @relation(fields: [accountId], references: [id])
-  ledgerEntries  CustomerLedger[]
-  customerRewards CustomerReward[]
+  total                Int
+  createdAt            DateTime         @default(now())
+  acceptedAt           DateTime?
+  paidAt               DateTime?
+  deliveredAt          DateTime?
+  items                OrderItem[]
+  userId               String?
+  user                 User?            @relation(fields: [userId], references: [id])
+  paymentMethod        PaymentMethod?
+  paymentMethod2       PaymentMethod?
+  paymentAmount2       Int?
+  discountAmount       Int              @default(0)
+  discountReason       String?
+  discountedAt         DateTime?
+  discountedById       String?
+  discountedBy         User?            @relation("OrderDiscountedBy", fields: [discountedById], references: [id])
+  cancelledAt          DateTime?
+  cancelReason         String?
+  canceledById         String?
+  canceledBy           User?            @relation("OrderCanceledBy", fields: [canceledById], references: [id])
+  delayNotified        Boolean          @default(false)
+  tiempoEstimado       Int              @default(10)
+  customerId           String?
+  customer             Customer?        @relation(fields: [customerId], references: [id])
+  accountId            String? // Para pagos PENSION: referencia a CustomerAccount
+  account              CustomerAccount? @relation(fields: [accountId], references: [id])
+  ledgerEntries        CustomerLedger[]
+  customerRewards      CustomerReward[]
 
   @@unique([orderDate, daySeq])
   @@index([createdAt])
@@ -290,7 +291,7 @@ model OrderItem {
   flavorCategory     FlavorCategory?
   bobaTypeName       String?
   menuItemName       String?
-  menuItemCategory   MenuCategory?
+  menuItemCategory   String?
   menuItemOptionName String?
   menuItemDetail     String?
   unitPrice          Int
@@ -329,13 +330,23 @@ model PrinterConfig {
   updatedAt    DateTime @updatedAt
 }
 
-// Imagen de fondo de una tarjeta de categoría de la barra del POS (estado
-// inicial). Una fila por pane: los valores del enum MenuCategory más las
-// pseudo-categorías del cajero "BUBAS" y "SANDWICHES". Sin fila (o sin
-// imageUrl) la tarjeta se dibuja con su ícono, como siempre.
-model CategoryConfig {
-  key      String  @id
-  imageUrl String?
+// Categoría de platillos de la carta (catálogo administrable por admin). Una
+// fila por categoría: `key` iguala el valor guardado en MenuItem.category y en
+// el snapshot histórico de OrderItem.menuItemCategory. El orden de la barra, la
+// visibilidad y los atributos visuales (ícono, color, imagen) viven aquí y se
+// entregan a las terminales vía el catálogo del POS.
+model Category {
+  key          String   @id
+  name         String
+  slug         String   @unique
+  iconName     String   @default("Utensils")
+  color        String   @default("#CE7A22")
+  imageUrl     String?
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  visibleInBar Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // Cantidad diaria de un plato del Menú del Día: una fila por (plato, jornada).
@@ -345,15 +356,15 @@ model CategoryConfig {
 // remaining = planned + Σ LunchAdjust.delta − sold nunca se desincroniza y
 // anular un pedido lo restituye solo.
 model LunchQuota {
-  id           String   @id @default(cuid())
+  id           String        @id @default(cuid())
   menuItemId   String
-  menuItem     MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem     MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   // Día local YYYY-MM-DD en America/La_Paz (zonedDateKey).
   date         String
   planned      Int?
-  lowThreshold Int      @default(5)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  lowThreshold Int           @default(5)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   adjusts      LunchAdjust[]
 
   @@unique([menuItemId, date])
@@ -363,13 +374,13 @@ model LunchQuota {
 // Bitácora de correcciones manuales sobre la cantidad de una jornada: el delta
 // aplicado, la nota del motivo, quién lo hizo y cuándo.
 model LunchAdjust {
-  id        String    @id @default(cuid())
+  id        String     @id @default(cuid())
   quotaId   String
   quota     LunchQuota @relation(fields: [quotaId], references: [id], onDelete: Cascade)
   delta     Int
   note      String?
   userId    String
-  createdAt DateTime @default(now())
+  createdAt DateTime   @default(now())
 
   @@index([quotaId])
 }
@@ -439,26 +450,6 @@ enum FlavorCategory {
   MILK
   WATER
   SPECIAL
-}
-
-enum MenuCategory {
-  ALMUERZO
-  SANDWICH
-  PANINI
-  ENSALADA
-  PIQUEO
-  COMPARTIR
-  ALITA
-  HAMBURGUESA
-  MILANESA
-  LOMO
-  POLLO
-  KIDS
-  POSTRE
-  WAFFLE
-  PANCAKE
-  EXTRAS
-  BEBIDA
 }
 
 enum BobaKind {

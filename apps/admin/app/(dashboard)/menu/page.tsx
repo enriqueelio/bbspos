@@ -23,7 +23,7 @@ export default async function MenuPage() {
     drinkPrices,
     menuItems,
     alitaSauces,
-    categoryConfigs,
+    categories,
   ] = await Promise.all([
     prisma.size.findMany({ orderBy: { oz: "asc" } }),
     prisma.flavor.findMany({
@@ -38,7 +38,7 @@ export default async function MenuPage() {
       orderBy: [{ category: "asc" }, { name: "asc" }],
     }),
     prisma.alitaSauce.findMany({ orderBy: { name: "asc" } }),
-    prisma.categoryConfig.findMany(),
+    prisma.category.findMany({ orderBy: { order: "asc" } }),
   ]);
 
   // La cantidad de la jornada y el histórico son del cajero: el POS programa,
@@ -76,9 +76,17 @@ export default async function MenuPage() {
         name: s.name,
         available: s.available,
       }))}
-      categoryImages={Object.fromEntries(
-        categoryConfigs.map((c) => [c.key, c.imageUrl]),
-      )}
+      categories={categories.map((c) => ({
+        key: c.key,
+        name: c.name,
+        slug: c.slug,
+        iconName: c.iconName,
+        color: c.color,
+        imageUrl: c.imageUrl ?? null,
+        order: c.order,
+        isActive: c.isActive,
+        visibleInBar: c.visibleInBar,
+      }))}
     />
   );
 }

@@ -5,14 +5,11 @@ import {
   FlavorCategory,
   FlavorCategoryList,
   FlavorCategoryLabel,
-  MenuCategoryLabel,
-  MenuCategoryList,
   cartItemUnitTotal,
   formatPrice,
   type Catalog,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
-  type MenuCategory as MenuCategoryType,
   type MenuItemView,
   type Size,
   type Topping,
@@ -52,11 +49,11 @@ function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   );
 }
 
-function firstCartaCategory(catalog: Catalog): MenuCategoryType | null {
+function firstCartaCategory(catalog: Catalog): string | null {
   return (
-    MenuCategoryList.find((c) =>
-      catalog.cartaItems.some((i) => i.category === c),
-    ) ?? null
+    catalog.categories.find((c) =>
+      catalog.cartaItems.some((i) => i.category === c.key),
+    )?.key ?? null
   );
 }
 
@@ -74,7 +71,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastLeaving, setToastLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cartaCategory, setCartaCategory] = useState<MenuCategoryType | null>(
+  const [cartaCategory, setCartaCategory] = useState<string | null>(
     null,
   );
   const [variantItem, setVariantItem] = useState<MenuItemView | null>(null);
@@ -314,6 +311,10 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       ? []
       : catalog.cartaItems.filter((i) => i.category === cartaCategory);
 
+  function categoryNameOf(key: string): string {
+    return catalog.categories.find((c) => c.key === key)?.name ?? key;
+  }
+
   function tapCartaItem(item: MenuItemView) {
     if (item.options.length > 0) {
       setVariantItem(item);
@@ -325,6 +326,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       menuItemId: item.id,
       name: item.name,
       category: item.category,
+      categoryName: categoryNameOf(item.category),
       unitPrice: item.price,
       optionId: null,
       optionName: null,
@@ -344,6 +346,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
+      categoryName: categoryNameOf(variantItem.category),
       unitPrice: option.price,
       optionId: option.id,
       optionName: option.name,
@@ -361,6 +364,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
+      categoryName: categoryNameOf(variantItem.category),
       unitPrice: variantSize.price,
       optionId: variantSize.id,
       optionName: variantSize.name,
@@ -589,6 +593,7 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
                         menuItemId: menuItem.id,
                         name: menuItem.name,
                         category: menuItem.category,
+                        categoryName: categoryNameOf(menuItem.category),
                         unitPrice: menuItem.price,
                         optionId: null,
                         optionName: null,
@@ -618,27 +623,27 @@ export function PosTerminal({ catalog }: { catalog: Catalog }) {
 
               {/* Pestañas de categorías de la carta */}
               <div className="flex flex-wrap gap-2">
-                {MenuCategoryList.map((category) => {
-                  const enabled = catalog.cartaItems.some(
-                    (i) => i.category === category,
-                  );
-                  const selected = category === cartaCategory;
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      disabled={!enabled}
-                      onClick={() => setCartaCategory(category)}
-                      className={`h-12 px-4 rounded-xl border text-base font-bold transition-colors disabled:opacity-30 ${
-                        selected
-                          ? "border-primary bg-primary text-white"
-                          : "border-border bg-slate-600 text-white hover:border-primary/60"
-                      }`}
-                    >
-                      {MenuCategoryLabel[category]}
-                    </button>
-                  );
-                })}
+                {catalog.categories
+                  .filter((c) =>
+                    catalog.cartaItems.some((i) => i.category === c.key),
+                  )
+                  .map((category) => {
+                    const selected = category.key === cartaCategory;
+                    return (
+                      <button
+                        key={category.key}
+                        type="button"
+                        onClick={() => setCartaCategory(category.key)}
+                        className={`h-12 px-4 rounded-xl border text-base font-bold transition-colors disabled:opacity-30 ${
+                          selected
+                            ? "border-primary bg-primary text-white"
+                            : "border-border bg-slate-600 text-white hover:border-primary/60"
+                        }`}
+                      >
+                        {category.name}
+                      </button>
+                    );
+                  })}
               </div>
 
               {/* Grilla de platos de la categoría seleccionada */}

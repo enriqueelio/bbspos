@@ -1,4 +1,4 @@
-import { PrismaClient, MenuCategory as PrismaMenuCategory } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -15,7 +15,7 @@ const TXT_PATH = resolve(
 
 interface ParsedItem {
   name: string;
-  category: PrismaMenuCategory;
+  category: string;
   price: number;
   description: string;
   isMixtas?: boolean;
@@ -23,24 +23,25 @@ interface ParsedItem {
   options: { name: string; price: number; requiredSauces?: number | null }[];
 }
 
-const HEADER_TO_CATEGORY: Record<string, PrismaMenuCategory> = {
-  "SANDWICHES DE MILANESA": PrismaMenuCategory.SANDWICH,
-  "PANINIS": PrismaMenuCategory.PANINI,
-  "ENSALADAS": PrismaMenuCategory.ENSALADA,
-  "PIQUEOS": PrismaMenuCategory.PIQUEO,
-  "PARA COMPARTIR": PrismaMenuCategory.COMPARTIR,
-  "ALITAS": PrismaMenuCategory.ALITA,
-  "ALITAS MIXTAS": PrismaMenuCategory.ALITA,
-  "HAMBURGUESAS": PrismaMenuCategory.HAMBURGUESA,
-  "MILANESAS": PrismaMenuCategory.MILANESA,
-  "LOMOS": PrismaMenuCategory.LOMO,
-  "POLLOS": PrismaMenuCategory.POLLO,
-  "MEN\u00da KIDS": PrismaMenuCategory.KIDS,
-  "POSTRES Y HELADOS": PrismaMenuCategory.POSTRE,
-  "BUBBLE WAFFLES": PrismaMenuCategory.WAFFLE,
-  "PANCAKES": PrismaMenuCategory.PANCAKE,
-  "TOPPINGS Y JALEAS": PrismaMenuCategory.EXTRAS,
-  "BEBIDAS": PrismaMenuCategory.BEBIDA,
+const HEADER_TO_CATEGORY: Record<string, string> = {
+  // SANDWICH y PANINI quedaron consolidados en SANDWICHES (categorías admin).
+  "SANDWICHES DE MILANESA": "SANDWICHES",
+  "PANINIS": "SANDWICHES",
+  "ENSALADAS": "ENSALADA",
+  "PIQUEOS": "PIQUEO",
+  "PARA COMPARTIR": "COMPARTIR",
+  "ALITAS": "ALITA",
+  "ALITAS MIXTAS": "ALITA",
+  "HAMBURGUESAS": "HAMBURGUESA",
+  "MILANESAS": "MILANESA",
+  "LOMOS": "LOMO",
+  "POLLOS": "POLLO",
+  "MEN\u00da KIDS": "KIDS",
+  "POSTRES Y HELADOS": "POSTRE",
+  "BUBBLE WAFFLES": "WAFFLE",
+  "PANCAKES": "PANCAKE",
+  "TOPPINGS Y JALEAS": "EXTRAS",
+  "BEBIDAS": "BEBIDA",
 };
 
 const GENERAL_RE = /^-\s*(.+?)\s*-\s*(\d+(?:[.,]\d+)?)\s*BS\.?\s*(.*)$/i;
@@ -78,7 +79,7 @@ function pushAlitasGroup(items: ParsedItem[], group: AlitaSizes) {
     for (const flavor of ALITA_FLAVORS) {
       items.push({
         name: `Alitas ${flavor}`,
-        category: PrismaMenuCategory.ALITA,
+        category: "ALITA",
         price: Math.min(...group.sizes.map((s) => s.price)),
         description:
           "Acompañadas de papas fritas y salsa de la casa.",
@@ -94,7 +95,7 @@ function pushAlitasGroup(items: ParsedItem[], group: AlitaSizes) {
   }
   items.push({
     name: "Alitas Mixtas",
-    category: PrismaMenuCategory.ALITA,
+    category: "ALITA",
     price: Math.min(...group.sizes.map((s) => s.price)),
     description:
       "2 salsas a elección (6 y 8 unidades) o 3 salsas (12 unidades). Acompañadas de papas fritas y salsa de la casa.",
@@ -135,28 +136,28 @@ async function seedAlitaSauces() {
 const EXTRAS_ITEMS: ParsedItem[] = [
   {
     name: "Helado",
-    category: PrismaMenuCategory.EXTRAS,
+    category: "EXTRAS",
     price: 15,
     description: "Porci\u00f3n de helado como extra.",
     options: [],
   },
   {
     name: "Topping extra",
-    category: PrismaMenuCategory.EXTRAS,
+    category: "EXTRAS",
     price: 5,
     description: "Topping adicional a elecci\u00f3n: Frutilla, Durazno, Banana, Oreo, Chubi, Chocolate, Gomitas, Chispas de chocolate.",
     options: [],
   },
   {
     name: "Crema",
-    category: PrismaMenuCategory.EXTRAS,
+    category: "EXTRAS",
     price: 5,
     description: "Porci\u00f3n extra de crema.",
     options: [],
   },
   {
     name: "Jalea extra",
-    category: PrismaMenuCategory.EXTRAS,
+    category: "EXTRAS",
     price: 5,
     description: "Jalea adicional: Salsa de chocolate, Frutilla, Dulce de leche, Miel o Leche condensada.",
     options: [],
@@ -168,7 +169,7 @@ function parseFile(): ParsedItem[] {
   const lines = text.split(/\r?\n/);
 
   const items: ParsedItem[] = [];
-  let currentCategory: PrismaMenuCategory | null = null;
+  let currentCategory: string | null = null;
   let currentHeader: string | null = null;
   // Las alitas se acumulan por sección: los tamaños vienen en líneas separadas
   // y se agrupan por sabor al terminar la sección (siguiente encabezado o fin).
@@ -200,7 +201,7 @@ function parseFile(): ParsedItem[] {
           const res = Number(dual[3]);
           items.push({
             name,
-            category: PrismaMenuCategory.MILANESA,
+            category: "MILANESA",
             price: Math.min(pollo, res),
             description: clean(dual[4]),
             options: [
@@ -214,7 +215,7 @@ function parseFile(): ParsedItem[] {
         if (single) {
           items.push({
             name: clean(single[1]),
-            category: PrismaMenuCategory.MILANESA,
+            category: "MILANESA",
             price: Number(single[2]),
             description: clean(single[3]),
             options: [{ name: "Pollo", price: Number(single[2]) }],
@@ -259,7 +260,7 @@ function parseFile(): ParsedItem[] {
     }
     if (line.startsWith("PANCAKES")) {
       flushAlitas();
-      currentCategory = PrismaMenuCategory.PANCAKE;
+      currentCategory = "PANCAKE";
       currentHeader = "PANCAKES";
       continue;
     }
@@ -354,7 +355,7 @@ async function main() {
   // sabor con los tamaños como variantes: se descartan los nombres antiguos.
   const removedAlitas = await prisma.menuItem.deleteMany({
     where: {
-      category: PrismaMenuCategory.ALITA,
+      category: "ALITA",
       name: { endsWith: "Unidades)" },
     },
   });
@@ -368,10 +369,10 @@ async function main() {
   }
 
   const cartaCount = await prisma.menuItem.count({
-    where: { category: { not: PrismaMenuCategory.ALMUERZO } },
+    where: { category: { not: "ALMUERZO" } },
   });
   const availableCount = await prisma.menuItem.count({
-    where: { category: { not: PrismaMenuCategory.ALMUERZO }, available: true },
+    where: { category: { not: "ALMUERZO" }, available: true },
   });
   const optionCount = await prisma.menuItemOption.count();
 
@@ -382,7 +383,7 @@ async function main() {
 
   const byCategory = await prisma.menuItem.groupBy({
     by: ["category"],
-    where: { category: { not: PrismaMenuCategory.ALMUERZO }, available: true },
+    where: { category: { not: "ALMUERZO" }, available: true },
     _count: { _all: true },
   });
   for (const row of byCategory) {
@@ -391,7 +392,7 @@ async function main() {
   console.log(`==> Variantes (MenuItemOption) registradas: ${optionCount}`);
 
   const milanesas = await prisma.menuItem.findMany({
-    where: { category: PrismaMenuCategory.MILANESA },
+    where: { category: "MILANESA" },
     include: { options: true },
     orderBy: { name: "asc" },
   });
@@ -400,7 +401,7 @@ async function main() {
   }
 
   const alitas = await prisma.menuItem.findMany({
-    where: { category: PrismaMenuCategory.ALITA },
+    where: { category: "ALITA" },
     include: { options: true },
     orderBy: { name: "asc" },
   });

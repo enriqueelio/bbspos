@@ -5,7 +5,6 @@ import {
   cartItemUnitTotal,
   formatPrice,
   isLunchItem,
-  MenuCategoryLabel,
   shortCustomerName,
   type CartItem,
   type CustomerLoyaltyView,
@@ -317,7 +316,7 @@ export function PosTicketPanel({
                       `${item.size.name} · ${item.bobaType.name}`
                     ) : (
                       <>
-                        {MenuCategoryLabel[item.category]}
+                        {item.categoryName}
                         {item.optionName && (
                           <span className="ml-1 font-semibold text-white">
                             · {item.optionName}

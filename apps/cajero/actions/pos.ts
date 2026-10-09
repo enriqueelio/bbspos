@@ -58,7 +58,7 @@ export async function getPosCatalog(
     toppings,
     menuItems,
     cartaItems,
-    categoryConfigs,
+    categories,
   ] = await Promise.all([
       prisma.size.findMany({
         where: { available: true },
@@ -80,7 +80,10 @@ export async function getPosCatalog(
       }),
       todayMenuItems(),
       cartaMenuItems(),
-      prisma.categoryConfig.findMany(),
+      prisma.category.findMany({
+        where: { isActive: true, visibleInBar: true },
+        orderBy: { order: "asc" },
+      }),
     ]);
 
   const toMenuItemView = (
@@ -139,10 +142,15 @@ export async function getPosCatalog(
     toppings,
     menuItems: menuItems.map((mi) => toMenuItemView(mi, lunchStock.get(mi.id) ?? null)),
     cartaItems: cartaItems.map((mi) => toMenuItemView(mi)),
-    // Imágenes de fondo de las tarjetas de categoría de la barra del POS.
-    categoryImages: Object.fromEntries(
-      categoryConfigs.map((c) => [c.key, c.imageUrl]),
-    ),
+    // Categorías de la barra del POS: nombre, ícono y color administrados por el
+    // admin; el orden de lectura es el `order` de la tabla Category.
+    categories: categories.map((c) => ({
+      key: c.key,
+      name: c.name,
+      iconName: c.iconName,
+      color: c.color,
+      imageUrl: c.imageUrl,
+    })),
   };
 }
 

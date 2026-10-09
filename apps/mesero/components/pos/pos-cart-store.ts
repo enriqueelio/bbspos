@@ -5,9 +5,9 @@ import type {
   BobaType,
   CartItem,
   CartTopping,
+  CategoryKey,
   Flavor,
   FlavorCategory,
-  MenuCategory,
   Size,
 } from "@bbspos/types";
 
@@ -25,7 +25,9 @@ export interface AddPosItemInput {
 export interface AddPosMenuItemInput {
   menuItemId: string;
   name: string;
-  category: MenuCategory;
+  category: CategoryKey;
+  /** Nombre de la categoría (Category.name), para la UI del ticket. */
+  categoryName: string;
   unitPrice: number;
   /** Id de la variante (MenuItemOption) elegida, p.ej. un tamaño de alitas.
    *  El server lo usa para recalcular el precio sin confiar en unitPrice. */
@@ -154,6 +156,7 @@ export function addPosMenuItem(input: AddPosMenuItemInput) {
       menuItemId: input.menuItemId,
       name: input.name,
       category: input.category,
+      categoryName: input.categoryName,
       unitPrice: input.unitPrice,
       optionId: input.optionId ?? null,
       optionName: input.optionName,

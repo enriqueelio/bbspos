@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   FlavorCategory,
   FlavorCategoryList,
-  MenuCategory,
-  MenuCategoryLabel,
   cartItemUnitTotal,
   formatOrderCode,
   formatPrice,
@@ -17,7 +15,6 @@ import {
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
   type LunchStockState,
-  type MenuCategory as MenuCategoryType,
   type MenuItemView,
   type Role as RoleType,
   type Topping,
@@ -61,51 +58,12 @@ const NO_STOCK: LunchStockState = {
   lowThreshold: 5,
 };
 
-/** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
+/** Identificador del panel de Bubble Drinks (categoría de la tabla Category). */
 const BUBAS_PANE = "BUBAS";
-// Sandwiches y Paninis se fusionan en un solo botón de la barra.
-const SANDWICHES_PANE = "SANDWICHES";
-type CatalogPane =
-  | MenuCategoryType
-  | typeof BUBAS_PANE
-  | typeof SANDWICHES_PANE;
-
-/** Orden de lectura de la carta en la barra de categorías: Milanesas primero
- *  (categoría seleccionada por defecto), luego platos principales, entradas,
- *  kids, postres y bebidas. Bubble Drinks siempre va al final. */
-const MENU_PANE_ORDER: MenuCategoryType[] = [
-  MenuCategory.MILANESA,
-  MenuCategory.SANDWICH,
-  MenuCategory.HAMBURGUESA,
-  MenuCategory.LOMO,
-  MenuCategory.POLLO,
-  MenuCategory.ALITA,
-  MenuCategory.ENSALADA,
-  MenuCategory.PIQUEO,
-  MenuCategory.COMPARTIR,
-  MenuCategory.KIDS,
-  MenuCategory.POSTRE,
-  MenuCategory.WAFFLE,
-  MenuCategory.PANCAKE,
-  MenuCategory.EXTRAS,
-  MenuCategory.BEBIDA,
-];
-
-/** Nombres cortos de categoría en la barra (ahorran espacio; los nombres
- *  completos se conservan en tickets, comandas y reportes vía MenuCategoryLabel). */
-const PANE_LABEL_SHORT: Partial<Record<CatalogPane, string>> = {
-  [MenuCategory.SANDWICH]: "Sandwiches",
-  [MenuCategory.HAMBURGUESA]: "Burgers",
-  [MenuCategory.WAFFLE]: "Wafles",
-  [MenuCategory.KIDS]: "Kids",
-  [MenuCategory.POSTRE]: "Heladería",
-  [MenuCategory.COMPARTIR]: "Compartir",
-};
-
-/** Títulos propios de los panes fusionados (no son categorías de la carta). */
-const PANE_TITLE: Partial<Record<CatalogPane, string>> = {
-  [SANDWICHES_PANE]: "Sandwiches",
-};
+/** La barra de categorías lee su orden e identidad de `Catalog.categories`
+ *  (claves de la tabla Category, editables por el admin); "BUBAS" se conserva
+ *  como pane siempre presente, al final. */
+type CatalogPane = string;
 
 function firstActiveCategory(catalog: Catalog): FlavorCategoryType {
   return (
@@ -130,6 +88,9 @@ function reconstructOrderItems(
   const flavorByName = new Map(catalog.flavors.map((f) => [f.name, f]));
   const bobaByName = new Map(catalog.bobaTypes.map((b) => [b.name, b]));
   const toppingByName = new Map(catalog.toppings.map((t) => [t.name, t]));
+  const categoryNameById = new Map(
+    catalog.categories.map((c) => [c.key, c.name]),
+  );
   const catalogItems = [...catalog.cartaItems, ...catalog.menuItems];
 
   for (const item of order.items) {
@@ -195,8 +156,9 @@ function reconstructOrderItems(
       id,
       menuItemId: catalogItem.id,
       name,
-      category:
-        (item.menuItemCategory as MenuCategoryType) ?? catalogItem.category,
+      category: item.menuItemCategory ?? catalogItem.category,
+      categoryName:
+        categoryNameById.get(catalogItem.category) ?? catalogItem.category,
       unitPrice: item.unitPrice,
       optionId: option?.id ?? null,
       optionName: item.menuItemOptionName,
@@ -293,9 +255,7 @@ export function PosTerminal({
       const past16 = now.getHours() >= 16;
       setIsAfter16(past16);
       if (past16) {
-        setActivePane((pane) =>
-          pane === MenuCategory.ALMUERZO ? null : pane,
-        );
+        setActivePane((pane) => (pane === "ALMUERZO" ? null : pane));
       }
     };
     checkTime();
@@ -663,18 +623,13 @@ export function PosTerminal({
   // renderizar la zona de productos: antes `!isMenuDelDia && !isBubas` daba
   // true con el catálogo cerrado y pintaba una grilla vacía.
   const cartaPane =
-    activePane !== null && activePane !== MenuCategory.ALMUERZO && !isBubas
+    activePane !== null && activePane !== "ALMUERZO" && !isBubas
       ? activePane
       : null;
   // Productos ordenados por precio de mayor a menor (en toda la carta).
   const cartaItems = cartaPane
     ? catalog.cartaItems
-        .filter((i) =>
-          cartaPane === SANDWICHES_PANE
-            ? i.category === MenuCategory.SANDWICH ||
-              i.category === MenuCategory.PANINI
-            : i.category === cartaPane,
-        )
+        .filter((i) => i.category === cartaPane)
         .sort((a, b) => b.price - a.price)
     : [];
   // Menú del Día también por precio de mayor a menor.
@@ -717,43 +672,56 @@ export function PosTerminal({
   const menuDayGridClass = "grid grid-cols-5 gap-2";
 
   // Botones del bloque superior: las categorías de la carta con productos y
-  // Bubble Drinks como categoría fija. El Menú del Día queda fijo en la parte
-  // superior del catálogo (fuera de esta barra) para acceso rápido; se oculta
-  // tras las 16:00.
+  // Bubble Drinks como categoría fija. El orden, nombre, ícono, color e imagen
+  // vienen de la tabla Category (orden de lectura del admin); solo aparecen las
+  // categorías que en este momento tienen platos en la carta, junto a BUBAS.
   const catalogPanes = useMemo(() => {
-    const panes: { key: CatalogPane; label: string; imageUrl: string | null }[] =
-      [];
-    for (const c of MENU_PANE_ORDER) {
-      if (c === MenuCategory.SANDWICH) {
-        const merged = catalog.cartaItems.some(
-          (i) =>
-            i.category === MenuCategory.SANDWICH ||
-            i.category === MenuCategory.PANINI,
-        );
-        if (merged) {
-          panes.push({
-            key: SANDWICHES_PANE,
-            label: PANE_TITLE[SANDWICHES_PANE]!,
-            imageUrl: catalog.categoryImages?.[SANDWICHES_PANE] ?? null,
-          });
-        }
+    const panes: {
+      key: CatalogPane;
+      label: string;
+      imageUrl: string | null;
+      iconName: string;
+      color: string;
+    }[] = [];
+    let sawBubas = false;
+    for (const c of catalog.categories) {
+      if (c.key === BUBAS_PANE) {
+        sawBubas = true;
+        panes.push({
+          key: c.key,
+          label: c.name,
+          imageUrl: c.imageUrl,
+          iconName: c.iconName,
+          color: c.color,
+        });
         continue;
       }
-      if (catalog.cartaItems.some((i) => i.category === c)) {
+      if (catalog.cartaItems.some((i) => i.category === c.key)) {
         panes.push({
-          key: c,
-          label: PANE_LABEL_SHORT[c] ?? MenuCategoryLabel[c],
-          imageUrl: catalog.categoryImages?.[c] ?? null,
+          key: c.key,
+          label: c.name,
+          imageUrl: c.imageUrl,
+          iconName: c.iconName,
+          color: c.color,
         });
       }
     }
-    panes.push({
-      key: BUBAS_PANE,
-      label: "Bubbas",
-      imageUrl: catalog.categoryImages?.[BUBAS_PANE] ?? null,
-    });
+    if (!sawBubas) {
+      panes.push({
+        key: BUBAS_PANE,
+        label: "Bubbas",
+        imageUrl: null,
+        iconName: "CupSoda",
+        color: "#7DD3FC",
+      });
+    }
     return panes;
   }, [catalog]);
+
+  // Nombres de categoría para los títulos de la carta (p.ej. "Sandwiches").
+  const categoryNameById = new Map(
+    catalog.categories.map((c) => [c.key, c.name]),
+  );
 
   // Tocar un almuerzo del día: primero se aparta la unidad para esta caja y solo
   // después se agrega la línea. Si otra caja se llevó lo último entre el número
@@ -784,6 +752,7 @@ export function PosTerminal({
       menuItemId: menuItem.id,
       name: menuItem.name,
       category: menuItem.category,
+      categoryName: categoryNameById.get(menuItem.category) ?? menuItem.category,
       unitPrice: menuItem.price,
       optionId: null,
       optionName: null,
@@ -808,6 +777,7 @@ export function PosTerminal({
       menuItemId: item.id,
       name: item.name,
       category: item.category,
+      categoryName: categoryNameById.get(item.category) ?? item.category,
       unitPrice: item.price,
       optionId: null,
       optionName: null,
@@ -828,6 +798,8 @@ export function PosTerminal({
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
+      categoryName:
+        categoryNameById.get(variantItem.category) ?? variantItem.category,
       unitPrice: option.price,
       optionId: option.id,
       optionName: option.name,
@@ -846,6 +818,8 @@ export function PosTerminal({
       menuItemId: variantItem.id,
       name: variantItem.name,
       category: variantItem.category,
+      categoryName:
+        categoryNameById.get(variantItem.category) ?? variantItem.category,
       unitPrice: variantSize.price,
       optionId: variantSize.id,
       optionName: variantSize.name,
@@ -1037,10 +1011,7 @@ export function PosTerminal({
                   desaparece en vez de quedar con una grilla vacía. */}
               {cartaPane && (
                 <PosCartaGrid
-                  paneTitle={
-                    PANE_TITLE[cartaPane] ??
-                    MenuCategoryLabel[cartaPane as MenuCategoryType]
-                  }
+                  paneTitle={categoryNameById.get(cartaPane) ?? cartaPane}
                   items={cartaItems}
                   variantItem={variantItem}
                   variantSize={variantSize}

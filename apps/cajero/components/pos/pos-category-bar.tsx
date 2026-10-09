@@ -1,85 +1,12 @@
 "use client";
 
-import type { ComponentType } from "react";
-import {
-  ArrowLeft,
-  Baby,
-  Beef,
-  Bird,
-  Cake,
-  CakeSlice,
-  CupSoda,
-  Drumstick,
-  GlassWater,
-  IceCreamCone,
-  PackagePlus,
-  Popcorn,
-  Salad,
-  Sandwich,
-  UtensilsCrossed,
-  Users,
-} from "lucide-react";
-import { MenuCategory } from "@bbspos/types";
+import { ArrowLeft } from "lucide-react";
+import { CATEGORY_ICONS } from "@bbspos/ui";
 
-/** Identificador del panel de Bubble Drinks (pseudo-categoría del POS). */
-const BUBAS_PANE = "BUBAS";
-// Sandwiches y Paninis se fusionan en un solo botón de la barra.
-const SANDWICHES_PANE = "SANDWICHES";
-
-/** Ícono de hamburguesa (lucide "hamburger"); no existe en la versión instalada
- *  de lucide-react, así que se define con sus mismas paths para mantener el
- *  estilo stroke de lucide. */
-function HamburgerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M12 16H4a2 2 0 1 1 0-4h16a2 2 0 1 1 0 4h-4.25" />
-      <path d="M5 12a2 2 0 0 1-2-2 9 7 0 0 1 18 0 2 2 0 0 1-2 2" />
-      <path d="M5 16a2 2 0 0 0-2 2 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 2 2 0 0 0-2-2q0 0 0 0" />
-      <path d="m6.67 12 6.13 4.6a2 2 0 0 0 2.8-.4l3.15-4.2" />
-    </svg>
-  );
-}
-
-/** Ícono representativo por panel (identidad visual de un vistazo). */
-const PANE_ICON: Partial<Record<string, ComponentType<{ className?: string }>>> =
-  {
-    [MenuCategory.MILANESA]: UtensilsCrossed,
-    [SANDWICHES_PANE]: Sandwich,
-    [MenuCategory.HAMBURGUESA]: HamburgerIcon,
-    [MenuCategory.LOMO]: Beef,
-    [MenuCategory.POLLO]: Bird,
-    [MenuCategory.ALITA]: Drumstick,
-    [MenuCategory.ENSALADA]: Salad,
-    [MenuCategory.PIQUEO]: Popcorn,
-    [MenuCategory.COMPARTIR]: Users,
-    [MenuCategory.KIDS]: Baby,
-    [MenuCategory.POSTRE]: IceCreamCone,
-    [MenuCategory.WAFFLE]: CakeSlice,
-    [MenuCategory.PANCAKE]: Cake,
-    [MenuCategory.EXTRAS]: PackagePlus,
-    [MenuCategory.BEBIDA]: GlassWater,
-    [BUBAS_PANE]: CupSoda,
-  };
-
-/** Tinte de color del ícono en estado inactivo (las categorías sin tinte usan el
- *  neutro). En estado seleccionado el ícono se pinta de blanco. */
+/** Tinte de color del ícono en estado inactivo, por panel. El `color` de la
+ *  categoría lo define el admin; a modo de fallback BUBAS conserva el suyo. */
 const PANE_ICON_COLOR: Partial<Record<string, string>> = {
-  [MenuCategory.MILANESA]: "text-amber-300",
-  [MenuCategory.ALITA]: "text-red-300",
-  [MenuCategory.BEBIDA]: "text-sky-300",
-  [MenuCategory.HAMBURGUESA]: "text-orange-300",
-  [MenuCategory.POSTRE]: "text-pink-300",
+  BUBAS: "#7DD3FC",
 };
 
 /** Tarjeta de categoría: fondo oscuro sutil, borde elegante, hover suave y
@@ -149,7 +76,13 @@ export function PosCategoryBar({
   onSwitch,
   onBack,
 }: {
-  panes: { key: string; label: string; imageUrl?: string | null }[];
+  panes: {
+    key: string;
+    label: string;
+    imageUrl?: string | null;
+    iconName: string;
+    color: string;
+  }[];
   /** Categoría abierta, o null cuando la fila está en su estado inicial. */
   activeKey: string | null;
   onSwitch: (key: string) => void;
@@ -171,7 +104,8 @@ export function PosCategoryBar({
       >
         {panes.map((pane) => {
           const selected = pane.key === activeKey;
-          const Icon = PANE_ICON[pane.key];
+          const Icon = pane.iconName ? CATEGORY_ICONS[pane.iconName] : undefined;
+          const accentColor = pane.color ?? PANE_ICON_COLOR[pane.key];
           // Con una categoría abierta solo esa tarjeta conserva el texto; el
           // título sigue en `title`/`aria-label` para que el ícono encogido se
           // pueda identificar al pasar el mouse o con lector de pantalla. Un
@@ -222,8 +156,9 @@ export function PosCategoryBar({
                     {Icon && (
                       <Icon
                         className={`h-4 w-4 shrink-0 ${
-                          PANE_ICON_COLOR[pane.key] ?? "text-slate-400"
+                          selected ? "text-white" : "text-slate-400"
                         }`}
+                        style={selected ? undefined : { color: accentColor }}
                       />
                     )}
                     <span className="leading-tight line-clamp-2">
@@ -236,10 +171,9 @@ export function PosCategoryBar({
                   {Icon && (
                     <Icon
                       className={`h-4 w-4 shrink-0 ${
-                        selected
-                          ? "text-white"
-                          : (PANE_ICON_COLOR[pane.key] ?? "text-slate-400")
+                        selected ? "text-white" : "text-slate-400"
                       }`}
+                      style={selected ? undefined : { color: accentColor }}
                     />
                   )}
                   {showLabel && (

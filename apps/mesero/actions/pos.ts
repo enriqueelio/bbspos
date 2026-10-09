@@ -54,7 +54,7 @@ function lunchDemand(items: CartItem[]) {
 }
 
 export async function getPosCatalog(): Promise<Catalog> {
-  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems] =
+  const [sizes, flavors, bobaTypes, drinkPrices, toppings, menuItems, cartaItems, categories] =
     await Promise.all([
       prisma.size.findMany({
         where: { available: true },
@@ -76,6 +76,10 @@ export async function getPosCatalog(): Promise<Catalog> {
       }),
       todayMenuItems(),
       cartaMenuItems(),
+      prisma.category.findMany({
+        where: { isActive: true, visibleInBar: true },
+        orderBy: { order: "asc" },
+      }),
     ]);
 
   const toMenuItemView = (
@@ -119,6 +123,13 @@ export async function getPosCatalog(): Promise<Catalog> {
     toppings,
     menuItems: menuItems.map(toMenuItemView),
     cartaItems: cartaItems.map(toMenuItemView),
+    categories: categories.map((c) => ({
+      key: c.key,
+      name: c.name,
+      iconName: c.iconName,
+      color: c.color,
+      imageUrl: c.imageUrl,
+    })),
   };
 }
 

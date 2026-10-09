@@ -19,69 +19,37 @@ export const FlavorCategoryList: FlavorCategory[] = [
   FlavorCategory.MILK,
 ];
 
-/** Sección gastronómica de un platillo del menú (mismo patrón que FlavorCategory).
- *  ALMUERZO es la sección dinámica del Menú del Día; el resto forma la carta fija. */
-export const MenuCategory = {
-  ALMUERZO: "ALMUERZO",
-  SANDWICH: "SANDWICH",
-  PANINI: "PANINI",
-  ENSALADA: "ENSALADA",
-  PIQUEO: "PIQUEO",
-  COMPARTIR: "COMPARTIR",
-  ALITA: "ALITA",
-  HAMBURGUESA: "HAMBURGUESA",
-  MILANESA: "MILANESA",
-  LOMO: "LOMO",
-  POLLO: "POLLO",
-  KIDS: "KIDS",
-  POSTRE: "POSTRE",
-  WAFFLE: "WAFFLE",
-  PANCAKE: "PANCAKE",
-  EXTRAS: "EXTRAS",
-  BEBIDA: "BEBIDA",
-} as const;
+/** Clave de una categoría de platillos. Sus valores ya no viven en un enum:
+ *  el catálogo registrado es la tabla `Category` (packages/db) y las terminales
+ *  lo reciben vía `Catalog.categories`. Se mantiene como alias nominal para
+ *  documentar qué cadenas son claves de categoría y no otro identificador. */
+export type CategoryKey = string;
 
-export type MenuCategory =
-  (typeof MenuCategory)[keyof typeof MenuCategory];
+/** Vista de una categoría de la carta entregada a las terminales. El nombre y
+ *  los atributos visuales los edita el admin (panel Categorías); la barra del
+ *  POS deriva de aquí su orden, íconos y colores. */
+export interface CategoryView {
+  key: CategoryKey;
+  name: string;
+  iconName: string;
+  color: string;
+  imageUrl: string | null;
+}
 
-export const MenuCategoryLabel: Record<MenuCategory, string> = {
-  ALMUERZO: "Almuerzos",
-  SANDWICH: "Sandwiches de Milanesa",
-  PANINI: "Paninis",
-  ENSALADA: "Ensaladas",
-  PIQUEO: "Piqueos",
-  COMPARTIR: "Para Compartir",
-  ALITA: "Alitas",
-  HAMBURGUESA: "Hamburguesas",
-  MILANESA: "Milanesas",
-  LOMO: "Lomos",
-  POLLO: "Pollos",
-  KIDS: "Menú Kids",
-  POSTRE: "Postres y Helados",
-  WAFFLE: "Bubble Waffles",
-  PANCAKE: "Pancakes",
-  EXTRAS: "Extras",
-  BEBIDA: "Bebidas",
+/** Claves de categoría históricas (previas a la tabla `Category`) que hoy se
+ *  consolidan en otra. `OrderItem.menuItemCategory` guarda el valor de cuando
+ *  se creó el pedido, así que los reportes deben seguir mostrando los pedidos
+ *  viejos agrupados bajo su categoría vigente. */
+export const LEGACY_CATEGORY_MAP: Record<string, string> = {
+  SANDWICH: "SANDWICHES",
+  PANINI: "SANDWICHES",
 };
 
-export const MenuCategoryList: MenuCategory[] = [
-  MenuCategory.SANDWICH,
-  MenuCategory.PANINI,
-  MenuCategory.ENSALADA,
-  MenuCategory.PIQUEO,
-  MenuCategory.COMPARTIR,
-  MenuCategory.ALITA,
-  MenuCategory.HAMBURGUESA,
-  MenuCategory.MILANESA,
-  MenuCategory.LOMO,
-  MenuCategory.POLLO,
-  MenuCategory.KIDS,
-  MenuCategory.POSTRE,
-  MenuCategory.WAFFLE,
-  MenuCategory.PANCAKE,
-  MenuCategory.EXTRAS,
-  MenuCategory.BEBIDA,
-];
+/** Normaliza una clave de categoría (incluidas las históricas) a la clave
+ *  vigente con la que se agrupa y muestra. */
+export function normalizeCategoryKey(key: string): string {
+  return LEGACY_CATEGORY_MAP[key] ?? key;
+}
 
 /** Variante con precio propio de un platillo de la carta (misma base del Menú). */
 export interface MenuItemOptionView {
@@ -118,7 +86,7 @@ export interface LunchStockState {
 export interface MenuItemView {
   id: string;
   name: string;
-  category: MenuCategory;
+  category: CategoryKey;
   price: number;
   description: string | null;
   imageUrl: string | null;
@@ -183,6 +151,10 @@ export interface DrinkPrice {
   price: number;
 }
 
+/** Catálogo activo entregado a las terminales. `categories` es el orden y la
+ *  identidad visual de la barra (activas y visibles en barra, ordenadas por el
+ *  admin); las pseudo-categorías "BUBAS" y "SANDWICHES" ya son filas reales de
+ *  la tabla. */
 export interface Catalog {
   sizes: Size[];
   flavors: Flavor[];
@@ -192,11 +164,9 @@ export interface Catalog {
   menuItems: MenuItemView[];
   /** Platazos de la carta fija (categorías distintas de ALMUERZO). */
   cartaItems: MenuItemView[];
-  /** Imagen de fondo de las tarjetas de categoría de la barra del POS del
-   *  cajero, por clave de pane (MenuCategory + "BUBAS" + "SANDWICHES"). Sin
-   *  entrada (o null) la tarjeta se dibuja con su ícono. Solo el cajero la
-   *  llena; mesero y store no la necesitan. */
-  categoryImages?: Record<string, string | null>;
+  /** Categorías de la barra del cajero, en su orden de lectura (activas y
+   *  visibles en barra). Mesero y store la usan para sus pestañas de carta. */
+  categories: CategoryView[];
 }
 
 export interface DrinkSelection {
@@ -236,7 +206,10 @@ export interface MenuItemCartItem {
   id: string;
   menuItemId: string;
   name: string;
-  category: MenuCategory;
+  category: CategoryKey;
+  /** Nombre de la categoría (Category.name) para mostrarlo en el ticket/UI sin
+   *  depender del catálogo en el punto de render. */
+  categoryName: string;
   unitPrice: number;
   optionId: string | null;
   optionName: string | null;
@@ -253,7 +226,7 @@ export type CartItem = DrinkCartItem | MenuItemCartItem;
 export function isLunchItem(
   item: CartItem,
 ): item is MenuItemCartItem {
-  return item.kind === "MENU_ITEM" && item.category === MenuCategory.ALMUERZO;
+  return item.kind === "MENU_ITEM" && item.category === "ALMUERZO";
 }
 
 /** Suma unitaria (sin multiplicar por cantidad) del ítem de carrito. */
@@ -542,7 +515,7 @@ export interface OrderItem {
   flavorCategory: FlavorCategory | null;
   bobaTypeName: string | null;
   menuItemName: string | null;
-  menuItemCategory: MenuCategory | null;
+  menuItemCategory: CategoryKey | null;
   menuItemOptionName: string | null;
   menuItemDetail?: string | null;
   unitPrice: number;
@@ -695,7 +668,9 @@ export interface ReportError {
 }
 
 export interface CategoryBreakdownRow {
-  category: FlavorCategory | MenuCategory;
+  category: string;
+  /** Nombre visible de la categoría (tabla Category o etiqueta de bebida). */
+  label: string;
   orders: number;
   units: number;
   revenue: number;

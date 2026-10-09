@@ -3,7 +3,7 @@
 import { prisma } from "@bbspos/db";
 import {
   FlavorCategoryList,
-  MenuCategoryList,
+  normalizeCategoryKey,
   type CategoryBreakdownRow,
 } from "@bbspos/types";
 import { requireSession } from "@/lib/reports/guard";
@@ -122,7 +122,7 @@ export async function printDailyReport(date?: string): Promise<string> {
 
   const bounds = dayBounds(localDate);
 
-  const [orders, cancelledAgg] = await Promise.all([
+  const [orders, cancelledAgg, categories] = await Promise.all([
     prisma.order.findMany({
       where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, ...notCancelled },
       include: { items: { include: { toppings: true } } },
@@ -130,6 +130,7 @@ export async function printDailyReport(date?: string): Promise<string> {
     prisma.order.count({
       where: { createdAt: { gte: bounds.gte, lt: bounds.lt }, status: "ANULADO" },
     }),
+    prisma.category.findMany({ orderBy: { order: "asc" } }),
   ]);
 
   const discountsTotal = orders.reduce((acc, o) => acc + (o.discountAmount ?? 0), 0);
@@ -167,8 +168,11 @@ export async function printDailyReport(date?: string): Promise<string> {
   let toppingsRevenue = 0;
   const CATEGORY_ORDER: CategoryBreakdownRow["category"][] = [
     ...FlavorCategoryList,
-    ...MenuCategoryList,
+    ...categories.map((c) => c.key),
   ];
+  const categoryLabels = new Map<string, string>(
+    categories.map((c) => [c.key, c.name] as const),
+  );
   const byCategory = new Map<
     CategoryBreakdownRow["category"],
     {
@@ -186,8 +190,11 @@ export async function printDailyReport(date?: string): Promise<string> {
       itemsSold += item.quantity;
       toppingsRevenue += item.toppings.reduce((acc, t) => acc + t.unitPrice, 0) * item.quantity;
       // Bebidas agrupan por flavorCategory; platillos (carta y Menú del Día)
-      // por menuItemCategory.
-      const key = item.flavorCategory ?? item.menuItemCategory ?? "ALMUERZO";
+      // por menuItemCategory. Las claves históricas (SANDWICH/PANINI) se
+      // consolidan en la categoría vigente.
+      const key = normalizeCategoryKey(
+        item.flavorCategory ?? item.menuItemCategory ?? "ALMUERZO",
+      );
       const row = byCategory.get(key);
       if (row) {
         row.orders.add(order.id);
@@ -206,7 +213,13 @@ export async function printDailyReport(date?: string): Promise<string> {
     toppingsRevenue,
     byCategory: CATEGORY_ORDER.map((c) => {
       const r = byCategory.get(c)!;
-      return { category: r.category, orders: r.orders.size, units: r.units, revenue: r.revenue };
+      return {
+        category: r.category,
+        label: categoryLabels.get(r.category) ?? r.category,
+        orders: r.orders.size,
+        units: r.units,
+        revenue: r.revenue,
+      };
     }),
     paymentBreakdown,
     discountsTotal,

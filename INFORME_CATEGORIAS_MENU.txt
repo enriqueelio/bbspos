@@ -1,0 +1,234 @@
+INFORME DE AUDITORIA - SISTEMA DE CATEGORIAS (/menu)
+====================================================
+
+Fecha: 2026-10-09
+Proyecto: bbspos (Next.js + Prisma/SQLite). Monorepo pnpm.
+
+Esto es un archivo en texto plano, sin markdown complejo, diseñado para ser
+legible por cualquier IA (ChatGPT, Claude, Gemini).
+
+--------------------------------------------------
+1. DIAGNOSTICO RAPIDO
+--------------------------------------------------
+- Las categorias NO viven en una tabla de base de datos. Son un enum de
+  TypeScript y de Prisma hardcodeado: "MenuCategory" con 17 valores.
+- No hay panel admin para crear, editar, desactivar ni reordenar categorias.
+  La pestana "Categorias" que existe solo sirve para subir/quitar la IMAGEN
+  de fondo de tarjetas que YA existen.
+- No existe campo de orden (order/position/sortOrder) en ninguna parte. El
+  orden es FIJO por arrays duplicados en el codigo.
+- No hay drag & drop instalado (@dnd-kit no es dependencia real).
+- El flujo de 2 estados de vista que se quiere (grid de tarjetas grandes en
+  estado inicial  <->  barra compacta horizontal con la activa expandida y
+  boton "Volver") YA ESTA IMPLEMENTADO en el POS del cajero. No hace falta
+  construirlo: hace falta volverlo administrable.
+- Unica parte administrable hoy: la imagen de fondo por tarjeta
+  (modelo CategoryConfig, subida WebP 640x360) configurable en
+  Admin -> Menú -> pestana "Categorias".
+
+--------------------------------------------------
+2. DIAGNOSTICO ACTUAL (donde y como estan definidas)
+--------------------------------------------------
+2.1 Origen de las categorias
+- Enum "MenuCategory" definido dos veces:
+  a) packages/types/src/index.ts:24-84 (const object + tipo + MenuCategoryLabel
+     + MenuCategoryList). Fuente de verdad de TypeScript.
+  b) packages/db/prisma/schema.prisma:444-462 (enum de Prisma, mismo listado).
+
+- Valores (17):
+  ALMUERZO, SANDWICH, PANINI, ENSALADA, PIQUEO, COMPARTIR, ALITA,
+  HAMBURGUESA, MILANESA, LOMO, POLLO, KIDS, POSTRE, WAFFLE, PANCAKE,
+  EXTRAS, BEBIDA
+
+- MenuCategoryList (16) excluye ALMUERZO (es el Menu del Dia dinamico, se
+  muestra aparte).
+
+- El plato se refiere a la categoria en MenuItem.category (schema.prisma:93)
+  con indice @@index([category, available]) (schema.prisma:110).
+
+2.2 Tabla de categoria NO existe
+- No hay modelo "Category" con id/name/slug/icon/image/order/isActive.
+- El unico modelo con "Category" en el nombre es CategoryConfig
+  (schema.prisma:332-339), y solo guarda la imagen:
+      model CategoryConfig {
+        key      String  @id
+        imageUrl String?
+      }
+  Sus claves son los valores del enum MenuCategory mas las pseudo-categorias
+  del cajero "BUBAS" y "SANDWICHES".
+
+2.3 Arrays fijos en el frontend (duplicacion del orden y etiquetas)
+- Cajero - orden de la barra:  apps/cajero/components/pos/pos-terminal.tsx:76-92
+  (MENU_PANE_ORDER, arranca en MILANESA y termina en BEBIDA)
+- Cajero - nombres cortos:     pos-terminal.tsx:96-103 (PANE_LABEL_SHORT)
+- Cajero - titulos fusionados: pos-terminal.tsx:106-108 (PANE_TITLE)
+- Cajero - iconos:             apps/cajero/components/pos/pos-category-bar.tsx:55-73 (PANE_ICON)
+- Cajero - colores de icono:   pos-category-bar.tsx:77-83 (PANE_ICON_COLOR)
+- Admin - panes con imagen:    apps/admin/app/(dashboard)/menu/menu-manager.tsx:308-325 (CATEGORY_PANES)
+- Admin - pestanas carta/cafeteria: menu-manager.tsx:945-963 (CARTA_CATEGORIES / CAFETERIA_CATEGORIES)
+- Admin - orden en reportes:   apps/admin/app/actions/print-report.ts:168-171 y
+                               apps/admin/app/api/reports/daily/route.ts:27 (CATEGORY_ORDER)
+- Mesero - tabs de carta:      apps/mesero/components/pos/pos-terminal.tsx:621-641 (itera MenuCategoryList)
+
+2.4 Fetch: estatico o dinamico?
+- Los DATOS (platos) salen de SQLite via Prisma (dinamico).
+- La LISTA de categorias es ESTATICA (array en codigo) en cada app.
+- Admin: apps/admin/app/(dashboard)/menu/page.tsx:10-42 consulta
+  prisma.menuItem.findMany({ orderBy: [{category:"asc"},{name:"asc"}] })
+  y prisma.categoryConfig.findMany(), y pasa todo a MenuManager (cliente).
+- Cajero: apps/cajero/actions/pos.ts:44-147 getPosCatalog() consulta Prisma,
+  arma categoryImages (:143-145). Se refresca por polling cada 15s
+  (documentado en pos-terminal.tsx:280-286).
+- NO existe la ruta /api/categories.
+
+--------------------------------------------------
+3. PROBLEMAS ENCONTRADOS
+--------------------------------------------------
+P1. Categorias hardcodeadas: agregar una categoria implica tocar codigo en 5
+    sitios y crear una migracion de BD. Imposible hacerlo desde un panel o un
+    panel/BD hoy.
+P2. Sin tabla Category: no hay name/slug/icon/color/order/isActive.
+P3. Sin campo de orden: el orden es fijo por arrays; cambiar la posicion de
+    una categoria es editar codigo en cajero, admin y mesero.
+P4. Sin drag & drop: @dnd-kit no esta instalado.
+P5. Icono y color NO son administrables: estan fijos en PANE_ICON y
+    PANE_ICON_COLOR. Solo la imagen es editable.
+P6. Duplicacion y desincronizacion de labels/orden entre capas:
+    - Labels distintos por capa: PANE_LABEL_SHORT dice "Sandwiches"/"Burgers"/
+      "Heladeria"; MenuCategoryLabel dice "Sandwiches de Milanesa"/
+      "Hamburguesas"/"Postres y Helados".
+    - SANDWICH+PANINI se fusionan como "SANDWICHES" en cajero y admin, pero
+      siguen separados en el enum de BD y en el mesero.
+    - ALMUERZO y PANINI nunca aparecen como pane de barra (ALMUERZO es el Menu
+      del Dia; PANINI se funde con SANDWICH).
+    - No toda categoria tiene icono propio (ALMUERZO, SANDWICH, PANINI no
+      aparecen en PANE_ICON).
+    - CATEGORY_KEYS (imagenes) incluye ALMUERZO, pero la barra nunca lo muestra.
+P7. El flujo de los 2 estados SOLO existe en el cajero. El mesero usa tabs de
+    texto planos sin tarjetas ni Volver.
+
+--------------------------------------------------
+4. FLUJO DE VISTA DE 2 ESTADOS - VIABILIDAD
+--------------------------------------------------
+Ya implementado en el cajero (apps/cajero/components/pos/pos-category-bar.tsx).
+El estado se llama activePane (pos-terminal.tsx:229), no "categoriaActiva".
+
+ESTADO 1 - sin categoria seleccionada (activeKey === null):
+- Contenedor: grid de 5 columnas (pos-category-bar.tsx:167-168).
+- Tarjeta grande h-32 (128px): CATEGORY_CARD.expandedIdle (:132).
+- Con imagen configurada: flex-col; foto arriba con flex-1 object-cover y
+  abajo franja oscura fija bg-slate-900/90 con icono + nombre (:206-232).
+- Sin imagen: fondo oscuro con icono centrado, mismo alto para grilla uniforme
+  (:200-201, :234-251).
+- La imagen URL se reescribe de /images/menu/ a /api/menu-image/ (:184-187).
+
+ESTADO 2 - categoria seleccionada (activeKey != null):
+- Contenedor pasa a flex (pos-category-bar.tsx:169).
+- La activa se expande con icono + texto: expandedActive h-12 px-6 (:138).
+- Las demas son cuadrados de 48px: collapsed h-12 w-12 (:139).
+- La activa pierde la imagen en este estado (:182-187).
+- Boton "Volver" (rojo, flecha izquierda) solo cuando !isIdle (:262-272).
+- En el padre: togglePane cierra si es la misma o abre si es otra
+  (pos-terminal.tsx:440-442); switchPane (null) = Volver (:444-459).
+
+Conclusion: el flujo es viable tal cual. Lo que falta NO es el flujo, sino que
+el orden, la existencia, el icono y el color de las categorias salgan de la BD.
+
+--------------------------------------------------
+5. SCHEMA PROPUESTO (para hacer las categorias 100% administrables)
+--------------------------------------------------
+Tabla nueva "Category" (reemplaza al enum MenuCategory como fuente de verdad):
+
+  model Category {
+    id        String   @id @default(cuid())
+    key       String   @unique          // clave estable tipo "SANDWICHES",
+                                        // compat con la actual
+    name      String                    // nombre visible
+    iconName  String?                   // nombre de icono lucide
+    color     String?                   // color de icono (clase tailwind o hex)
+    imageUrl  String?                   // imagen de fondo (migrar de CategoryConfig)
+    order     Int      @default(0)      // posicion en la barra
+    isActive  Boolean  @default(true)   // visibilidad
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+  }
+
+  @@index([order])
+
+Notas de migracion:
+- MenuItem.category pasa a ser una relacion o un String que referencia Key.
+- CategoryConfig se puede descartar (su imageUrl lo absorbe Category.imageUrl),
+  o dejar por compat durante la transicion.
+- "BUBAS" y "SANDWICHES" (pseudo-categorias del cajero) entran como filas de
+  Category con su orden e icono.
+
+--------------------------------------------------
+6. ENDPOINTS PROPUESTOS
+--------------------------------------------------
+GET    /api/categories
+       - Devuelve todas las categorias activas ordenadas por order ASC.
+       - Formato: [{ id, key, name, iconName, color, imageUrl, order, isActive }]
+       - El frontend (admin, cajero, mesero) arma su barra desde esta lista.
+
+PUT    /api/categories/reorder
+       - Body: { orderedKeys: ["MILANESA","SANDWICHES",...] }
+       - Actualiza order de cada categoria segun su posicion en el array.
+       - Se llama al soltar el drag & drop.
+
+POST   /api/categories            (o action createCategory)
+       - Crea categoria: key, name, iconName, color, imageUrl, order, isActive.
+
+PATCH  /api/categories/:id        (o action updateCategory)
+       - Edita nombre, icono, color, imagen, activo.
+
+DELETE /api/categories/:id        (o action deleteCategory)
+       - Soft-delete recomendado: marcar isActive = false en lugar de borrar,
+         para no romper pedidos historicos.
+
+Subida de imagen: reutilizar el patron de saveCategoryImage existente
+(apps/admin/app/actions/product-image.ts:127-169): sharp resize 640x360 cover,
+WebP, archivo category-<key>.webp en apps/store/public/images/menu/.
+
+--------------------------------------------------
+7. FRONTEND PROPUESTO
+--------------------------------------------------
+7.1 Panel admin (nueva pagina /admin/categorias o pestana del menu actual)
+- Tabla/lista de categorias: nombre (editable), icono (selector lucide),
+  color (picker), imagen (subida), activo (switch), orden (drag & drop).
+- Drag & drop con @dnd-kit/sortable:
+    - Lista ordenada por category.order.
+    - Al soltar, recomputar orden y llamar PUT /api/categories/reorder.
+- Boton "+ Agregar categoria" para crear con la misma UI.
+- Desactivar = isActive=false (desaparece de la barra del cajero).
+
+7.2 Menu / POS (refactor del consumo)
+- Cargar categorias desde /api/categories (o desde el catalogo si ya viaja).
+- La barra se construye SOLO con categorias activas ordenadas por order.
+- Los 2 estados de vista se mantienen tal cual (ya existen).
+- El icono se resuelve de iconName -> componente lucide (mapa pequeno,
+  mismas claves que PANE_ICON hoy).
+- Si no hay imagen, cae al layout sin imagen actual (icono centrado, h-32).
+
+--------------------------------------------------
+8. CHECKLIST FINAL (orden sugerido de implementacion)
+--------------------------------------------------
+[ ] 1. Crear modelo Category en schema.prisma + migracion SQL manual.
+[ ] 2. Sembrar filas desde el enum actual + BUBAS + SANDWICHES con su orden.
+[ ] 3. Migrar MenuItem.category a referenciar Category (o mantener String/key).
+[ ] 4. Absorber CategoryConfig.imageUrl en Category.imageUrl y migrar datos.
+[ ] 5. GET /api/categories ordenado por order ASC.
+[ ] 6. Instalar @dnd-kit/core y @dnd-kit/sortable en apps/admin.
+[ ] 7. PUT /api/categories/reorder + POST/PATCH/DELETE de categorias.
+[ ] 8. UI admin de categorias (listado + drag & drop + subida de imagen).
+[ ] 9. Refactor cajero: catalogPanes lee de Category (order, isActive).
+[ ] 10. Refactor mesero: tabs leen de Category (para no quedar desincronizado).
+[ ] 11. Reemplazar PANE_ICON/PANE_ICON_COLOR por iconName/color de la BD.
+[ ] 12. Eliminar arrays duplicados (MENU_PANE_ORDER, CATEGORY_PANES, etc.).
+[ ] 13. Reportes (CATEGORY_ORDER) pasan a leer la BD.
+[ ] 14. Typecheck + lint + migrate deploy + prueba manual en :3001 y :3002.
+
+Criterio de exito: agregar 20 categorias mañana desde el panel sin tocar
+codigo, y ordenarlas arrastrando.
+
+--------------------------------------------------
+FIN DEL INFORME

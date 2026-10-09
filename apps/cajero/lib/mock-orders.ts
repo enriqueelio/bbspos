@@ -1,6 +1,5 @@
 import {
   FlavorCategory,
-  MenuCategory,
   PaymentMethod,
   OrderStatus,
   OrderType,
@@ -40,7 +39,7 @@ function drink(opts: {
 function menuItem(opts: {
   id: string;
   menuItemName: string;
-  menuItemCategory: MenuCategory;
+  menuItemCategory: string;
   menuItemOptionName?: string;
   unitPrice: number;
   quantity?: number;
@@ -86,7 +85,7 @@ export const mockOrders: Order[] = [
       menuItem({
         id: "mock-1-i2",
         menuItemName: "Milanesa 4 Quesos",
-        menuItemCategory: MenuCategory.MILANESA,
+        menuItemCategory: "MILANESA",
         menuItemOptionName: "Papas fritas",
         unitPrice: 30,
       }),
@@ -111,7 +110,7 @@ export const mockOrders: Order[] = [
       menuItem({
         id: "mock-2-i1",
         menuItemName: "Alitas Mixtas 6 pzas",
-        menuItemCategory: MenuCategory.ALITA,
+        menuItemCategory: "ALITA",
         menuItemOptionName: "Salsa BBQ",
         unitPrice: 38,
       }),
@@ -141,7 +140,7 @@ export const mockOrders: Order[] = [
       menuItem({
         id: "mock-3-i1",
         menuItemName: "Bubble Waffle con helado",
-        menuItemCategory: MenuCategory.WAFFLE,
+        menuItemCategory: "WAFFLE",
         unitPrice: 28,
       }),
       drink({
@@ -171,7 +170,7 @@ export const mockOrders: Order[] = [
       menuItem({
         id: "mock-4-i1",
         menuItemName: "Lomo Saltado",
-        menuItemCategory: MenuCategory.LOMO,
+        menuItemCategory: "LOMO",
         menuItemOptionName: "Arroz y papas",
         unitPrice: 34,
       }),
@@ -202,7 +201,7 @@ export const mockOrders: Order[] = [
       menuItem({
         id: "mock-5-i1",
         menuItemName: "Pancake con frutas",
-        menuItemCategory: MenuCategory.PANCAKE,
+        menuItemCategory: "PANCAKE",
         unitPrice: 24,
       }),
       drink({

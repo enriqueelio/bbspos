@@ -913,6 +913,36 @@ export interface CashDenominationCount {
   count: number;
 }
 
+/** Movimiento manual o automático de efectivo de la gaveta. */
+export const CashMovementType = {
+  INGRESO: "INGRESO",
+  EGRESO: "EGRESO",
+} as const;
+
+export type CashMovementType =
+  (typeof CashMovementType)[keyof typeof CashMovementType];
+
+export const CashMovementSource = {
+  MANUAL: "MANUAL",
+  AUTO_CLOSE: "AUTO_CLOSE",
+} as const;
+
+export type CashMovementSource =
+  (typeof CashMovementSource)[keyof typeof CashMovementSource];
+
+export interface CashMovementRecord {
+  id: string;
+  date: string;
+  createdAt: string;
+  type: CashMovementType;
+  source: CashMovementSource;
+  concept: string;
+  amount: number;
+  userName: string;
+  cashCloseId: string | null;
+  voidedAt: string | null;
+}
+
 /** Contraste del día según el sistema (para la vista de Cierre de Caja).
  *  Los pagos divididos ya quedaron prorrateados entre sus métodos. */
 export interface CashCloseStats {
@@ -929,7 +959,11 @@ export interface CashCloseStats {
   rechargeCash: number;
   /** Recargas / pagos de deuda de pensionados por QR (ingreso real de caja). */
   rechargeQr: number;
-  /** Efectivo esperado en gaveta = systemCash + rechargeCash. */
+  /** Ingresos manuales de caja (fondo, ventas fuera del POS, etc.). */
+  cashIncome: number;
+  /** Egresos manuales de caja (compras, retiros, etc.). */
+  cashExpense: number;
+  /** Efectivo esperado en gaveta = systemCash + rechargeCash + cashIncome - cashExpense. */
   expectedCash: number;
   /** Pedidos del día con pago dividido (efectivo + QR prorrateado). */
   splitOrders: number;
@@ -949,9 +983,15 @@ export interface CashCloseRecord {
   pensionSales: number;
   rechargeCash: number;
   rechargeQr: number;
+  cashIncome: number;
+  cashExpense: number;
+  /** Excedente detectado y registrado automáticamente al confirmar. */
+  autoSurplus: number;
+  /** Efectivo esperado ya ajustado por autoSurplus. */
   expectedCash: number;
   diffCash: number;
   notes: string | null;
+  movements: CashMovementRecord[];
 }
 
 /** Reconstruye el desglose de denominaciones guardado como JSON ["200",2,...]. */

@@ -1,23 +1,60 @@
-import { prisma } from "@bbspos/db";
+import { prisma, type Prisma } from "@bbspos/db";
 import {
   OrderStatus,
   parseDenominations,
   type CashCloseRecord,
   type CashCloseStats,
+  type CashMovementRecord,
+  type CashMovementSource,
+  type CashMovementType,
 } from "@bbspos/types";
 import { dayBounds } from "@/lib/day";
+
+type CashCloseDb = Pick<
+  Prisma.TransactionClient,
+  "order" | "customerLedger" | "cashMovement"
+>;
+
+function toMovementRecord(row: {
+  id: string;
+  date: string;
+  createdAt: Date;
+  type: string;
+  source: string;
+  concept: string;
+  amount: number;
+  cashCloseId: string | null;
+  voidedAt: Date | null;
+  user: { name: string } | null;
+}): CashMovementRecord {
+  return {
+    id: row.id,
+    date: row.date,
+    createdAt: row.createdAt.toISOString(),
+    type: row.type as CashMovementType,
+    source: row.source as CashMovementSource,
+    concept: row.concept,
+    amount: row.amount,
+    userName: row.user?.name ?? "—",
+    cashCloseId: row.cashCloseId,
+    voidedAt: row.voidedAt?.toISOString() ?? null,
+  };
+}
 
 /** Contraste del día según el sistema, con el mismo criterio del reporte
  *  diario: solo pedidos ENTREGADOS cuentan para la caja, y un pago dividido
  *  queda prorrateado entre sus dos métodos (el primero recibe total − amount2,
- *  el segundo amount2). Ver @bbspos/db daily-report:collectReportStats. */
+ *  el segundo amount2). Ver @bbspos/db daily-report:collectReportStats.
+ *  Los ingresos/egresos manuales y el excedente automático también ajustan la
+ *  gaveta. */
 export async function getCashCloseStats(
   dateKey: string,
+  db: CashCloseDb = prisma,
 ): Promise<CashCloseStats> {
   const bounds = dayBounds(dateKey);
 
-  const [delivered, ledger] = await Promise.all([
-    prisma.order.findMany({
+  const [delivered, ledger, movements] = await Promise.all([
+    db.order.findMany({
       where: {
         status: OrderStatus.ENTREGADO,
         deliveredAt: { gte: bounds.gte, lt: bounds.lt },
@@ -31,9 +68,13 @@ export async function getCashCloseStats(
     }),
     // Cuentas de pensionados: la recarga/pago de deuda es ingreso real de caja
     // del día; el consumo se cobra contra la cuenta y NO entra a la caja.
-    prisma.customerLedger.findMany({
+    db.customerLedger.findMany({
       where: { createdAt: { gte: bounds.gte, lt: bounds.lt } },
       select: { type: true, amount: true, paymentMethod: true },
+    }),
+    db.cashMovement.findMany({
+      where: { date: dateKey, voidedAt: null },
+      select: { type: true, amount: true },
     }),
   ]);
 
@@ -72,6 +113,13 @@ export async function getCashCloseStats(
     .filter((l) => (l.paymentMethod ?? "EFECTIVO") === "QR")
     .reduce((sum, l) => sum + l.amount, 0);
 
+  const cashIncome = movements
+    .filter((m) => m.type === "INGRESO")
+    .reduce((sum, m) => sum + m.amount, 0);
+  const cashExpense = movements
+    .filter((m) => m.type === "EGRESO")
+    .reduce((sum, m) => sum + m.amount, 0);
+
   return {
     date: dateKey,
     deliveredOrders: delivered.length,
@@ -81,9 +129,24 @@ export async function getCashCloseStats(
     pensionSales,
     rechargeCash,
     rechargeQr,
-    expectedCash: acc.EFECTIVO + rechargeCash,
+    cashIncome,
+    cashExpense,
+    expectedCash:
+      acc.EFECTIVO + rechargeCash + cashIncome - cashExpense,
     splitOrders,
   };
+}
+
+/** Movimientos de efectivo activos del día (más reciente primero). */
+export async function getCashMovements(
+  dateKey: string,
+): Promise<CashMovementRecord[]> {
+  const rows = await prisma.cashMovement.findMany({
+    where: { date: dateKey, voidedAt: null },
+    orderBy: { createdAt: "desc" },
+    include: { user: { select: { name: true } } },
+  });
+  return rows.map(toMovementRecord);
 }
 
 /** Historial de cierres del día (más reciente primero) para auditoría y
@@ -110,8 +173,12 @@ export async function getCashCloses(
     pensionSales: row.pensionSales,
     rechargeCash: row.rechargeCash,
     rechargeQr: row.rechargeQr,
+    cashIncome: row.cashIncome,
+    cashExpense: row.cashExpense,
+    autoSurplus: row.autoSurplus,
     expectedCash: row.systemCash,
     diffCash: row.diffCash,
     notes: row.notes,
+    movements: [],
   }));
 }

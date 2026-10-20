@@ -22,6 +22,8 @@ model User {
   discountedOrders Order[]          @relation("OrderDiscountedBy")
   redeemedRewards  CustomerReward[] @relation("CustomerRewardRedeemedBy")
   cashCloses       CashClose[]
+  cashMovements    CashMovement[]   @relation("CashMovementUser")
+  voidedMovements  CashMovement[]   @relation("CashMovementVoidedBy")
 }
 
 model Size {
@@ -460,14 +462,57 @@ model CashClose {
   // Recargas/pagos de deuda de pensionados (SÍ entran a la caja ese día).
   rechargeCash  Float
   rechargeQr    Float
-  // sobranate/faltante de efectivo = countedCash - systemCash (systemCash ya
-  // incluye rechargeCash).
+  // Movimientos manuales de caja del día (ingresos/egresos) incluidos en el
+  // efectivo esperado. El excedente automático se guarda aparte.
+  cashIncome    Float    @default(0)
+  cashExpense   Float    @default(0)
+  // Si al contar sobró efectivo, al confirmar se registra un ingreso
+  // automático por este monto y systemCash queda ajustado. El campo preserva
+  // el excedente detectado para el ticket y la auditoría.
+  autoSurplus   Float    @default(0)
+  // faltante de efectivo = countedCash - systemCash (systemCash ya incluye
+  // rechargeCash, movimientos manuales y el excedente automático).
   diffCash      Float
   notes         String?
   createdAt     DateTime @default(now())
+  movements     CashMovement[]
 
   @@index([date])
   @@index([closedAt])
+}
+
+// Ingresos y egresos de efectivo de la gaveta (pan, agua, fondo de caja,
+// etc.). Nunca se editan ni se borran: una corrección manual se anula y queda
+// auditada. El excedente detectado al cerrar se crea con source AUTO_CLOSE.
+model CashMovement {
+  id          String             @id @default(cuid())
+  date        String
+  createdAt   DateTime           @default(now())
+  type        CashMovementType
+  source      CashMovementSource @default(MANUAL)
+  concept     String
+  amount      Float
+  userId      String?
+  user        User?              @relation("CashMovementUser", fields: [userId], references: [id])
+  cashCloseId String?
+  cashClose   CashClose?         @relation(fields: [cashCloseId], references: [id], onDelete: SetNull)
+  voidedAt    DateTime?
+  voidedById  String?
+  voidedBy    User?              @relation("CashMovementVoidedBy", fields: [voidedById], references: [id])
+
+  @@index([date])
+  @@index([cashCloseId])
+  @@index([createdAt])
+}
+
+enum CashMovementType {
+  INGRESO
+  EGRESO
+}
+
+enum CashMovementSource {
+  MANUAL
+  AUTO_CLOSE
 }
 
 enum FlavorCategory {

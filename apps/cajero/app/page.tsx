@@ -3,7 +3,11 @@ import { OrderStatus, OrderType, Role, type Order } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { dayBounds, todayKey } from "@/lib/day";
 import { getCashierDailyData } from "@/lib/report";
-import { getCashCloseStats, getCashCloses } from "@/lib/cash-close";
+import {
+  getCashCloseStats,
+  getCashCloses,
+  getCashMovements,
+} from "@/lib/cash-close";
 import { ReportView } from "@/components/report-view";
 import { ReportActions } from "@/components/report-actions";
 import { CashCloseView } from "@/components/cash-close-view";
@@ -266,9 +270,10 @@ export default async function CashierPage({
 
   if (tab === "cierre") {
     const key = todayKey();
-    const [stats, closes, printableOrders] = await Promise.all([
+    const [stats, closes, movements, printableOrders] = await Promise.all([
       getCashCloseStats(key),
       getCashCloses(key),
+      getCashMovements(key),
       getPrintableOrders(),
     ]);
 
@@ -284,6 +289,7 @@ export default async function CashierPage({
           <CashCloseView
             stats={stats}
             closes={closes}
+            movements={movements}
             canClose={session.user.role !== Role.MESERO}
           />
         </div>

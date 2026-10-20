@@ -8,9 +8,13 @@ import {
   Banknote,
   CheckCircle2,
   Divide,
+  Minus,
+  Plus,
   Printer,
   QrCode,
+  Trash2,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   Badge,
@@ -26,22 +30,25 @@ import {
   formatPrice,
   type CashCloseRecord,
   type CashCloseStats,
+  type CashMovementRecord,
+  type CashMovementType,
 } from "@bbspos/types";
-import { confirmCashClose, printCashClose } from "@/app/actions/cash-close";
+import {
+  confirmCashClose,
+  printCashClose,
+  registerCashMovement,
+  voidCashMovement,
+} from "@/app/actions/cash-close";
 
 function DiffBadge({ diff }: { diff: number }) {
-  if (diff === 0) {
+  if (diff < 0) {
     return (
-      <Badge className="bg-emerald-700 text-white">Cuadrado</Badge>
+      <Badge className="bg-red-700 text-white">
+        Faltante {formatPrice(Math.abs(diff))}
+      </Badge>
     );
   }
-  return (
-    <Badge
-      className={diff > 0 ? "bg-amber-500 text-black" : "bg-red-700 text-white"}
-    >
-      {diff > 0 ? `+${formatPrice(diff)}` : formatPrice(diff)}
-    </Badge>
-  );
+  return <Badge className="bg-emerald-700 text-white">Sin faltante</Badge>;
 }
 
 // Formatea "X Bs": sin decimales cuando es entero y con 2 decimales cuando
@@ -80,10 +87,12 @@ const arqueoRow = cva("border-b border-slate-800/70 transition-colors", {
 export function CashCloseView({
   stats,
   closes,
+  movements,
   canClose,
 }: {
   stats: CashCloseStats;
   closes: CashCloseRecord[];
+  movements: CashMovementRecord[];
   canClose: boolean;
 }) {
   const router = useRouter();
@@ -94,6 +103,16 @@ export function CashCloseView({
   const [pending, startTransition] = useTransition();
   const [busyPrintId, setBusyPrintId] = useState<string | null>(null);
   const [result, setResult] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
+  const [movementType, setMovementType] =
+    useState<CashMovementType>("EGRESO");
+  const [movementConcept, setMovementConcept] = useState("");
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementPending, startMovementTransition] = useTransition();
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [movementResult, setMovementResult] = useState<{
     ok: boolean;
     text: string;
   } | null>(null);
@@ -121,6 +140,66 @@ export function CashCloseView({
       e.preventDefault();
       if (index - 1 >= 0) refs[index - 1]?.focus();
     }
+  }
+
+  function onRegisterMovement(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMovementResult(null);
+
+    const concept = movementConcept.trim();
+    const amount = Number(movementAmount);
+    if (!concept) {
+      setMovementResult({ ok: false, text: "Escribe un concepto." });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMovementResult({ ok: false, text: "El monto debe ser mayor a cero." });
+      return;
+    }
+
+    startMovementTransition(async () => {
+      try {
+        const res = await registerCashMovement({
+          type: movementType,
+          concept,
+          amount,
+        });
+        setMovementResult({ ok: true, text: res.message });
+        setMovementConcept("");
+        setMovementAmount("");
+        router.refresh();
+      } catch (err) {
+        setMovementResult({
+          ok: false,
+          text:
+            err instanceof Error
+              ? err.message
+              : "No se pudo registrar el movimiento.",
+        });
+      }
+    });
+  }
+
+  function onVoidMovement(id: string) {
+    setMovementResult(null);
+    setVoidingId(id);
+    startMovementTransition(async () => {
+      try {
+        const res = await voidCashMovement(id);
+        setMovementResult({ ok: true, text: res.message });
+        router.refresh();
+      } catch (err) {
+        setMovementResult({
+          ok: false,
+          text:
+            err instanceof Error
+              ? err.message
+              : "No se pudo anular el movimiento.",
+        });
+      } finally {
+        setVoidingId(null);
+      }
+    });
   }
 
   function onConfirm() {
@@ -169,104 +248,283 @@ export function CashCloseView({
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Banknote className="h-5 w-5 text-emerald-400" />
-            Arqueo de billetes (gaveta)
+            Arqueo de billetes y monedas (gaveta)
           </CardTitle>
           <p className="text-sm text-white">
             Ingresa cuántos de cada denominación hay físicamente en la caja.
           </p>
         </CardHeader>
         <CardContent>
-          <div className="overflow-hidden rounded-lg border border-slate-700">
-            <div className="max-h-[52vh] overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-950 text-[10px] uppercase tracking-wide text-slate-400">
-                  <tr className="border-b border-slate-700">
-                    <th className="px-4 py-2 text-left font-semibold">
-                      Denominación
-                    </th>
-                    <th className="w-24 px-2 py-2 text-center font-semibold">
-                      Cantidad
-                    </th>
-                    <th className="px-4 py-2 text-right font-semibold">
-                      Subtotal
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {DENOMINACIONES.map((d, i) => {
-                    const count = conteo[d.valor] ?? 0;
-                    const activa = active === d.valor;
-                    return (
-                      <tr
-                        key={d.valor}
-                        className={cn(
-                          arqueoRow({ zebra: i % 2 === 1 ? "par" : "impar" }),
-                          activa && "hover:bg-slate-800/60",
-                          count > 0 ? "text-emerald-400" : "text-white",
-                        )}
-                      >
-                        <td className="px-4 py-1.5">
-                          <span className="font-black">
-                            Bs {d.valor}
-                          </span>
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
-                            {d.tipo}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          <Input
-                            ref={(el) => {
-                              inputRefs.current[i] = el;
-                            }}
-                            inputMode="numeric"
-                            min={0}
-                            autoComplete="off"
-                            value={count === 0 ? "" : String(count)}
-                            onChange={(e) => {
-                              setResult(null);
-                              const digits = e.target.value
-                                .replace(/[^\d]/g, "")
-                                .slice(0, 4);
-                              setConteo((prev) => ({
-                                ...prev,
-                                [d.valor]: digits === "" ? 0 : parseInt(digits, 10),
-                              }));
-                            }}
-                            onFocus={(e) => {
-                              setActive(d.valor);
-                              e.currentTarget.select();
-                            }}
-                            onKeyDown={(e) => onKeyDown(e, i)}
-                            placeholder="0"
-                            className="h-9 w-20 text-center tabular-nums"
-                            aria-label={`Cantidad de ${d.valor} bolivianos`}
-                          />
-                        </td>
-                        <td className="px-4 py-1.5 text-right font-semibold tabular-nums">
-                          {fmtBs(d.valor * count)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot className="sticky bottom-0 z-10 bg-slate-950">
-                  <tr className="border-t border-emerald-500/30">
-                    <td className="px-4 py-3 font-black uppercase tracking-wide text-emerald-300">
-                      Total General
-                    </td>
-                    <td></td>
-                    <td className="px-4 py-3 text-right text-3xl font-black tabular-nums text-emerald-300">
-                      {fmtBs(countedCash)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+          <div className="rounded-lg border border-slate-700">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-950 text-[10px] uppercase tracking-wide text-slate-400">
+                <tr className="border-b border-slate-700">
+                  <th className="px-4 py-2 text-left font-semibold">
+                    Denominación
+                  </th>
+                  <th className="w-24 px-2 py-2 text-center font-semibold">
+                    Cantidad
+                  </th>
+                  <th className="px-4 py-2 text-right font-semibold">
+                    Subtotal
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {DENOMINACIONES.map((d, i) => {
+                  const count = conteo[d.valor] ?? 0;
+                  const activa = active === d.valor;
+                  return (
+                    <tr
+                      key={d.valor}
+                      className={cn(
+                        arqueoRow({ zebra: i % 2 === 1 ? "par" : "impar" }),
+                        activa && "hover:bg-slate-800/60",
+                        count > 0 ? "text-emerald-400" : "text-white",
+                      )}
+                    >
+                      <td className="px-4 py-1.5">
+                        <span className="font-black">Bs {d.valor}</span>
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
+                          {d.tipo}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <Input
+                          ref={(el) => {
+                            inputRefs.current[i] = el;
+                          }}
+                          inputMode="numeric"
+                          min={0}
+                          autoComplete="off"
+                          value={count === 0 ? "" : String(count)}
+                          onChange={(e) => {
+                            setResult(null);
+                            const digits = e.target.value
+                              .replace(/[^\d]/g, "")
+                              .slice(0, 4);
+                            setConteo((prev) => ({
+                              ...prev,
+                              [d.valor]:
+                                digits === "" ? 0 : parseInt(digits, 10),
+                            }));
+                          }}
+                          onFocus={(e) => {
+                            setActive(d.valor);
+                            e.currentTarget.select();
+                          }}
+                          onKeyDown={(e) => onKeyDown(e, i)}
+                          placeholder="0"
+                          className="h-9 w-20 text-center tabular-nums"
+                          aria-label={`Cantidad de ${d.valor} bolivianos`}
+                        />
+                      </td>
+                      <td className="px-4 py-1.5 text-right font-semibold tabular-nums">
+                        {fmtBs(d.valor * count)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-slate-950">
+                <tr className="border-t border-emerald-500/30">
+                  <td className="px-4 py-3 font-black uppercase tracking-wide text-emerald-300">
+                    Total General
+                  </td>
+                  <td></td>
+                  <td className="px-4 py-3 text-right text-3xl font-black tabular-nums text-emerald-300">
+                    {fmtBs(countedCash)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
           <p className="mt-2 text-xs text-slate-400">
             Tip: escribe la cantidad y pulsa ↓ o Enter para pasar a la siguiente
             denominación.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wallet className="h-5 w-5 text-primary" />
+            Movimientos de caja
+          </CardTitle>
+          <p className="text-sm text-white">
+            Registra ingresos y egresos de efectivo: compras, fondo de caja o
+            dinero que entra o sale de la gaveta.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <form
+            onSubmit={onRegisterMovement}
+            className="grid gap-2 lg:grid-cols-[170px_minmax(0,1fr)_150px_auto] lg:items-end"
+          >
+            <div>
+              <span className="mb-1 block text-sm font-semibold text-white">
+                Tipo
+              </span>
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-700 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMovementType("INGRESO")}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-1 rounded-md text-sm font-semibold transition-colors",
+                    movementType === "INGRESO"
+                      ? "bg-emerald-700 text-white"
+                      : "text-slate-300 hover:bg-slate-800",
+                  )}
+                >
+                  <Plus className="h-4 w-4" /> Ingreso
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMovementType("EGRESO")}
+                  className={cn(
+                    "flex h-9 items-center justify-center gap-1 rounded-md text-sm font-semibold transition-colors",
+                    movementType === "EGRESO"
+                      ? "bg-red-700 text-white"
+                      : "text-slate-300 hover:bg-slate-800",
+                  )}
+                >
+                  <Minus className="h-4 w-4" /> Egreso
+                </button>
+              </div>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-white">
+                Concepto
+              </span>
+              <Input
+                value={movementConcept}
+                onChange={(e) => {
+                  setMovementConcept(e.target.value);
+                  setMovementResult(null);
+                }}
+                placeholder="Pan, agua, fondo de caja…"
+                maxLength={120}
+                className="w-full"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-white">
+                Monto (Bs)
+              </span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0.01"
+                step="0.01"
+                value={movementAmount}
+                onChange={(e) => {
+                  setMovementAmount(e.target.value);
+                  setMovementResult(null);
+                }}
+                placeholder="0.00"
+                className="w-full tabular-nums"
+              />
+            </label>
+            <Button
+              type="submit"
+              size="lg"
+              disabled={movementPending}
+              className="bg-emerald-700 text-white hover:bg-emerald-600"
+            >
+              {movementPending ? "Registrando…" : "Registrar"}
+            </Button>
+          </form>
+
+          {movementResult && (
+            <p
+              className={cn(
+                "rounded-md px-3 py-2 text-sm font-semibold",
+                movementResult.ok
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : "bg-red-500/10 text-red-400",
+              )}
+            >
+              {movementResult.text}
+            </p>
+          )}
+
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-bold text-white">
+                Movimientos del día ({movements.length})
+              </p>
+              <p className="text-xs text-slate-400">
+                Ingresos {formatPrice(stats.cashIncome)} · Egresos{" "}
+                {formatPrice(stats.cashExpense)}
+              </p>
+            </div>
+            <div className="mt-1 divide-y divide-slate-800 rounded-lg border border-slate-700">
+              {movements.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-slate-400">
+                  Aún no hay ingresos ni egresos registrados hoy.
+                </p>
+              ) : (
+                movements.map((m) => {
+                  const isIncome = m.type === "INGRESO";
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm"
+                    >
+                      <span
+                        className={cn(
+                          "rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                          isIncome
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-red-500/15 text-red-300",
+                        )}
+                      >
+                        {isIncome ? "Ingreso" : "Egreso"}
+                      </span>
+                      <span className="font-semibold text-white">
+                        {m.concept}
+                      </span>
+                      {m.source === "AUTO_CLOSE" && (
+                        <Badge className="border border-amber-500/40 bg-amber-500/10 text-amber-300">
+                          Auto
+                        </Badge>
+                      )}
+                      <span className="text-xs text-slate-400">
+                        {new Date(m.createdAt).toLocaleTimeString("es-BO", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        · {m.userName}
+                      </span>
+                      <span
+                        className={cn(
+                          "ml-auto font-black tabular-nums",
+                          isIncome ? "text-emerald-400" : "text-red-400",
+                        )}
+                      >
+                        {isIncome ? "+" : "−"}
+                        {formatPrice(m.amount)}
+                      </span>
+                      {m.source === "MANUAL" && !m.cashCloseId && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={movementPending || voidingId === m.id}
+                          onClick={() => onVoidMovement(m.id)}
+                          className="text-slate-400 hover:text-red-300"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {voidingId === m.id ? "Anulando…" : "Anular"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -308,6 +566,22 @@ export function CashCloseView({
                     {formatPrice(stats.rechargeCash)}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="pl-4 text-xs text-slate-400">
+                    Ingresos de caja
+                  </span>
+                  <span className="tabular-nums text-emerald-300">
+                    +{formatPrice(stats.cashIncome)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="pl-4 text-xs text-slate-400">
+                    Egresos de caja
+                  </span>
+                  <span className="tabular-nums text-red-300">
+                    −{formatPrice(stats.cashExpense)}
+                  </span>
+                </div>
                 <div className="flex justify-between border-t border-slate-800 pt-1">
                   <span className="text-white">Contado en gaveta</span>
                   <span className="tabular-nums font-black text-emerald-300">
@@ -315,9 +589,15 @@ export function CashCloseView({
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-white">Sobrante / faltante</span>
+                  <span className="text-white">Faltante</span>
                   <DiffBadge diff={diffCash} />
                 </div>
+                {diffCash > 0 && (
+                  <p className="text-xs text-slate-400">
+                    Al confirmar, el excedente se registrará automáticamente
+                    como ingreso.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -418,7 +698,7 @@ export function CashCloseView({
                 setNotes(e.target.value);
                 setResult(null);
               }}
-              placeholder="Incidencias del turno, sobrantes explicados, etc."
+              placeholder="Incidencias del turno, movimientos de caja, etc."
               className="w-full"
             />
           </label>
@@ -491,6 +771,12 @@ export function CashCloseView({
                   Esperado: {formatPrice(c.expectedCash)}
                 </span>
                 <DiffBadge diff={c.diffCash} />
+                {c.autoSurplus > 0 && (
+                  <span className="w-full text-xs text-amber-300">
+                    Excedente registrado automáticamente:{" "}
+                    {formatPrice(c.autoSurplus)}
+                  </span>
+                )}
                 {c.notes && (
                   <span className="w-full text-xs text-slate-400">
                     Nota: {c.notes}

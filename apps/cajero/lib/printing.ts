@@ -612,9 +612,8 @@ export function formatReportText(
 }
 
 function diffLabel(diff: number): string {
-  if (diff > 0) return `Sobrante: ${money(diff)}`;
-  if (diff < 0) return `Faltante: ${money(diff)}`;
-  return "Cuadrado";
+  if (diff < 0) return `Faltante: ${money(Math.abs(diff))}`;
+  return "Sin faltante";
 }
 
 /** Formatea el ticket resumen de un cierre de caja para impresora térmica. */
@@ -644,8 +643,30 @@ export function formatCashCloseText(record: CashCloseRecord): string {
   lines.push(pricedRow("TOTAL CONTADO", record.countedCash));
 
   lines.push(repeat("-", WIDTH));
+  lines.push(centered("MOVIMIENTOS DE CAJA"));
+  if (record.movements.length === 0) {
+    lines.push(centered("Sin movimientos"));
+  } else {
+    for (const m of record.movements) {
+      const label =
+        m.source === "AUTO_CLOSE"
+          ? "Excedente auto"
+          : `${m.type === "INGRESO" ? "+" : "-"} ${truncate(m.concept, 18)}`;
+      lines.push(pricedRow(label, m.amount));
+    }
+  }
+  lines.push(pricedRow("(+) Ingresos manuales", record.cashIncome));
+  lines.push(pricedRow("(-) Egresos manuales", record.cashExpense));
+
+  lines.push(repeat("-", WIDTH));
   lines.push(centered("CONTRASTE DEL SISTEMA"));
-  lines.push(pricedRow("Efectivo esperado", record.expectedCash));
+  lines.push(
+    pricedRow(
+      "Esperado antes ajuste",
+      record.expectedCash - record.autoSurplus,
+    ),
+  );
+  lines.push(pricedRow("Esperado ajustado", record.expectedCash));
   lines.push(row("Efectivo contado:", money(record.countedCash)));
   lines.push(diffLabel(record.diffCash));
   lines.push(pricedRow("QR (validar banco)", record.systemQr));

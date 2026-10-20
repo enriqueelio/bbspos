@@ -1758,7 +1758,7 @@ export function QueueView({
               autoComplete="off"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar pedido, nombre u hora…"
+              placeholder="Buscar…"
               title="Buscar por número de pedido, nombre, mesa u hora…"
               className="h-10 w-full pl-8"
             />

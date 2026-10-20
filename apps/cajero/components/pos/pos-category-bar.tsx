@@ -150,6 +150,10 @@ export function PosCategoryBar({
                     src={bgUrl}
                     alt=""
                     aria-hidden
+                    width={512}
+                    height={288}
+                    decoding="async"
+                    draggable={false}
                     className="min-h-0 w-full flex-1 object-cover"
                   />
                   <span className="flex shrink-0 items-center justify-center gap-2 bg-slate-900/90 px-2 py-2">

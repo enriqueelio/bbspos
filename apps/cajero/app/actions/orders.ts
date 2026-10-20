@@ -17,10 +17,10 @@ import {
 import { getRequiredSession } from "@/lib/session";
 import { accumulateCustomerLoyalty } from "@/app/actions/customers";
 import {
-  formatComanda,
   getPrinterConfig,
   openCashDrawer,
-  printText,
+  printComandas,
+  toComandaItem,
 } from "@/lib/printing";
 
 /** Imprime la comanda de un pedido, best-effort: un fallo de impresora nunca
@@ -36,9 +36,9 @@ async function tryPrintComanda(orderId: string, openDrawer = false) {
       include: { items: { include: { toppings: true } } },
     });
     if (!full) return;
-    await printText(
+    await printComandas(
       settings,
-      formatComanda({
+      {
         seq: full.seq,
         daySeq: full.daySeq,
         customerName: full.customerName,
@@ -48,23 +48,9 @@ async function tryPrintComanda(orderId: string, openDrawer = false) {
         reserveLeadMin: full.reserveLeadMin,
         createdAt: full.createdAt,
         total: full.total,
-        items: full.items.map((item) => ({
-          sizeName: item.sizeName,
-          flavorName: item.flavorName,
-          bobaTypeName: item.bobaTypeName,
-          menuItemName: item.menuItemName,
-          menuItemOptionName: item.menuItemOptionName,
-          menuItemDetail: item.menuItemDetail,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          toppings: item.toppings.map((t) => ({
-            toppingName: t.toppingName,
-            unitPrice: t.unitPrice,
-          })),
-        })),
-      }),
+        items: full.items.map(toComandaItem),
+      },
       {
-        title: "ticket",
         number: full.daySeq ?? full.seq,
         date: full.createdAt,
       },

@@ -4,10 +4,11 @@ import { prisma } from "@bbspos/db";
 import { getRequiredSession } from "@/lib/session";
 import { getCashierDailyData } from "@/lib/report";
 import {
-  formatComanda,
   formatReportText,
   getPrinterConfig,
+  printComandas,
   printText,
+  toComandaItem,
 } from "@/lib/printing";
 
 /** Reimprime la comanda de un pedido en la impresora configurada. */
@@ -41,9 +42,9 @@ export async function reprintOrder(orderId: string): Promise<string> {
     );
   }
 
-  await printText(
+  await printComandas(
     settings,
-    formatComanda({
+    {
       seq: order.seq,
       daySeq: order.daySeq,
       customerName: order.customerName,
@@ -53,29 +54,15 @@ export async function reprintOrder(orderId: string): Promise<string> {
       reserveLeadMin: order.reserveLeadMin,
       createdAt: order.createdAt,
       total: order.total,
-      items: order.items.map((item) => ({
-        sizeName: item.sizeName,
-        flavorName: item.flavorName,
-        bobaTypeName: item.bobaTypeName,
-        menuItemName: item.menuItemName,
-        menuItemOptionName: item.menuItemOptionName,
-        menuItemDetail: item.menuItemDetail,
-        unitPrice: item.unitPrice,
-        quantity: item.quantity,
-        toppings: item.toppings.map((t) => ({
-          toppingName: t.toppingName,
-          unitPrice: t.unitPrice,
-        })),
-      })),
-    }),
+      items: order.items.map(toComandaItem),
+    },
     {
-      title: "ticket",
       number: order.daySeq ?? order.seq,
       date: order.createdAt,
     },
   );
 
-  return `Comanda #${String(order.daySeq ?? order.seq ?? 0).padStart(3, "0")} enviada a la impresora.`;
+  return `Comandas del pedido #${String(order.daySeq ?? order.seq ?? 0).padStart(3, "0")} enviadas a la impresora.`;
 }
 
 /** Imprime el reporte del d�a del cajero conectado en la impresora configurada. */

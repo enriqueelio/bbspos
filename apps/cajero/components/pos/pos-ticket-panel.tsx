@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   cartItemUnitTotal,
   formatPrice,
@@ -77,6 +77,24 @@ export function PosTicketPanel({
   const [regBusy, setRegBusy] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const prevItemCount = useRef(cart.items.length);
+
+  // Al agregar una línea, el ticket se desplaza solo hasta el final para que
+  // el último producto agregado nunca quede escondido bajo el área de pago.
+  // Solo reacciona cuando la lista crece (no al editar cantidades ni al
+  // restaurar el ticket guardado en el navegador).
+  useEffect(() => {
+    const count = cart.items.length;
+    const grew = count > prevItemCount.current;
+    prevItemCount.current = count;
+    if (!grew) return;
+    const frame = requestAnimationFrame(() => {
+      const el = itemsRef.current;
+      el?.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [cart.items.length]);
 
   // Los steppers de un almuerzo también mueven el cupo: subir aparta las
   // unidades para esta caja y bajar las suelta. Si al subir ya no hay
@@ -291,7 +309,10 @@ export function PosTicketPanel({
       )}
 
       {/* Cuerpo del ticket: ítems scrolleables */}
-      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div
+        ref={itemsRef}
+        className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {cart.items.length === 0 && (
           <p className="text-sm text-slate-500">
             Agrega bebidas tocando un sabor o un plato del día en el catálogo.

@@ -33,6 +33,7 @@ model Size {
   imageUrl    String?
   createdAt   DateTime     @default(now())
   drinkPrices DrinkPrice[]
+  orderItems  OrderItem[]
 }
 
 model Flavor {
@@ -42,6 +43,7 @@ model Flavor {
   available  Boolean              @default(true)
   imageUrl   String?
   createdAt  DateTime             @default(now())
+  orderItems OrderItem[]
 }
 
 model FlavorCategoryLink {
@@ -63,6 +65,7 @@ model BobaType {
   imageUrl    String?
   createdAt   DateTime     @default(now())
   drinkPrices DrinkPrice[]
+  orderItems  OrderItem[]
 }
 
 model DrinkPrice {
@@ -79,12 +82,13 @@ model DrinkPrice {
 }
 
 model Topping {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  price     Int
-  available Boolean  @default(true)
-  imageUrl  String?
-  createdAt DateTime @default(now())
+  id                String             @id @default(cuid())
+  name              String             @unique
+  price             Int
+  available         Boolean            @default(true)
+  imageUrl          String?
+  createdAt         DateTime           @default(now())
+  orderItemToppings OrderItemTopping[]
 }
 
 model MenuItem {
@@ -105,6 +109,7 @@ model MenuItem {
   options        MenuItemOption[]
   lunchQuotas    LunchQuota[]
   lunchHolds     LunchHold[]
+  orderItems     OrderItem[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -114,14 +119,15 @@ model MenuItem {
 // Opciones de un platillo con variantes de precio obligatorias, p. ej. las
 // milanesas "a la carta" que se cobra distinto Pollo vs Res.
 model MenuItemOption {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   menuItemId     String
-  menuItem       MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  menuItem       MenuItem    @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
   name           String
   price          Int
   // Alitas Mixtas: salsas a elegir para este tamaño (6/8 = 2, 12 = 3).
   requiredSauces Int?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime    @default(now())
+  orderItems     OrderItem[]
 
   @@unique([menuItemId, name])
 }
@@ -148,7 +154,6 @@ model CustomerAccount {
   ledger      CustomerLedger[]
   orders      Order[]
 
-  @@index([customerId])
   @@index([pensionType])
 }
 
@@ -286,6 +291,18 @@ model OrderItem {
   id                 String             @id @default(cuid())
   orderId            String
   order              Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Vínculos al catálogo para trazabilidad (inventario, reportes). Nullable para
+  // pedidos históricos; los nombres de abajo se mantienen como snapshot.
+  menuItemId         String?
+  menuItem           MenuItem?          @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  menuItemOptionId   String?
+  menuItemOption     MenuItemOption?    @relation(fields: [menuItemOptionId], references: [id], onDelete: SetNull)
+  sizeId             String?
+  size               Size?              @relation(fields: [sizeId], references: [id], onDelete: SetNull)
+  flavorId           String?
+  flavor             Flavor?            @relation(fields: [flavorId], references: [id], onDelete: SetNull)
+  bobaTypeId         String?
+  bobaType           BobaType?          @relation(fields: [bobaTypeId], references: [id], onDelete: SetNull)
   sizeName           String?
   flavorName         String?
   flavorCategory     FlavorCategory?
@@ -300,14 +317,19 @@ model OrderItem {
   toppings           OrderItemTopping[]
 
   @@index([orderId])
+  @@index([menuItemId])
 }
 
 model OrderItemTopping {
   id          String    @id @default(cuid())
   orderItemId String
   orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  toppingId   String?
+  topping     Topping?  @relation(fields: [toppingId], references: [id], onDelete: SetNull)
   toppingName String
   unitPrice   Int
+
+  @@index([toppingId])
 }
 
 model PaymentConfig {
@@ -345,6 +367,8 @@ model Category {
   order        Int      @default(0)
   isActive     Boolean  @default(true)
   visibleInBar Boolean  @default(true)
+  // Estación de preparación donde se imprime la comanda: "COCINA" o "CAFETERIA".
+  station      String   @default("COCINA")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

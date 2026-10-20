@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@bbspos/db";
-import { Role } from "@bbspos/types";
+import { KitchenStation, KitchenStationList, Role } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { CATEGORY_ICON_NAMES } from "@bbspos/ui";
 
@@ -17,6 +17,7 @@ export interface CategoryAdminView {
   order: number;
   isActive: boolean;
   visibleInBar: boolean;
+  station: KitchenStation;
 }
 
 interface CategoryInput {
@@ -56,6 +57,9 @@ function toView(
     order: c.order,
     isActive: c.isActive,
     visibleInBar: c.visibleInBar,
+    station: c.station === KitchenStation.CAFETERIA
+      ? KitchenStation.CAFETERIA
+      : KitchenStation.COCINA,
   };
 }
 
@@ -231,5 +235,22 @@ export async function reorderCategories(keys: string[]): Promise<void> {
       }),
     ),
   );
+  revalidatePath("/menu");
+}
+
+/** Define si la comanda de los productos de una categoría sale en la impresora
+ *  de cocina o en la de cafetería. */
+export async function setCategoryStation(input: {
+  key: string;
+  station: KitchenStation;
+}): Promise<void> {
+  await requireAdminSession();
+  if (!KitchenStationList.includes(input.station)) {
+    throw new Error("Estación no válida.");
+  }
+  await prisma.category.update({
+    where: { key: input.key },
+    data: { station: input.station },
+  });
   revalidatePath("/menu");
 }

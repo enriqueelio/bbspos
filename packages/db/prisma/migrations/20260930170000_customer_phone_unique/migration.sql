@@ -6,4 +6,6 @@
 -- Sin backfill: ya se verifico que ningun telefono esta duplicado.
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Customer_phone_key" ON "Customer"("phone");
+-- IF NOT EXISTS: el índice ya lo crea la migración de lealtad; en una base
+-- nueva esta migración se ejecuta después y el CREATE fallaba al desplegar.
+CREATE UNIQUE INDEX IF NOT EXISTS "Customer_phone_key" ON "Customer"("phone");

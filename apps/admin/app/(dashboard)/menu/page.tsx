@@ -86,6 +86,7 @@ export default async function MenuPage() {
         order: c.order,
         isActive: c.isActive,
         visibleInBar: c.visibleInBar,
+        station: c.station === "CAFETERIA" ? "CAFETERIA" : "COCINA",
       }))}
     />
   );

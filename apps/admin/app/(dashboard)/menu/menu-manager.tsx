@@ -62,6 +62,7 @@ import {
   saveProductImage,
 } from "@/app/actions/product-image";
 import { CategoriesPanel } from "@/components/menu/categories-panel";
+import { StationsPanel } from "@/components/menu/stations-panel";
 import type { CategoryAdminView } from "@/app/actions/category";
 
 export type ProductImageEntity =
@@ -211,6 +212,7 @@ const MENU_TABS = [
   { key: "cafeteria", label: "Cafetería" },
   { key: "bubas", label: "Bubas" },
   { key: "salsas", label: "Salsas Alitas" },
+  { key: "estaciones", label: "Estaciones" },
   { key: "categorias", label: "Categorías" },
 ] as const;
 
@@ -1809,6 +1811,10 @@ export function MenuManager({
               )}
               </div>
         </div>
+      )}
+
+      {activeTab === "estaciones" && (
+        <StationsPanel categories={categories} />
       )}
 
       {activeTab === "categorias" && <CategoriesPanel categories={categories} />}

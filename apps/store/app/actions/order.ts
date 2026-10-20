@@ -27,6 +27,9 @@ export async function createOrder(
       throw new Error("Este producto no está disponible en la tienda.");
     }
     return {
+      sizeId: item.size.id,
+      flavorId: item.flavor.id,
+      bobaTypeId: item.bobaType.id,
       sizeName: item.size.name,
       flavorName: item.flavor.name,
       flavorCategory: item.category,
@@ -36,6 +39,7 @@ export async function createOrder(
       tiempoProduccion: productosTiempo["Bubble Tea"] ?? 5,
       toppings: {
         create: item.toppings.map((t) => ({
+          toppingId: t.id,
           toppingName: t.name,
           unitPrice: t.price,
         })),

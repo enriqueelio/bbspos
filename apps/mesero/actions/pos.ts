@@ -210,13 +210,16 @@ export async function createPosOrder(
         if (!dbTopping || dbTopping.price <= 0) {
           throw new Error("PRECIO_INVALIDO");
         }
-        return { toppingName: dbTopping.name, unitPrice: dbTopping.price };
+        return { toppingId: dbTopping.id, toppingName: dbTopping.name, unitPrice: dbTopping.price };
       });
       if (base <= 0) {
         throw new Error("PRECIO_INVALIDO");
       }
       total += (base + toppings.reduce((sum, t) => sum + t.unitPrice, 0)) * item.quantity;
       return {
+        sizeId: item.size.id,
+        flavorId: item.flavor.id,
+        bobaTypeId: item.bobaType.id,
         sizeName: item.size.name,
         flavorName: item.flavor.name,
         flavorCategory: item.category,
@@ -237,6 +240,8 @@ export async function createPosOrder(
     }
     total += unitPrice * item.quantity;
     return {
+      menuItemId: item.menuItemId,
+      menuItemOptionId: item.optionId,
       menuItemName: item.name,
       menuItemCategory: item.category,
       menuItemOptionName: item.optionName,

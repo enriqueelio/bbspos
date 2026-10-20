@@ -91,7 +91,9 @@ export async function saveProductImage(input: {
   const filename = `${entity}-${id}.webp`;
   await writeFile(join(MENU_IMAGES_DIR, filename), optimized);
 
-  const imageUrl = `/images/menu/${filename}`;
+  // La versión en la URL invalida la caché inmutable del navegador solo cuando
+  // la foto cambia; el archivo conserva el mismo nombre en disco.
+  const imageUrl = `/images/menu/${filename}?v=${Date.now()}`;
   await updateImageUrl(entity, id, imageUrl);
   revalidatePath("/menu");
   return { imageUrl };
@@ -146,8 +148,8 @@ export async function saveCategoryImage(input: {
   try {
     optimized = await sharp(await file.arrayBuffer())
       .rotate()
-      .resize(640, 360, { fit: "cover" })
-      .webp({ quality: 80 })
+      .resize(512, 288, { fit: "cover" })
+      .webp({ quality: 75, effort: 5 })
       .toBuffer();
   } catch {
     throw new Error(
@@ -159,7 +161,7 @@ export async function saveCategoryImage(input: {
   const filename = `category-${key.toLowerCase()}.webp`;
   await writeFile(join(MENU_IMAGES_DIR, filename), optimized);
 
-  const imageUrl = `/images/menu/${filename}`;
+  const imageUrl = `/images/menu/${filename}?v=${Date.now()}`;
   await prisma.category.update({
     where: { key },
     data: { imageUrl },

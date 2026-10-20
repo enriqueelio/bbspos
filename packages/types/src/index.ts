@@ -25,6 +25,25 @@ export const FlavorCategoryList: FlavorCategory[] = [
  *  documentar qué cadenas son claves de categoría y no otro identificador. */
 export type CategoryKey = string;
 
+/** Estación de preparación a la que se envía la comanda de un producto. */
+export const KitchenStation = {
+  COCINA: "COCINA",
+  CAFETERIA: "CAFETERIA",
+} as const;
+
+export type KitchenStation =
+  (typeof KitchenStation)[keyof typeof KitchenStation];
+
+export const KitchenStationLabel: Record<KitchenStation, string> = {
+  COCINA: "Cocina",
+  CAFETERIA: "Cafetería",
+};
+
+export const KitchenStationList: KitchenStation[] = [
+  KitchenStation.COCINA,
+  KitchenStation.CAFETERIA,
+];
+
 /** Vista de una categoría de la carta entregada a las terminales. El nombre y
  *  los atributos visuales los edita el admin (panel Categorías); la barra del
  *  POS deriva de aquí su orden, íconos y colores. */

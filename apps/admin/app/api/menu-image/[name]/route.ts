@@ -26,7 +26,10 @@ export async function GET(
     return new NextResponse(new Uint8Array(data), {
       headers: {
         "Content-Type": "image/webp",
-        "Cache-Control": "no-store",
+        // El imageUrl incluye ?v=<timestamp> al subir la foto: la URL cambia
+        // con cada reemplazo y el navegador puede cachear para siempre.
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": String(data.length),
       },
     });
   } catch {

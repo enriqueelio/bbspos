@@ -11,6 +11,8 @@ Monorepo pnpm `bbspos`: POS de té (Bubble Tea). Apps Next.js: `apps/admin` (300
 - Zona horaria fija `America/La_Paz` (UTC-4). En SQLite, `createdAt` se guarda como entero ms → usar `date("createdAt" / 1000, 'unixepoch', '-4 hours')` en SQL raw.
 - Ticket visible = `daySeq` diario (#001...); `seq` es únicamente global. Mostrar `daySeq ?? seq`.
 - Estados de pedido en BD: `RECIBIDO`, `ACEPTADO`, `ENTREGADO`, `ANULADO`. Cobrado = `paidAt`, entregado = `deliveredAt`.
+- `OrderItem` guarda IDs del catálogo (`menuItemId`, `menuItemOptionId`, `sizeId`, `flavorId`, `bobaTypeId`) además de los nombres snapshot; `OrderItemTopping` guarda `toppingId`. Toda ruta nueva de creación de pedidos debe poblarlos (necesario para inventario futuro).
+- Antes de desplegar, validar las migraciones desde cero con una `DATABASE_URL` temporal y `prisma migrate deploy`, además de probarlas sobre una copia de la base real.
 
 ## Comandos
 

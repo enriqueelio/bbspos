@@ -23,7 +23,7 @@ import {
 } from "@bbspos/types";
 import { getRequiredSession } from "@/lib/session";
 import { CART_ID_COOKIE } from "@/lib/cart-id";
-import { printText, formatComanda, getPrinterConfig } from "@/lib/printing";
+import { printComandas, toComandaItem, getPrinterConfig } from "@/lib/printing";
 import productosTiempoData from "../../../data/productos-tiempo.json";
 
 const productosTiempo = productosTiempoData as Record<string, number>;
@@ -217,13 +217,16 @@ async function pricePosItems(items: CartItem[]) {
         if (!dbTopping || dbTopping.price <= 0) {
           throw new Error("PRECIO_INVALIDO");
         }
-        return { toppingName: dbTopping.name, unitPrice: dbTopping.price };
+        return { toppingId: dbTopping.id, toppingName: dbTopping.name, unitPrice: dbTopping.price };
       });
       if (base <= 0) {
         throw new Error("PRECIO_INVALIDO");
       }
       total += (base + toppings.reduce((sum, t) => sum + t.unitPrice, 0)) * item.quantity;
       return {
+        sizeId: item.size.id,
+        flavorId: item.flavor.id,
+        bobaTypeId: item.bobaType.id,
         sizeName: item.size.name,
         flavorName: item.flavor.name,
         flavorCategory: item.category,
@@ -244,6 +247,8 @@ async function pricePosItems(items: CartItem[]) {
     }
     total += unitPrice * item.quantity;
     return {
+      menuItemId: item.menuItemId,
+      menuItemOptionId: item.optionId,
       menuItemName: item.name,
       menuItemCategory: item.category,
       menuItemOptionName: item.optionName,
@@ -446,9 +451,9 @@ export async function createPosOrder(
           include: { items: { include: { toppings: true } } },
         });
         if (printed) {
-          await printText(
+          await printComandas(
             settings,
-            formatComanda({
+            {
               seq: printed.seq,
               daySeq: printed.daySeq,
               customerName: printed.customerName,
@@ -458,23 +463,9 @@ export async function createPosOrder(
               reserveLeadMin: printed.reserveLeadMin,
               createdAt: printed.createdAt,
               total: printed.total,
-              items: printed.items.map((item) => ({
-                sizeName: item.sizeName,
-                flavorName: item.flavorName,
-                bobaTypeName: item.bobaTypeName,
-                menuItemName: item.menuItemName,
-                menuItemOptionName: item.menuItemOptionName,
-                menuItemDetail: item.menuItemDetail,
-                unitPrice: item.unitPrice,
-                quantity: item.quantity,
-                toppings: item.toppings.map((t) => ({
-                  toppingName: t.toppingName,
-                  unitPrice: t.unitPrice,
-                })),
-              })),
-            }),
+              items: printed.items.map(toComandaItem),
+            },
             {
-              title: "ticket",
               number: printed.daySeq ?? printed.seq,
               date: printed.createdAt,
             },

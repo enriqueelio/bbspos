@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import {
   getPrinterSettings,
+  prisma,
   printVirtualPng,
   type PrintJobMeta,
   type PrinterSettings,
@@ -9,6 +10,7 @@ import {
   type CashCloseRecord,
   type CashierDailyData,
   formatDurationMinutes,
+  KitchenStation,
   PaymentMethodLabel,
 } from "@bbspos/types";
 
@@ -278,13 +280,35 @@ function toAscii(text: string): string {
 interface ComandaItem {
   sizeName: string | null;
   flavorName: string | null;
+  flavorCategory?: string | null;
   bobaTypeName: string | null;
   menuItemName: string | null;
+  menuItemCategory?: string | null;
   menuItemOptionName: string | null;
   menuItemDetail: string | null;
   unitPrice: number;
   quantity: number;
   toppings: { toppingName: string; unitPrice: number }[];
+}
+
+/** OrderItem de Prisma (con toppings) convertido a la forma de la comanda. */
+export function toComandaItem(item: ComandaItem): ComandaItem {
+  return {
+    sizeName: item.sizeName,
+    flavorName: item.flavorName,
+    flavorCategory: item.flavorCategory ?? null,
+    bobaTypeName: item.bobaTypeName,
+    menuItemName: item.menuItemName,
+    menuItemCategory: item.menuItemCategory ?? null,
+    menuItemOptionName: item.menuItemOptionName,
+    menuItemDetail: item.menuItemDetail,
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+    toppings: item.toppings.map((t) => ({
+      toppingName: t.toppingName,
+      unitPrice: t.unitPrice,
+    })),
+  };
 }
 
 type ComandaDeliveryType = "MESA" | "LLEVAR" | "DELIVERY";
@@ -374,13 +398,23 @@ function wrap(text: string, width: number): string[] {
   return lines.length > 0 ? lines : [""];
 }
 
-/** Formatea la comanda como texto plano para impresora de tickets. */
-export function formatComanda(order: ComandaOrder): string {
+/** Formatea la comanda como texto plano para impresora de tickets. Con
+ *  `station` se imprime solo esa estación (los ítems ya vienen filtrados) y el
+ *  encabezado lo indica. */
+export function formatComanda(
+  order: ComandaOrder,
+  station?: KitchenStation,
+): string {
   const lines: string[] = [];
 
+  const numberLabel = String(order.daySeq ?? order.seq ?? 0).padStart(3, "0");
   lines.push(repeat("=", WIDTH));
   lines.push(centered("BIBOSI"));
-  lines.push(centered(`COMANDA #${String(order.daySeq ?? order.seq ?? 0).padStart(3, "0")}`));
+  lines.push(
+    centered(
+      station ? `COMANDA ${station} #${numberLabel}` : `COMANDA #${numberLabel}`,
+    ),
+  );
   lines.push(repeat("=", WIDTH));
 
   if (order.customerName) {
@@ -445,10 +479,78 @@ export function formatComanda(order: ComandaOrder): string {
   }
 
   lines.push(repeat("-", WIDTH));
-  lines.push(pricedRow("TOTAL", order.total));
+  if (station) {
+    const stationTotal = order.items.reduce(
+      (sum, item) => sum + comandaItemTotal(item),
+      0,
+    );
+    lines.push(pricedRow(`SUBTOTAL ${station}`, stationTotal));
+    lines.push(pricedRow("TOTAL GENERAL", order.total));
+  } else {
+    lines.push(pricedRow("TOTAL", order.total));
+  }
   lines.push(repeat("=", WIDTH));
 
   return `${lines.join("\n")}\n`;
+}
+
+function comandaItemTotal(item: ComandaItem): number {
+  const toppings = item.toppings.reduce((sum, t) => sum + t.unitPrice, 0);
+  return (item.unitPrice + toppings) * item.quantity;
+}
+
+/** Imprime las comandas del pedido separadas por estación. Devuelve cuántas
+ *  salieron: una por cada estación que tenga productos (0 a 2). Los platos usan
+ *  la estación configurada en su categoría (Cocina por defecto); las bebidas
+ *  armadas van siempre a Cafetería. */
+export async function printComandas(
+  settings: PrinterSettings,
+  order: ComandaOrder,
+  job: PrintJobMeta,
+  openDrawer = false,
+): Promise<number> {
+  const categories = await prisma.category.findMany({
+    select: { key: true, station: true },
+  });
+  const stationByCategory = new Map<string, KitchenStation>(
+    categories.map((c) => [
+      c.key,
+      c.station === KitchenStation.CAFETERIA
+        ? KitchenStation.CAFETERIA
+        : KitchenStation.COCINA,
+    ]),
+  );
+
+  const grouped: Record<KitchenStation, ComandaItem[]> = {
+    COCINA: [],
+    CAFETERIA: [],
+  };
+  for (const item of order.items) {
+    const station = item.menuItemName
+      ? (stationByCategory.get(item.menuItemCategory ?? "") ?? KitchenStation.COCINA)
+      : KitchenStation.CAFETERIA;
+    grouped[station].push(item);
+  }
+
+  let printed = 0;
+  for (const station of [KitchenStation.COCINA, KitchenStation.CAFETERIA]) {
+    const items = grouped[station];
+    if (items.length === 0) continue;
+    await printText(
+      settings,
+      formatComanda({ ...order, items }, station),
+      {
+        ...job,
+        title:
+          station === KitchenStation.COCINA
+            ? "comanda-cocina"
+            : "comanda-cafeteria",
+      },
+      openDrawer && printed === 0,
+    );
+    printed++;
+  }
+  return printed;
 }
 
 function money(n: number): string {

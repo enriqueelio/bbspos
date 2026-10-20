@@ -32,11 +32,11 @@ export function visualStateOf(order: Order): OrderVisualState {
 export const orderBadgeVariants = cva("shrink-0 border-transparent font-bold", {
   variants: {
     visual: {
-      RECIBIDO: "bg-slate-400 text-slate-950",
-      ACEPTADO: "bg-blue-500 text-white",
-      ENTREGADO_SIN_COBRAR: "bg-green-500 text-white",
-      ENTREGADO_COBRADO: "bg-green-500 text-white",
-      PAGADO_SIN_ENTREGAR: "bg-orange-500 text-white",
+      RECIBIDO: "bg-slate-300 text-slate-950",
+      ACEPTADO: "bg-blue-700 text-white",
+      ENTREGADO_SIN_COBRAR: "bg-green-700 text-white",
+      ENTREGADO_COBRADO: "bg-green-700 text-white",
+      PAGADO_SIN_ENTREGAR: "bg-orange-700 text-white",
     },
   },
   defaultVariants: { visual: "ACEPTADO" },

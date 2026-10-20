@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from "lucide-react";
 import { CATEGORY_ICONS } from "@bbspos/ui";
+import { FOCUS_RING, POS_GRID } from "./pos-styles";
 
 /** Tinte de color del ícono en estado inactivo, por panel. El `color` de la
  *  categoría lo define el admin; a modo de fallback BUBAS conserva el suyo. */
@@ -49,7 +50,7 @@ const PANE_ICON_COLOR: Partial<Record<string, string>> = {
  *  después de elegir, haciendo creer que el borde había cambiado de color. Es el
  *  mismo tratamiento que ya reciben los campos de texto del POS. */
 const CATEGORY_CARD = {
-  base: "inline-flex items-center justify-center gap-2 rounded-xl border text-xs font-bold capitalize tracking-wide transition-colors duration-150 focus:outline-none active:scale-95 disabled:cursor-not-allowed disabled:opacity-30",
+  base: `inline-flex items-center justify-center gap-2 rounded-xl border text-xs font-bold capitalize tracking-wide transition-colors duration-150 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 ${FOCUS_RING}`,
   // Cuadrícula (estado inicial): la tarjeta ocupa su celda y queda uniforme.
   // Con imagen usa `expandedIdleImage` (p-0, el layout interno es flex-col a
   // sangre completa); sin imagen lleva este con padding y el ícono centrado.
@@ -91,14 +92,17 @@ export function PosCategoryBar({
 }) {
   const isIdle = activeKey === null;
   return (
-    <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2">
-      {/* El contenedor cambia de layout con el estado: la retícula de 5 columnas
-          deja huecos enormes en cuanto las tarjetas se encogen a 48px, así que
-          en el estado activo se agrupan en flex, que las junta sin huecos. */}
+    <nav
+      aria-label="Categorías del menú"
+      className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950 py-2"
+    >
+      {/* El contenedor cambia de layout con el estado: la retícula deja huecos
+          enormes en cuanto las tarjetas se encogen a 48px, así que en el estado
+          activo se agrupan en flex, que las junta sin huecos. */}
       <div
         className={
           isIdle
-            ? "grid grid-cols-5 justify-items-stretch gap-2 px-4"
+            ? `${POS_GRID} justify-items-stretch px-4`
             : "flex flex-wrap items-center gap-3 px-4"
         }
       >
@@ -209,6 +213,6 @@ export function PosCategoryBar({
           </button>
         )}
       </div>
-    </div>
+    </nav>
   );
 }

@@ -32,12 +32,12 @@ import { confirmCashClose, printCashClose } from "@/app/actions/cash-close";
 function DiffBadge({ diff }: { diff: number }) {
   if (diff === 0) {
     return (
-      <Badge className="bg-emerald-600 text-white">Cuadrado</Badge>
+      <Badge className="bg-emerald-700 text-white">Cuadrado</Badge>
     );
   }
   return (
     <Badge
-      className={diff > 0 ? "bg-amber-500 text-black" : "bg-red-600 text-white"}
+      className={diff > 0 ? "bg-amber-500 text-black" : "bg-red-700 text-white"}
     >
       {diff > 0 ? `+${formatPrice(diff)}` : formatPrice(diff)}
     </Badge>
@@ -437,7 +437,7 @@ export function CashCloseView({
               disabled={pending || !canClose}
               onClick={onConfirm}
               title={canClose ? undefined : "Solo el cajero o el administrador"}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              className="bg-emerald-700 text-white hover:bg-emerald-600"
             >
               {pending ? "Guardando…" : "Confirmar Cierre de Caja"}
             </Button>

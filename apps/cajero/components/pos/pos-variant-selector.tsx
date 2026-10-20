@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { formatPrice, type MenuItemView } from "@bbspos/types";
+import { FOCUS_RING } from "./pos-styles";
 
 // ===== Alitas: sabores simples y salsas de las alitas mixtas =====
 // Las alitas simples vienen bañadas en su salsa; las Alitas Mixtas obligan a
@@ -79,8 +80,9 @@ export function PosVariantSelector({
             <button
               key={option.id}
               type="button"
+              aria-pressed={active}
               onClick={() => onSelectSize(option)}
-              className={`h-12 rounded-xl border text-sm font-semibold text-white transition-all active:scale-95 ${
+              className={`h-12 rounded-xl border text-sm font-semibold text-white transition-all active:scale-95 ${FOCUS_RING} ${
                 active
                   ? "border-primary bg-primary"
                   : "border-slate-600 bg-slate-800 hover:border-primary hover:bg-slate-700"
@@ -114,8 +116,9 @@ export function PosVariantSelector({
                 <button
                   key={sauce}
                   type="button"
+                  aria-pressed={on}
                   onClick={() => onToggleSauce(sauce)}
-                  className={`h-9 rounded-full border px-3 text-xs font-semibold transition-all active:scale-95 ${
+                  className={`h-11 rounded-full border px-3 text-xs font-semibold transition-all active:scale-95 ${FOCUS_RING} ${
                     on
                       ? "border-amber-400 bg-amber-400/20 text-amber-100"
                       : "border-slate-600 bg-slate-800 text-slate-300 hover:border-amber-400/60"
@@ -130,7 +133,7 @@ export function PosVariantSelector({
             <button
               type="button"
               onClick={onConfirm}
-              className="mt-2 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600"
+              className={`mt-2 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-700 to-emerald-800 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-600 hover:to-emerald-700 ${FOCUS_RING}`}
             >
               Confirmar · {formatPrice(selectedSize.price)}
             </button>
@@ -141,7 +144,7 @@ export function PosVariantSelector({
       <button
         type="button"
         onClick={onCancel}
-        className="w-full rounded-lg pt-1 text-center text-xs font-semibold text-slate-400 uppercase tracking-wide transition-colors hover:text-white"
+        className={`w-full rounded-lg pt-2 text-center text-xs font-semibold uppercase tracking-wide text-slate-300 transition-colors hover:text-white ${FOCUS_RING}`}
       >
         Cancelar
       </button>

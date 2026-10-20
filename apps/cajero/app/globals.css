@@ -18,10 +18,10 @@
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-    --success: 160.1 84.1% 39.4%;
+    --success: 160.1 84.1% 28%;
     --success-foreground: 0 0% 100%;
     --warning: 37.7 92.1% 50.2%;
-    --warning-foreground: 0 0% 100%;
+    --warning-foreground: 222.2 47.4% 11.2%;
     --destructive: 346.8 77.2% 49.8%;
     --destructive-foreground: 0 0% 100%;
     --border: 217.2 32.6% 17.5%;
@@ -54,6 +54,23 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Superficies del navegador: selección, cursor de texto y foco visible
+     pertenecen a la paleta, no a la hoja por defecto. */
+  ::selection {
+    background: hsl(var(--primary) / 0.35);
+    color: hsl(var(--foreground));
+  }
+
+  input,
+  textarea {
+    caret-color: hsl(var(--primary));
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 
@@ -204,5 +221,18 @@
   animation:
     card-enter 200ms ease-out both,
     flash-blue 2s ease-in-out 200ms both;
+}
+
+/* El estado nunca depende solo del movimiento: el color y el texto siguen
+   ahí. Solo se apaga el parpadeo para quien lo pidió en su sistema. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 

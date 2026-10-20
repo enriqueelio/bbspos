@@ -10,7 +10,15 @@ import {
   type Size,
   type Topping,
 } from "@bbspos/types";
-import { CHIP, CHIP_BASE, PRODUCT, PRODUCT_BASE, TOP_LABEL } from "./pos-styles";
+import {
+  CHIP,
+  CHIP_BASE,
+  FOCUS_RING,
+  POS_GRID,
+  PRODUCT,
+  PRODUCT_BASE,
+  TOP_LABEL,
+} from "./pos-styles";
 
 export function PosBubasBuilder({
   bubaCategory,
@@ -80,6 +88,7 @@ export function PosBubasBuilder({
             <button
               key={category}
               type="button"
+              aria-pressed={selected}
               disabled={!enabled}
               onClick={() => onSwitchCategory(category)}
               className={`${CHIP_BASE} ${
@@ -92,15 +101,16 @@ export function PosBubasBuilder({
         })}
       </div>
 
-      {/* Grilla de sabores: misma retícula de 5 columnas que la barra de
-          categorías y los almuerzos del día, para que las columnas alineen. */}
-      <div className="grid grid-cols-5 gap-2">
+      {/* Grilla de sabores: misma retícula fluida que la barra de categorías
+          y los almuerzos del día, para que las columnas alineen. */}
+      <div className={POS_GRID}>
         {flavors.map((flavor) => {
           const selected = selectedFlavorId === flavor.id;
           return (
             <button
               key={flavor.id}
               type="button"
+              aria-pressed={selected}
               onClick={() => onSelectFlavor(flavor)}
               className={`${PRODUCT_BASE} h-12 ${
                 selected ? PRODUCT.selected : PRODUCT.idle
@@ -115,11 +125,12 @@ export function PosBubasBuilder({
       {/* Tamaño */}
       <section className="mt-2 space-y-3">
         <h3 className={TOP_LABEL}>Tamaño</h3>
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+        <div className={POS_GRID}>
           {sizes.map((s) => (
             <button
               key={s.id}
               type="button"
+              aria-pressed={s.id === selectedSize?.id}
               onClick={() => onSelectSize(s.id)}
               className={`${PRODUCT_BASE} h-12 ${
                 s.id === selectedSize?.id ? PRODUCT.selected : PRODUCT.idle
@@ -134,11 +145,12 @@ export function PosBubasBuilder({
       {/* Tipo de boba (debajo de tamaño) - selección radio */}
       <section className="mt-2 space-y-3">
         <h3 className={TOP_LABEL}>Tipo de boba</h3>
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+        <div className={POS_GRID}>
           {bobaTypes.map((b) => (
             <button
               key={b.id}
               type="button"
+              aria-pressed={b.id === selectedBobaType?.id}
               onClick={() => onSelectBoba(b.id)}
               className={`${PRODUCT_BASE} h-12 ${
                 b.id === selectedBobaType?.id ? PRODUCT.selected : PRODUCT.idle
@@ -162,8 +174,9 @@ export function PosBubasBuilder({
                   <button
                     type="button"
                     disabled={qty <= 0}
+                    aria-label={`${t.name}: restar`}
                     onClick={() => onSetToppingQty(t.id, qty - 1)}
-                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0"
+                    className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0 ${FOCUS_RING}`}
                   >
                     −
                   </button>
@@ -172,8 +185,9 @@ export function PosBubasBuilder({
                   </span>
                   <button
                     type="button"
+                    aria-label={`${t.name}: sumar`}
                     onClick={() => onSetToppingQty(t.id, qty + 1)}
-                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0"
+                    className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0 ${FOCUS_RING}`}
                   >
                     +
                   </button>
@@ -196,8 +210,9 @@ export function PosBubasBuilder({
                     <button
                       type="button"
                       disabled={qty <= 0}
-                      onClick={() => onSetToppingQty(t.id, qty - 1)}
-                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0"
+                      aria-label={`${t.name}: restar`}
+                    onClick={() => onSetToppingQty(t.id, qty - 1)}
+                      className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-30 shrink-0 ${FOCUS_RING}`}
                     >
                       −
                     </button>
@@ -206,8 +221,9 @@ export function PosBubasBuilder({
                     </span>
                     <button
                       type="button"
-                      onClick={() => onSetToppingQty(t.id, qty + 1)}
-                      className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0"
+                      aria-label={`${t.name}: sumar`}
+                    onClick={() => onSetToppingQty(t.id, qty + 1)}
+                      className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 shrink-0 ${FOCUS_RING}`}
                     >
                       +
                     </button>
@@ -249,7 +265,7 @@ export function PosBubasBuilder({
             type="button"
             disabled={!canConfirm}
             onClick={onConfirmProduct}
-            className="mt-3 h-11 w-full rounded-xl bg-gradient-to-b from-emerald-500 to-emerald-600 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-400 hover:to-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center gap-2"
+            className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-emerald-700 to-emerald-800 text-base font-bold text-white shadow-lg shadow-emerald-950/40 transition-all active:scale-[0.99] hover:from-emerald-600 hover:to-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
           >
             <span>Confirmar</span>
             {preticketSubtotal !== null && (
@@ -260,7 +276,7 @@ export function PosBubasBuilder({
           </button>
         </section>
       ) : (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-400">
           Toca un sabor para empezar tu pedido.
         </p>
       )}

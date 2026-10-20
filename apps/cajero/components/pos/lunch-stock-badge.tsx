@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import type { LunchStockState } from "@bbspos/types";
 import { adjustLunchStock } from "@/actions/lunch-stock";
 import { addableUnits } from "@/lib/lunch-stock";
+import { FOCUS_RING } from "./pos-styles";
 
 /** Estilo del número: un contador compacto y legible en la esquina de la
  *  tarjeta, con el mismo tamaño de fuente y el mismo redondeo de las cifras
  *  del POS para que se lea como un número más del sistema y no como un dato
  *  ajeno. No lleva ningún número de tecla: es unidades de almuerzo. */
 const BADGE_BASE =
-  "flex h-5 min-w-[22px] items-center justify-center rounded-full border px-1 font-mono text-[10px] leading-none transition-colors";
+  "relative flex h-6 min-w-[26px] items-center justify-center rounded-full border px-1 font-mono text-[11px] leading-none transition-colors before:absolute before:-inset-2 before:content-['']";
 
 /** Los cuatro estados del contador, calculados sobre las unidades que esta caja
  *  todavía puede agregar (`remaining - heldByMe`): así el número baja cuando el
@@ -59,10 +60,10 @@ const STEPS = [-10, -5, -1, 1, 5, 10] as const;
 /** Medidas del panel (w-72), usadas para decidir hacia dónde abrirlo para que
  *  nunca quede metido detrás del ticket ni saliéndose del catálogo. */
 const PANEL_W = 288;
-const PANEL_H = 150;
+const PANEL_H = 220;
 
 const INPUT =
-  "h-8 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 outline-none focus:border-amber-400";
+  `h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 focus:border-amber-400 ${FOCUS_RING}`;
 
 /** Contador de unidades de un almuerzo del día con un panel para sumar o restar.
  *
@@ -91,6 +92,8 @@ export function LunchStockBadge({
   });
   const panelRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const panelId = useId();
 
   // Cierre con clic fuera o tecla Escape.
   useEffect(() => {
@@ -107,6 +110,12 @@ export function LunchStockBadge({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
+  }, [open]);
+
+  // Al abrir, el foco entra al campo de cantidad: el panel es una tarea corta
+  // y así se puede escribir sin tabular por los seis atajos.
+  useEffect(() => {
+    if (open) amountRef.current?.focus();
   }, [open]);
 
   function togglePanel() {
@@ -169,8 +178,9 @@ export function LunchStockBadge({
         title={`${label}`}
         aria-label={label}
         aria-expanded={open}
+        aria-controls={panelId}
         onClick={togglePanel}
-        className={`${BADGE_BASE} ${tone} hover:brightness-125`}
+        className={`${BADGE_BASE} ${tone} hover:brightness-125 ${FOCUS_RING}`}
       >
         {number}
       </button>
@@ -178,6 +188,9 @@ export function LunchStockBadge({
       {open && (
         <div
           ref={panelRef}
+          id={panelId}
+          role="dialog"
+          aria-label="Unidades del almuerzo"
           className={`absolute z-30 w-72 rounded-xl border border-slate-700 bg-slate-900 p-3 text-left shadow-2xl shadow-black/60 ${
             place.align === "left" ? "left-0" : "right-0"
           } ${place.drop === "up" ? "bottom-full mb-1" : "top-full mt-1"}`}
@@ -197,7 +210,7 @@ export function LunchStockBadge({
                 type="button"
                 disabled={busy}
                 onClick={() => void apply(step)}
-                className={`h-8 rounded-lg border font-mono text-[11px] font-bold transition-colors disabled:opacity-40 ${
+                className={`h-11 rounded-lg border font-mono text-xs font-bold transition-colors disabled:opacity-40 ${FOCUS_RING} ${
                   step > 0
                     ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
                     : "border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700"
@@ -209,7 +222,12 @@ export function LunchStockBadge({
           </div>
 
           <div className="mt-2 flex items-center gap-1.5">
+            <label htmlFor={`${panelId}-amount`} className="sr-only">
+              Unidades a sumar o restar
+            </label>
             <input
+              ref={amountRef}
+              id={`${panelId}-amount`}
               type="number"
               min={1}
               max={999}
@@ -222,23 +240,29 @@ export function LunchStockBadge({
             <button
               type="button"
               disabled={busy}
+              aria-label="Restar las unidades escritas"
               onClick={() => applyTyped(-1)}
-              className="h-8 shrink-0 rounded-lg border border-slate-600 bg-slate-800 px-2.5 text-xs font-bold text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-40"
+              className={`h-11 w-11 shrink-0 rounded-lg border border-slate-600 bg-slate-800 text-sm font-bold text-slate-200 transition-colors hover:bg-slate-700 disabled:opacity-40 ${FOCUS_RING}`}
             >
               −
             </button>
             <button
               type="button"
               disabled={busy}
+              aria-label="Sumar las unidades escritas"
               onClick={() => applyTyped(1)}
-              className="h-8 shrink-0 rounded-lg bg-emerald-500 px-2.5 text-xs font-bold text-slate-950 transition-colors hover:bg-emerald-400 disabled:opacity-40"
+              className={`h-11 w-11 shrink-0 rounded-lg bg-emerald-500 text-sm font-bold text-slate-950 transition-colors hover:bg-emerald-400 disabled:opacity-40 ${FOCUS_RING}`}
             >
               +
             </button>
           </div>
 
           {error && (
-            <p className="mt-2 text-[11px] leading-tight text-red-300">
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="mt-2 text-xs leading-tight text-red-200"
+            >
               {error}
             </p>
           )}

@@ -17,8 +17,15 @@ import {
   registerCustomerAtPos,
 } from "@/app/actions/customers";
 import { holdLunchUnits, unholdLunchUnits } from "@/actions/lunch-stock";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@bbspos/ui";
 import { usePosCart, type PosDeliveryType } from "./pos-cart-store";
-import { PAY_BUTTON } from "./pos-styles";
+import { FOCUS_RING, PAY_BUTTON } from "./pos-styles";
 
 function deliveryLabel(type: PosDeliveryType) {
   return type === "MESA" ? "MESA" : type === "LLEVAR" ? "LLEVAR" : "DELIVERY";
@@ -264,7 +271,10 @@ export function PosTicketPanel({
   }
 
   return (
-    <section className="flex w-1/5 min-w-[280px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
+    <section
+      aria-label="Ticket en curso"
+      className="flex w-[27%] min-w-0 shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900"
+    >
       {/* Encabezado del ticket */}
       <div className="shrink-0 px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
         <h2 className="text-base font-black uppercase tracking-wide text-white">
@@ -280,24 +290,36 @@ export function PosTicketPanel({
               !hasBuildingProduct)
           }
           title="Vaciar el pedido si el cliente se arrepiente"
-          className="h-8 shrink-0 rounded-full border border-red-500/50 bg-red-500/10 px-3 text-xs font-semibold uppercase tracking-wide text-red-300 transition-all hover:border-red-500 hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`h-11 shrink-0 rounded-full border border-red-500/50 bg-red-500/10 px-3 text-xs font-semibold uppercase tracking-wide text-red-200 transition-all hover:border-red-500 hover:bg-red-500/20 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
         >
           Limpiar
         </button>
       </div>
 
       {busy && (
-        <p className="shrink-0 mx-4 mt-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-300">
+        <p
+          role="status"
+          aria-live="polite"
+          className="shrink-0 mx-4 mt-3 rounded-md border border-slate-600 bg-slate-800 px-3 py-2 text-xs text-slate-200"
+        >
           Enviando… por favor espera.
         </p>
       )}
       {notice && (
-        <p className="shrink-0 mx-4 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+        <p
+          role="status"
+          aria-live="polite"
+          className="shrink-0 mx-4 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200"
+        >
           {notice}
         </p>
       )}
       {error && (
-        <p className="shrink-0 mx-4 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="shrink-0 mx-4 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+        >
           ⚠ {error}
         </p>
       )}
@@ -314,7 +336,7 @@ export function PosTicketPanel({
         className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 space-y-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {cart.items.length === 0 && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-400">
             Agrega bebidas tocando un sabor o un plato del día en el catálogo.
           </p>
         )}
@@ -322,12 +344,14 @@ export function PosTicketPanel({
           const unitWithExtras = cartItemUnitTotal(item);
           const isExpanded = expandedItemId === item.id;
           return (
-            <div
-              key={item.id}
-              className="rounded-md bg-slate-800 px-3 py-2"
-              onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
-            >
-              <div className="flex items-start justify-between gap-2">
+            <div key={item.id} className="rounded-md bg-slate-800 px-3 py-2">
+              <button
+                type="button"
+                aria-expanded={isExpanded}
+                aria-controls={`ticket-item-${item.id}`}
+                onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                className={`flex w-full items-start justify-between gap-2 rounded-md text-left ${FOCUS_RING}`}
+              >
                 <div className="min-w-0 text-sm">
                   <p className="font-semibold capitalize text-white">
                     {item.quantity}× {item.kind === "DRINK" ? item.flavor.name : item.name}
@@ -360,17 +384,17 @@ export function PosTicketPanel({
                 <span className="font-mono text-sm font-bold text-white whitespace-nowrap shrink-0">
                   {formatPrice(unitWithExtras * item.quantity)}
                 </span>
-              </div>
+              </button>
               {isExpanded && (
-                <div className="mt-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-150">
+                <div
+                  id={`ticket-item-${item.id}`}
+                  className="mt-2 flex items-center gap-2 animate-in slide-in-from-top-2 duration-150"
+                >
                   <button
                     type="button"
                     aria-label="Restar cantidad"
-                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      changeQuantity(item, item.quantity - 1);
-                    }}
+                    className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 ${FOCUS_RING}`}
+                    onClick={() => changeQuantity(item, item.quantity - 1)}
                   >
                     −
                   </button>
@@ -380,22 +404,16 @@ export function PosTicketPanel({
                   <button
                     type="button"
                     aria-label="Sumar cantidad"
-                    className="h-8 w-8 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      changeQuantity(item, item.quantity + 1);
-                    }}
+                    className={`h-11 w-11 rounded-lg bg-slate-700 text-white text-lg font-bold flex items-center justify-center active:scale-90 transition-all hover:bg-slate-600 ${FOCUS_RING}`}
+                    onClick={() => changeQuantity(item, item.quantity + 1)}
                   >
                     +
                   </button>
                   <button
                     type="button"
                     aria-label="Quitar ítem del ticket"
-                    className="h-8 px-3 rounded-lg bg-red-600/90 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-500"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeLine(item);
-                    }}
+                    className={`h-11 px-3 rounded-lg bg-red-700 text-white text-xs font-bold uppercase tracking-wide transition-all active:scale-95 hover:bg-red-600 ${FOCUS_RING}`}
+                    onClick={() => removeLine(item)}
                   >
                     Quitar
                   </button>
@@ -409,9 +427,17 @@ export function PosTicketPanel({
       {/* Área de pago fija al fondo del panel izquierdo */}
       <div className="shrink-0 px-4 py-3 bg-slate-950 border-t border-slate-800 flex flex-col gap-2">
         <div className="relative">
+          <label
+            htmlFor="ticket-customer-name"
+            className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400"
+          >
+            Cliente
+          </label>
           <div className="flex items-center gap-2">
             <input
+              id="ticket-customer-name"
               type="text"
+              autoComplete="off"
               value={cart.customerName}
               onChange={(e) => {
                 cart.setCustomerName(e.target.value.toUpperCase());
@@ -431,7 +457,8 @@ export function PosTicketPanel({
                 }
               }}
               placeholder="NOMBRE"
-              className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase placeholder:text-slate-500 focus:outline-none transition-shadow ${
+              aria-invalid={needsName}
+              className={`h-10 w-full rounded-xl border bg-slate-800 px-3 text-sm font-medium uppercase placeholder:text-slate-400 transition-shadow ${FOCUS_RING} ${
                 needsName
                   ? "border-amber-400/70 animate-name-glow text-white"
                   : cart.customerId
@@ -444,7 +471,8 @@ export function PosTicketPanel({
                 type="button"
                 onClick={openRegister}
                 title="Registrar un cliente nuevo y vincularlo al pedido"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95"
+                aria-label="Registrar un cliente nuevo y vincularlo al pedido"
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 transition-all hover:border-emerald-400 hover:bg-emerald-500/20 active:scale-95 ${FOCUS_RING}`}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -470,12 +498,18 @@ export function PosTicketPanel({
               <button
                 type="button"
                 onClick={toggleReservation}
+                aria-pressed={cart.scheduledFor !== ""}
+                aria-label={
+                  cart.scheduledFor !== ""
+                    ? "Quitar la reserva y volver a pedido inmediato"
+                    : "Hacer reserva: fija la hora pactada y el aviso"
+                }
                 title={
                   cart.scheduledFor !== ""
                     ? "Quitar la reserva (pedido inmediato)"
                     : "Hacer reserva: fija la hora pactada y el aviso"
                 }
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all active:scale-95 ${FOCUS_RING} ${
                   cart.scheduledFor !== ""
                     ? "border-purple-400 bg-purple-500/25 text-purple-200"
                     : "border-slate-700 bg-slate-800 text-slate-400 hover:border-purple-400/70 hover:text-purple-200"
@@ -545,10 +579,11 @@ export function PosTicketPanel({
                 <button
                   key={type}
                   type="button"
+                  aria-pressed={cart.deliveryType === type}
                   onClick={() => cart.setDeliveryType(type)}
                   className={`${PAY_BUTTON} ${
                     cart.deliveryType === type
-                      ? "border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/25"
+                      ? "border-blue-600 bg-blue-700 text-white shadow-md shadow-blue-500/25"
                       : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-primary/60 hover:bg-slate-800"
                   }`}
                 >
@@ -559,14 +594,23 @@ export function PosTicketPanel({
           </div>
         )}
 
-        <input
-          type="text"
-          value={cart.notes}
-          onChange={(e) => cart.setNotes(e.target.value.toUpperCase())}
-          placeholder="INDICACIONES"
-          title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
-          className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-500 focus:border-amber-400/70 focus:outline-none transition-shadow"
-        />
+        <div>
+          <label
+            htmlFor="ticket-notes"
+            className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400"
+          >
+            Indicaciones
+          </label>
+          <input
+            id="ticket-notes"
+            type="text"
+            value={cart.notes}
+            onChange={(e) => cart.setNotes(e.target.value.toUpperCase())}
+            placeholder="SIN CEBOLLA, POCO PICANTE…"
+            title="Notas del cliente para el pedido (ej. sin cebolla, poco picante)"
+            className={`h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm uppercase text-slate-200 placeholder:text-slate-400 focus:border-amber-400/70 transition-shadow ${FOCUS_RING}`}
+          />
+        </div>
 
         {/* Reserva: hora pactada + minutos antes para avisar (solo cajero/
             admin). Se despliega con el icono de calendario junto al de
@@ -574,7 +618,14 @@ export function PosTicketPanel({
             cola como reserva y se confirma (cobro + comanda) en su momento. */}
         {isBilling && cart.scheduledFor !== "" && (
           <div className="space-y-2 rounded-xl border border-purple-500/40 bg-purple-500/5 p-2">
+            <label
+              htmlFor="ticket-scheduled-for"
+              className="block text-[10px] font-bold uppercase tracking-wide text-slate-400"
+            >
+              Hora de la reserva
+            </label>
             <input
+              id="ticket-scheduled-for"
               type="datetime-local"
               value={toLocalDateTime(cart.scheduledFor)}
               onChange={(e) => {
@@ -582,22 +633,26 @@ export function PosTicketPanel({
                   cart.setScheduledFor(new Date(e.target.value).toISOString());
                 }
               }}
-              className="h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:border-purple-400/70 focus:outline-none transition-shadow"
+              className={`h-10 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm text-slate-200 focus:border-purple-400/70 transition-shadow ${FOCUS_RING}`}
             />
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              <label
+                htmlFor="ticket-reserve-lead"
+                className="text-[10px] font-bold uppercase tracking-wide text-slate-400"
+              >
                 Avisar
-              </span>
+              </label>
               <input
+                id="ticket-reserve-lead"
                 type="number"
                 min={1}
                 value={cart.reserveLeadMin}
                 onChange={(e) =>
                   cart.setReserveLeadMin(Number(e.target.value))
                 }
-                className="h-8 w-16 rounded-lg border border-slate-700 bg-slate-800 px-2 text-center text-sm font-bold text-slate-200 focus:border-purple-400/70 focus:outline-none"
+                className={`h-11 w-16 rounded-lg border border-slate-700 bg-slate-800 px-2 text-center text-sm font-bold text-slate-200 focus:border-purple-400/70 ${FOCUS_RING}`}
               />
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] text-slate-400">
                 min antes (en la cola)
               </span>
             </div>
@@ -607,10 +662,11 @@ export function PosTicketPanel({
         <button
           type="button"
           disabled={busy || !formOk}
+          aria-busy={busy}
           onClick={onSubmit}
-          className={`mt-2 w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`mt-2 w-full h-12 text-base font-bold capitalize text-white rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING} ${
             isBilling
-              ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/40 hover:from-blue-400 hover:to-blue-600"
+              ? "bg-gradient-to-b from-blue-600 to-blue-700 shadow-blue-950/40 hover:from-blue-500 hover:to-blue-600"
               : "bg-gradient-to-b from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700"
           }`}
         >
@@ -640,66 +696,97 @@ export function PosTicketPanel({
 
       {/* Diálogo "Registrar cliente" (básico: nombre obligatorio + teléfono
           opcional). Se asume el rol de cajero/admin, que es el único que ve
-          el acceso. */}
-      {showRegister && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-600 bg-slate-900 p-4 shadow-2xl">
-            <h3 className="text-base font-black uppercase tracking-wide text-white">
+          el acceso. Radix aporta el foco atrapado, Escape y el rol de diálogo. */}
+      <Dialog
+        open={showRegister}
+        onOpenChange={(open) => {
+          if (!open && !regBusy) setShowRegister(false);
+        }}
+      >
+        <DialogContent className="max-w-sm border-slate-600 bg-slate-900 p-4">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-base font-black uppercase tracking-wide text-white">
               Registrar cliente
-            </h3>
-            <p className="mt-1 text-xs text-slate-400">
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
               Se crea en la base de clientes, se vincula a este pedido y se
               identifica con su primer nombre y apellido paterno.
-            </p>
-            <div className="mt-3 space-y-2">
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label
+                htmlFor="register-customer-name"
+                className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-300"
+              >
+                Nombre completo
+              </label>
               <input
+                id="register-customer-name"
                 type="text"
                 value={regName}
                 onChange={(e) => {
                   setRegName(e.target.value.toUpperCase());
                   setRegError(null);
                 }}
-                placeholder="NOMBRE (obligatorio)"
+                placeholder="NOMBRE Y APELLIDO"
                 autoFocus
-                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
+                aria-invalid={regError !== null}
+                aria-describedby={regError ? "register-customer-error" : undefined}
+                className={`h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-400 focus:border-emerald-400/70 ${FOCUS_RING}`}
               />
+            </div>
+            <div>
+              <label
+                htmlFor="register-customer-phone"
+                className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-300"
+              >
+                Teléfono <span className="font-normal text-slate-400">(opcional)</span>
+              </label>
               <input
-                type="text"
+                id="register-customer-phone"
+                type="tel"
                 value={regPhone}
                 onChange={(e) => {
                   setRegPhone(e.target.value);
                   setRegError(null);
                 }}
-                placeholder="TELÉFONO (opcional)"
-                className="h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-500 focus:border-emerald-400/70 focus:outline-none"
+                placeholder="NÚMERO DE CONTACTO"
+                className={`h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 text-sm font-medium uppercase text-white placeholder:text-slate-400 focus:border-emerald-400/70 ${FOCUS_RING}`}
               />
-              {regError && (
-                <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                  ⚠ {regError}
-                </p>
-              )}
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setShowRegister(false)}
-                disabled={regBusy}
-                className="h-11 rounded-xl border border-slate-700 bg-slate-800 text-sm font-bold uppercase tracking-wide text-slate-300 transition-all hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+            {regError && (
+              <p
+                id="register-customer-error"
+                role="alert"
+                aria-live="assertive"
+                className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={registerCustomer}
-                disabled={regBusy}
-                className="h-11 rounded-xl border border-emerald-500 bg-emerald-600 text-sm font-bold uppercase tracking-wide text-white transition-all hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {regBusy ? "Registrando…" : "Registrar"}
-              </button>
-            </div>
+                ⚠ {regError}
+              </p>
+            )}
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setShowRegister(false)}
+              disabled={regBusy}
+              className={`h-11 rounded-xl border border-slate-700 bg-slate-800 text-sm font-bold uppercase tracking-wide text-slate-200 transition-all hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={registerCustomer}
+              disabled={regBusy}
+              aria-busy={regBusy}
+              className={`h-11 rounded-xl border border-emerald-600 bg-emerald-700 text-sm font-bold uppercase tracking-wide text-white transition-all hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40 ${FOCUS_RING}`}
+            >
+              {regBusy ? "Registrando…" : "Registrar"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

@@ -17,7 +17,6 @@ import {
   type LunchStockState,
   type MenuItemView,
   type Role as RoleType,
-  type Topping,
 } from "@bbspos/types";
 import {
   createPosOrder,
@@ -41,6 +40,7 @@ import { PosTicketPanel } from "./pos-ticket-panel";
 import { PosBubasBuilder } from "./pos-bubas-builder";
 import { PosCartaGrid } from "./pos-carta-grid";
 import { LunchStockBadge } from "./lunch-stock-badge";
+import { FOCUS_RING, POS_GRID } from "./pos-styles";
 import { getRequiredSauces, isMixtasItem } from "./pos-variant-selector";
 import { holdLunchUnits, syncLunchHolds } from "@/actions/lunch-stock";
 import { addableUnits } from "@/lib/lunch-stock";
@@ -667,9 +667,9 @@ export function PosTerminal({
   ) {
     setStockOverrides((current) => ({ ...current, [menuItemId]: next }));
   }
-  // Menú del Día con retícula fija de 5 columnas, misma que la barra de
-  // categorías, para que ambas grillas queden alineadas.
-  const menuDayGridClass = "grid grid-cols-5 gap-2";
+  // Menú del Día con la misma retícula fluida que la barra de categorías,
+  // para que ambas grillas queden alineadas.
+  const menuDayGridClass = POS_GRID;
 
   // Botones del bloque superior: las categorías de la carta con productos y
   // Bubble Drinks como categoría fija. El orden, nombre, ícono, color e imagen
@@ -854,8 +854,11 @@ export function PosTerminal({
 
   return (
     <div className="flex h-full w-full bg-slate-950 overflow-hidden">
-      {/* ===== Columna 1 (20%): Pedidos en Cola con scroll propio ===== */}
-      <aside className="flex w-1/5 min-w-[300px] shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900">
+      {/* ===== Columna 1 (22%): Pedidos en Cola con scroll propio ===== */}
+      <aside
+        aria-label="Pedidos en cola"
+        className="flex w-[22%] min-w-0 shrink-0 flex-col overflow-hidden border-r border-slate-800 bg-slate-900"
+      >
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <QueueView
             orders={queueOrders}
@@ -886,10 +889,11 @@ export function PosTerminal({
         onLunchStock={applyStockOverride}
       />
 
-      {/* ===== Columna 3 (60%): Catálogo interactivo ===== */}
+      {/* ===== Columna 3 (resto): Catálogo interactivo ===== */}
       <section
         ref={catalogRef}
-        className="flex w-3/5 flex-col bg-slate-950 overflow-hidden"
+        aria-label="Catálogo"
+        className="flex min-w-0 flex-1 flex-col overflow-hidden bg-slate-950"
       >
         <div className="flex-1 overflow-y-auto">
           {/* Almuerzos del día (acceso rápido): tarjetas doradas con el mismo bloque
@@ -917,11 +921,11 @@ export function PosTerminal({
                               : `Agregar ${menuItem.name}`
                       }
                       onClick={() => tapMenuDayItem(menuItem)}
-                      className={
+                      className={`flex min-h-[80px] w-full flex-col justify-between rounded-xl border p-2.5 text-left ${FOCUS_RING} ${
                         blocked
-                          ? "flex h-[70px] w-full cursor-not-allowed flex-col justify-between rounded-xl border border-slate-700 bg-slate-800/40 p-2.5 text-left opacity-60"
-                          : "flex h-[70px] w-full flex-col justify-between rounded-xl border border-amber-500/50 bg-amber-500/10 p-2.5 text-left transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
-                      }
+                          ? "cursor-not-allowed border-slate-700 bg-slate-800/40 opacity-60"
+                          : "border-amber-500/50 bg-amber-500/10 transition-transform hover:border-amber-400 hover:bg-amber-500/20 active:scale-95"
+                      }`}
                     >
                       <span
                         className={`line-clamp-2 pr-7 text-xs font-semibold leading-tight ${
@@ -942,7 +946,7 @@ export function PosTerminal({
                         )}
                         <span
                           className={`self-end font-mono text-sm font-bold ${
-                            blocked ? "text-slate-500" : "text-amber-300"
+                            blocked ? "text-slate-400" : "text-amber-300"
                           }`}
                         >
                           {formatPrice(menuItem.price)}

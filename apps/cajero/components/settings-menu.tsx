@@ -119,7 +119,7 @@ export function SettingsMenu({
               </div>
               <div className="max-h-72 overflow-y-auto py-1">
                 {printableOrders.length === 0 && (
-                  <p className="px-3 py-3 text-xs text-slate-500">
+                  <p className="px-3 py-3 text-xs text-slate-400">
                     No hay pedidos por reimprimir.
                   </p>
                 )}
@@ -142,7 +142,7 @@ export function SettingsMenu({
                       disabled={busyId === o.id}
                       title="Reimprimir comanda"
                       onClick={() => handleReprint(o.id)}
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-primary hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-slate-700 bg-slate-800 text-slate-300 transition-colors hover:border-primary hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {busyId === o.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

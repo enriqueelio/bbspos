@@ -1,6 +1,7 @@
 "use client";
 
 import { formatPrice, type MenuItemView } from "@bbspos/types";
+import { FOCUS_RING, POS_GRID } from "./pos-styles";
 import { PosVariantSelector } from "./pos-variant-selector";
 
 export function PosCartaGrid({
@@ -35,17 +36,18 @@ export function PosCartaGrid({
       </h3>
 
       {/* Grilla de platos de la categoría seleccionada (CSS Grid táctil:
-          tarjetas ~140px, altura fija 70px, precio en la esquina inferior) */}
-      <div className="grid grid-cols-5 gap-2">
+          columnas fluidas y altura mínima, precio en la esquina inferior) */}
+      <div className={POS_GRID}>
         {items.map((item) => {
           const selected = variantItem?.id === item.id;
           return (
             <button
               key={item.id}
               type="button"
+              aria-pressed={selected}
               title={item.description ?? `Agregar ${item.name}`}
               onClick={() => onTapItem(item)}
-              className={`flex h-[70px] flex-col justify-between rounded-xl border p-2.5 text-left transition-transform active:scale-95 ${
+              className={`flex min-h-[80px] flex-col justify-between rounded-xl border p-2.5 text-left transition-transform active:scale-95 ${FOCUS_RING} ${
                 selected
                   ? "border-primary bg-primary/15"
                   : "border-slate-700/60 bg-slate-800 hover:bg-slate-700"

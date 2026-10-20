@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
@@ -125,7 +125,7 @@ function DeliveryTypeMenu({
   const current = order.orderType ?? OrderType.LLEVAR;
   const alternatives = OrderTypeList.filter((t) => t !== current);
 
-  // Cierra el menú al hacer clic fuera de él.
+  // Cierra el menú al hacer clic fuera de él o con Escape.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: MouseEvent) {
@@ -133,8 +133,15 @@ function DeliveryTypeMenu({
         setOpen(false);
       }
     }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
     document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   const dead =
@@ -146,6 +153,13 @@ function DeliveryTypeMenu({
       <button
         type="button"
         disabled={dead || clock.busyId === order.id}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={
+          dead
+            ? "El pedido ya finalizó"
+            : `Cambiar tipo de entrega (ahora: ${DELIVERY_ICONS[current].label})`
+        }
         title={
           dead
             ? "El pedido ya finalizó"
@@ -153,7 +167,7 @@ function DeliveryTypeMenu({
         }
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "group flex items-center rounded-md p-1 transition-colors",
+          "group flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
           open ? "bg-slate-800" : "hover:bg-slate-800",
           dead && "cursor-default opacity-40",
         )}
@@ -170,6 +184,8 @@ function DeliveryTypeMenu({
       </button>
       {open && (
         <div
+          role="menu"
+          aria-label="Tipo de entrega"
           className={cn(
             "absolute z-40 mt-1 flex flex-col overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-2xl animate-in fade-in-0 zoom-in-95",
             compact ? "right-0" : "left-0",
@@ -181,6 +197,7 @@ function DeliveryTypeMenu({
               <button
                 key={type}
                 type="button"
+                role="menuitem"
                 disabled={clock.busyId === order.id}
                 onClick={() => {
                   setOpen(false);
@@ -188,7 +205,7 @@ function DeliveryTypeMenu({
                     updateOrderDeliveryType(order.id, type),
                   );
                 }}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-slate-800 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-11 items-center gap-2 px-3 py-2 text-sm font-bold text-slate-200 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon className="h-4 w-4" aria-label={label} />
                 {label}
@@ -353,16 +370,31 @@ function useQueueClock(orders: Order[]) {
     return () => clearInterval(timer);
   }, []);
 
-  // Refresco automático de la cola; se pausa con la pestaña oculta.
+  // Refresco automático de la cola; se detiene con la pestaña oculta y se
+  // reanuda (con un refresh inmediato) al volver a primer plano.
   useEffect(() => {
-    if (document.hidden) return;
-    const timer = setInterval(() => router.refresh(), 15_000);
-    const onVisibility = () => {
-      if (!document.hidden) router.refresh();
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (timer !== null) return;
+      timer = setInterval(() => router.refresh(), 15_000);
     };
+    const stop = () => {
+      if (timer === null) return;
+      clearInterval(timer);
+      timer = null;
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        router.refresh();
+        start();
+      }
+    };
+    if (!document.hidden) start();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      clearInterval(timer);
+      stop();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [router]);
@@ -631,6 +663,8 @@ function ChargeButton({
     ? createPortal(
         <div
           ref={menuRef}
+          role="menu"
+          aria-label="Método de pago"
           className="fixed z-50 animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-xl border border-slate-700 bg-slate-900 shadow-2xl"
           style={{
             left: pos.left,
@@ -640,6 +674,7 @@ function ChargeButton({
         >
           <button
             type="button"
+            role="menuitem"
             className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-violet-600"
             onClick={() => {
               setOpen(false);
@@ -651,6 +686,7 @@ function ChargeButton({
           </button>
           <button
             type="button"
+            role="menuitem"
             className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-slate-700"
             onClick={() => {
               setOpen(false);
@@ -662,6 +698,7 @@ function ChargeButton({
           </button>
           <button
             type="button"
+            role="menuitem"
             className="flex h-12 w-full items-center justify-between border-b border-slate-800 px-3 text-base font-bold text-white transition-colors hover:bg-primary/70"
             onClick={() => pay("QR")}
           >
@@ -670,6 +707,7 @@ function ChargeButton({
           </button>
           <button
             type="button"
+            role="menuitem"
             className="flex h-12 w-full items-center justify-between px-3 text-base font-bold text-white transition-colors hover:bg-emerald-600"
             onClick={() => pay("EFECTIVO")}
           >
@@ -685,11 +723,13 @@ function ChargeButton({
     <div ref={ref} className="relative flex-1">
       <Button
         size={compact ? "default" : "lg"}
+        aria-haspopup="menu"
+        aria-expanded={open}
         className={`animate-pulse font-black text-white shadow-lg transition-all hover:animate-none active:scale-[0.98] ${
           accent === "blue"
-            ? "bg-gradient-to-b from-blue-500 to-blue-600 shadow-blue-950/50 hover:from-blue-400 hover:to-blue-500"
-            : "bg-gradient-to-b from-red-500 to-red-600 shadow-red-950/50 hover:from-red-400 hover:to-red-500"
-        } ${compact ? "h-10 w-full px-3 text-sm" : "h-14 text-xl"}`}
+            ? "bg-gradient-to-b from-blue-600 to-blue-700 shadow-blue-950/50 hover:from-blue-500 hover:to-blue-600"
+            : "bg-gradient-to-b from-red-600 to-red-700 shadow-red-950/50 hover:from-red-500 hover:to-red-600"
+        } ${compact ? "h-11 w-full px-3 text-sm" : "h-14 text-xl"}`}
         disabled={disabled || clock.busyId === order.id}
         onClick={() => {
           const rect = ref.current?.getBoundingClientRect();
@@ -798,8 +838,9 @@ function OrderCard({
       {collapsed ? (
         <button
           type="button"
+          aria-expanded={false}
           onClick={() => setExpandedId(order.id)}
-          className={`flex w-full animate-in fade-in cursor-pointer items-center justify-between gap-2 text-left transition-colors hover:bg-slate-900/60 ${
+          className={`flex w-full animate-in fade-in cursor-pointer items-center justify-between gap-2 text-left transition-colors hover:bg-slate-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
             flashing ? "animate-flash-blue" : ""
           } ${compact ? "px-3 py-2" : "gap-3 px-5 py-3.5"}`}
         >
@@ -950,13 +991,26 @@ function OrderCard({
                 )}
           </p>
         </div>
-        {compact && (
-          <div className="flex shrink-0 items-center gap-1.5">
-            <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
-            {/* DeliveryTypeMenu usa iconClassName h-5 w-5 por defecto. */}
-            <UserOrderIcon order={order} className="h-5 w-5" />
-          </div>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {compact && (
+            <>
+              <DeliveryTypeMenu order={order} clock={clock} compact={compact} />
+              {/* DeliveryTypeMenu usa iconClassName h-5 w-5 por defecto. */}
+              <UserOrderIcon order={order} className="h-5 w-5" />
+            </>
+          )}
+          <button
+            type="button"
+            aria-label="Contraer pedido"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedId(null);
+            }}
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ChevronDown className="h-4 w-4 rotate-180" aria-hidden="true" />
+          </button>
+        </div>
         </div>
       </CardHeader>
       <CardContent className={compact ? "space-y-2 px-3 pb-3" : "space-y-3"}>
@@ -1019,7 +1073,7 @@ function OrderCard({
               <Button
                 size={compact ? "default" : "lg"}
                 className={`bg-primary hover:bg-primary/80 text-white ${
-                  compact ? "h-10 w-full text-sm" : "h-14"
+                  compact ? "h-11 w-full text-sm" : "h-14"
                 }`}
                 disabled={clock.busyId === order.id}
                 onClick={() =>
@@ -1043,9 +1097,9 @@ function OrderCard({
               <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-1.5">
                 <Button
                   size={compact ? "default" : "lg"}
-                  className={`animate-pulse bg-gradient-to-b from-blue-500 to-blue-600 font-black text-white shadow-lg shadow-blue-950/50 transition-all hover:animate-none hover:from-blue-400 hover:to-blue-500 active:scale-[0.98] ${
+                  className={`animate-pulse bg-gradient-to-b from-blue-600 to-blue-700 font-black text-white shadow-lg shadow-blue-950/50 transition-all hover:animate-none hover:from-blue-500 hover:to-blue-600 active:scale-[0.98] ${
                     compact
-                      ? "h-10 w-full px-3 text-sm"
+                      ? "h-11 w-full px-3 text-sm"
                       : "h-14 text-xl"
                   }`}
                   disabled={isPending || isEditing}
@@ -1066,7 +1120,7 @@ function OrderCard({
                     size={compact ? "default" : "lg"}
                     variant="secondary"
                     className={`border-amber-500/60 bg-slate-800 text-amber-300 hover:border-amber-400 hover:bg-slate-700 ${
-                      compact ? "h-10 w-auto px-3 text-sm" : "h-14 w-auto px-4"
+                      compact ? "h-11 w-auto px-3 text-sm" : "h-14 w-auto px-4"
                     }`}
                     disabled={clock.busyId === order.id || isEditing}
                     onClick={() =>
@@ -1085,9 +1139,9 @@ function OrderCard({
                 <Button
                   size={compact ? "default" : "lg"}
                   variant="secondary"
-                  className={`border-red-500/70 bg-red-600/90 text-white hover:border-red-400 hover:bg-red-500 flex-none ${
+                  className={`flex-none border-red-500/70 bg-red-700 text-white hover:border-red-400 hover:bg-red-600 ${
                     compact
-                      ? "h-10 w-10 justify-center p-0 text-lg"
+                      ? "h-11 w-11 justify-center p-0 text-lg"
                       : "h-14 w-auto px-4"
                   }`}
                   title="Anular la reserva"
@@ -1149,8 +1203,8 @@ function OrderCard({
             {!reservation && order.status === OrderStatus.ACEPTADO && (
 <Button
                   size={compact ? "default" : "lg"}
-                  className={`bg-emerald-500 hover:bg-emerald-600 text-white ${
-                    compact ? "h-10 w-full text-sm" : "h-14"
+                  className={`bg-emerald-700 hover:bg-emerald-600 text-white ${
+                    compact ? "h-11 w-full text-sm" : "h-14"
                   }`}
                   disabled={clock.busyId === order.id}
         onClick={() =>
@@ -1261,8 +1315,53 @@ function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+
+  // Foco atrapado mientras el diálogo está abierto: Escape cancela, Tab
+  // recorre solo sus dos botones y al cerrar se devuelve el foco al disparador.
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusables = () =>
+      Array.from(
+        dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+    dialog?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previous?.focus();
+    };
+  }, []);
+
   return (
     <div
+      ref={dialogRef}
       className={`fixed inset-0 z-50 flex items-center justify-center p-6 transition-opacity duration-200 ${
         closing ? "opacity-0" : "opacity-100"
       }`}
@@ -1275,16 +1374,25 @@ function ConfirmDialog({
       <div
         role="dialog"
         aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-message"
         className={`relative w-full max-w-lg space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl transition-transform duration-200 ${
           closing ? "scale-95" : "scale-100 animate-in fade-in"
         }`}
       >
-        <h2 className="text-2xl font-black text-white">Confirmar acción</h2>
-        <p className="text-lg text-white">{message}</p>
+        <h2
+          id="confirm-dialog-title"
+          className="text-2xl font-black text-white"
+        >
+          Confirmar acción
+        </h2>
+        <p id="confirm-dialog-message" className="text-lg text-white">
+          {message}
+        </p>
         <div className="flex w-full flex-col gap-3">
           <Button
             size="lg"
-            className="h-14 w-full bg-emerald-600 text-xl font-black text-white hover:bg-emerald-700"
+            className="h-14 w-full bg-emerald-700 text-xl font-black text-white hover:bg-emerald-600"
             onClick={onConfirm}
           >
             Aceptar
@@ -1292,6 +1400,7 @@ function ConfirmDialog({
           <Button
             size="lg"
             variant="secondary"
+            data-autofocus
             className="h-14 w-full text-xl font-black"
             onClick={onCancel}
           >
@@ -1377,34 +1486,51 @@ function QueueGroupAccordion({
   onToggle?: () => void;
   children: React.ReactNode;
 }) {
+  const panelId = useId();
+  const header = (
+    <>
+      <ChevronDown
+        aria-hidden="true"
+        className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${
+          open ? "" : "-rotate-90"
+        }`}
+      />
+      <span className="truncate text-sm font-black uppercase tracking-wide text-white">
+        {title}
+      </span>
+      {count > 0 && (
+        <Badge variant="outline" className="ml-auto shrink-0">
+          {count}
+        </Badge>
+      )}
+    </>
+  );
   return (
     <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={collapsible ? onToggle : undefined}
-        disabled={!collapsible}
-        className={`flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors ${
-          collapsible
-            ? "cursor-pointer hover:bg-slate-900/60"
-            : "cursor-default"
-        }`}
-      >
-        <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150 ${
-            open ? "" : "-rotate-90"
-          }`}
-        />
-        <span className="truncate text-sm font-black uppercase tracking-wide text-white">
-          {title}
-        </span>
-        {count > 0 && (
-          <Badge variant="outline" className="ml-auto shrink-0">
-            {count}
-          </Badge>
-        )}
-      </button>
+      {collapsible ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="flex w-full cursor-pointer items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-slate-900/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+        >
+          {header}
+        </button>
+      ) : (
+        <div className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
+          {header}
+        </div>
+      )}
       {open && (
-        <div className="space-y-3 border-t border-slate-800 p-3">{children}</div>
+        <div
+          id={panelId}
+          role="region"
+          aria-label={title}
+          className="space-y-3 border-t border-slate-800 p-3"
+        >
+          {children}
+        </div>
       )}
     </Card>
   );
@@ -1571,12 +1697,24 @@ export function QueueView({
   return (
     <div className="space-y-6">
       {clock.error && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6">
-          <div className="w-full max-w-lg space-y-6 rounded-xl bg-red-600 p-6 text-center text-xl font-bold text-white shadow-2xl">
-            <p>⚠ {clock.error}</p>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="queue-error-title"
+          aria-describedby="queue-error-detail"
+        >
+          <div className="w-full max-w-lg space-y-6 rounded-xl bg-red-700 p-6 text-center text-xl font-bold text-white shadow-2xl">
+            <h2 id="queue-error-title" className="sr-only">
+              No se pudo completar la acción
+            </h2>
+            <p id="queue-error-detail" aria-live="assertive">
+              ⚠ {clock.error}
+            </p>
             <Button
               size="lg"
-              className="h-14 w-full bg-white text-xl font-black text-red-600 hover:bg-slate-100"
+              autoFocus
+              className="h-14 w-full bg-white text-xl font-black text-red-700 hover:bg-slate-100"
               onClick={() => clock.setError(null)}
             >
               Aceptar
@@ -1585,7 +1723,11 @@ export function QueueView({
         </div>
       )}
       {clock.notice && !clock.error && (
-        <p className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
+        <p
+          role="status"
+          aria-live="polite"
+          className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"
+        >
           {clock.notice}
         </p>
       )}
@@ -1603,13 +1745,22 @@ export function QueueView({
             {pendingCount > 0 && <Badge variant="warning">{pendingCount}</Badge>}
           </h2>
           <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <label htmlFor="queue-search" className="sr-only">
+              Buscar pedidos
+            </label>
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+            />
             <Input
+              id="queue-search"
+              type="search"
+              autoComplete="off"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder=""
+              placeholder="Buscar pedido, nombre u hora…"
               title="Buscar por número de pedido, nombre, mesa u hora…"
-              className="h-9 w-full pl-8"
+              className="h-10 w-full pl-8"
             />
           </div>
         </div>

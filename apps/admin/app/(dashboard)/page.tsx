@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@bbspos/db";
+import { dayBounds, prisma, todayKey } from "@bbspos/db";
 import { OrderStatusLabel, formatPrice, formatOrderCode } from "@bbspos/types";
 import {
   Badge,
@@ -25,17 +25,16 @@ function statusVariant(status: string) {
 }
 
 export default async function DashboardPage() {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const today = dayBounds(todayKey());
 
   const [todayOrders, pendingOrders, todayRevenue, recentOrders] =
     await Promise.all([
-      prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+      prisma.order.count({ where: { createdAt: today } }),
       prisma.order.count({
         where: { status: "RECIBIDO" },
       }),
       prisma.order.aggregate({
-        where: { createdAt: { gte: todayStart } },
+        where: { createdAt: today },
         _sum: { total: true },
       }),
       prisma.order.findMany({
@@ -54,19 +53,19 @@ export default async function DashboardPage() {
     {
       label: "Pedidos por cobrar",
       value: String(pendingOrders),
-      valueClass: pendingOrders > 0 ? "text-amber-400" : "",
+      valueClass: pendingOrders > 0 ? "text-warning" : "",
     },
     {
       label: "Ventas del día",
       value: formatPrice(todayRevenue._sum.total ?? 0),
-      valueClass: "text-emerald-400",
+      valueClass: "text-success",
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="mb-6 border-b border-slate-800 pb-4">
-        <h1 className="text-xl font-bold text-white">Dashboard</h1>
+      <div className="mb-6 border-b border-border pb-4">
+        <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">
           Resumen de la actividad del restaurante.
         </p>
@@ -89,8 +88,8 @@ export default async function DashboardPage() {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white">Pedidos recientes</h2>
-          <Button variant="ghost" size="sm" asChild>
+          <h2 className="text-xl font-bold text-foreground">Pedidos recientes</h2>
+          <Button variant="ghost" size="sm" asChild className="min-h-11">
             <Link href="/orders">Ver todos</Link>
           </Button>
         </div>

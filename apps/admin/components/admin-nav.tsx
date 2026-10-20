@@ -14,11 +14,12 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "rounded-md px-3 py-1.5 text-lg font-semibold transition-colors",
+        "inline-flex min-h-11 items-center rounded-md px-3 py-1.5 text-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         active
-          ? "bg-primary text-white shadow-md"
-          : "text-slate-400 hover:bg-slate-800 hover:text-white",
+          ? "bg-primary text-primary-foreground shadow-md"
+          : "text-muted-foreground hover:bg-accent hover:text-foreground",
       )}
     >
       {children}
@@ -41,6 +42,7 @@ function SettingsMenu() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const active = SETTINGS_ITEMS.some(
     (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
@@ -64,23 +66,35 @@ function SettingsMenu() {
     setOpen(false);
   }, [pathname]);
 
+  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "Escape" || !open) return;
+    e.preventDefault();
+    setOpen(false);
+    buttonRef.current?.focus();
+  }
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={ref} onKeyDown={onKeyDown}>
       <Button
+        ref={buttonRef}
         variant="ghost"
         size="icon"
         aria-label="Configuración"
         aria-expanded={open}
+        aria-controls={open ? "admin-settings-menu" : undefined}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "h-9 w-9 text-slate-300 hover:bg-slate-800 hover:text-white",
-          active && "text-white",
+          "h-11 w-11 text-muted-foreground hover:bg-accent hover:text-foreground",
+          active && "text-foreground",
         )}
       >
         <Settings className="h-5 w-5" />
       </Button>
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-md border border-slate-700 bg-slate-900 p-1 shadow-xl">
+        <div
+          id="admin-settings-menu"
+          className="absolute left-1/2 top-full z-50 mt-2 w-48 -translate-x-1/2 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl"
+        >
           {SETTINGS_ITEMS.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -88,11 +102,12 @@ function SettingsMenu() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "block rounded px-3 py-2 text-sm font-medium transition-colors",
+                  "flex min-h-11 items-center rounded px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
-                    ? "bg-primary text-white"
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
                 {item.label}
@@ -123,6 +138,7 @@ export function AdminNav({ userName }: { userName: string }) {
         <Button
           variant="outline"
           size="sm"
+          className="min-h-11"
           onClick={() => signOut({ callbackUrl: "/login" })}
         >
           Salir

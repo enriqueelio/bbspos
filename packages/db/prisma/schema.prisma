@@ -108,6 +108,8 @@ model MenuItem {
   isMixtas       Boolean          @default(false)
   // Salsas a elegir por defecto en las Alitas Mixtas (por plato).
   requiredSauces Int?
+  // Orden de aparición dentro de su categoría (menor primero).
+  sortOrder      Int              @default(0)
   options        MenuItemOption[]
   lunchQuotas    LunchQuota[]
   lunchHolds     LunchHold[]
@@ -128,6 +130,8 @@ model MenuItemOption {
   price          Int
   // Alitas Mixtas: salsas a elegir para este tamaño (6/8 = 2, 12 = 3).
   requiredSauces Int?
+  // Orden de aparición dentro del plato (menor primero).
+  sortOrder      Int         @default(0)
   createdAt      DateTime    @default(now())
   orderItems     OrderItem[]
 

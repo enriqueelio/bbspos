@@ -63,7 +63,7 @@ export async function todayMenuItems() {
   const today = zonedDateKey();
   return prisma.menuItem.findMany({
     where: { available: true, enMenuDelDia: true, menuDelDiaDate: today },
-    orderBy: { name: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 }
 
@@ -75,8 +75,8 @@ export async function cartaMenuItems() {
       available: true,
       category: { not: "ALMUERZO" },
     },
-    include: { options: { orderBy: { name: "asc" } } },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
+    include: { options: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
+    orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
 }
 

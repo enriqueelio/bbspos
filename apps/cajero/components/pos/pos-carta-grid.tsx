@@ -2,7 +2,7 @@
 
 import { formatPrice, type MenuItemView } from "@bbspos/types";
 import { FOCUS_RING, POS_GRID } from "./pos-styles";
-import { PosVariantSelector } from "./pos-variant-selector";
+import { PosVariantSelector, sortVariantOptions } from "./pos-variant-selector";
 
 export function PosCartaGrid({
   paneTitle,
@@ -57,8 +57,15 @@ export function PosCartaGrid({
                 {item.name}
               </span>
               {item.options.length > 0 ? (
-                <span className="self-end text-[10px] font-semibold uppercase tracking-wide text-amber-300">
-                  Elegir variante
+                <span className="flex flex-col items-end gap-0.5 text-[10px] leading-tight">
+                  {sortVariantOptions(item.options).map((option) => (
+                    <span key={option.id} className="flex items-baseline gap-1">
+                      <span className="capitalize text-slate-300">{option.name}</span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {formatPrice(option.price)}
+                      </span>
+                    </span>
+                  ))}
                 </span>
               ) : (
                 <span className="self-end font-mono text-sm font-bold text-emerald-400">

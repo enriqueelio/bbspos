@@ -26,12 +26,19 @@ export function getRequiredSauces(
   );
 }
 
-/** Ordenamiento de los tamaños por el número inicial ("6 u", "8 u", "12 u"). */
-function sortByQuantity(a: MenuItemView["options"][number], b: MenuItemView["options"][number]) {
-  return (
-    Number(a.name.match(/^(\d+)/)?.[1] ?? 0) -
-    Number(b.name.match(/^(\d+)/)?.[1] ?? 0)
-  );
+/** Peso de una variante para ordenarla: "Mini" primero, luego por medida
+ *  (ml/litros) o por cantidad de unidades (6/8/12). */
+function optionRank(name: string): number {
+  const match = name.toLowerCase().match(/^(\d+(?:[.,]\d+)?)\s*(l|litro|litros|ml)?/);
+  if (!match) return 0;
+  const value = Number(match[1].replace(",", "."));
+  const unit = match[2];
+  return unit === "l" || unit === "litro" || unit === "litros" ? value * 1000 : value;
+}
+
+/** Ordena las variantes por medida o cantidad, de menor a mayor. */
+export function sortVariantOptions(options: MenuItemView["options"]) {
+  return [...options].sort((a, b) => optionRank(a.name) - optionRank(b.name));
 }
 
 export function PosVariantSelector({
@@ -74,7 +81,7 @@ export function PosVariantSelector({
         {item.name} — elige tamaño
       </p>
       <div className="grid grid-cols-2 gap-2">
-        {[...item.options].sort(sortByQuantity).map((option) => {
+        {sortVariantOptions(item.options).map((option) => {
           const active = selectedSize?.id === option.id;
           return (
             <button

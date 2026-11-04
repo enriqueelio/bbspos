@@ -260,16 +260,22 @@ export async function createMenuItem(input: {
   if (!optsValid) {
     throw new Error("Datos inválidos: precio de variante inválido.");
   }
+  const last = await prisma.menuItem.aggregate({
+    where: { category: input.category },
+    _max: { sortOrder: true },
+  });
   await prisma.menuItem.create({
     data: {
       name,
       category: input.category,
       price: Math.trunc(input.price),
       description: input.description?.trim() || null,
+      sortOrder: (last._max.sortOrder ?? 0) + 1,
       options: {
-        create: options.map((o) => ({
+        create: options.map((o, index) => ({
           name: o.name.trim(),
           price: Math.trunc(o.price),
+          sortOrder: index + 1,
         })),
       },
     },
@@ -299,6 +305,18 @@ export async function updateMenuItem(
   if (!input.price || input.price <= 0) {
     throw new Error("Datos inválidos: precio es obligatorio.");
   }
+  const current = await prisma.menuItem.findUnique({
+    where: { id },
+    select: { category: true, sortOrder: true },
+  });
+  let sortOrder = current?.sortOrder ?? 0;
+  if (current && current.category !== input.category) {
+    const last = await prisma.menuItem.aggregate({
+      where: { category: input.category },
+      _max: { sortOrder: true },
+    });
+    sortOrder = (last._max.sortOrder ?? 0) + 1;
+  }
   await prisma.$transaction([
     prisma.menuItemOption.deleteMany({ where: { menuItemId: id } }),
     prisma.menuItem.update({
@@ -309,15 +327,44 @@ export async function updateMenuItem(
         price: Math.trunc(input.price),
         available: input.available,
         description: input.description?.trim() || null,
+        sortOrder,
         options: {
-          create: options.map((o) => ({
+          create: options.map((o, index) => ({
             name: o.name.trim(),
             price: Math.trunc(o.price),
+            sortOrder: index + 1,
           })),
         },
       },
     }),
   ]);
+  revalidatePath("/menu");
+}
+
+/** Reordena los platos de una categoría según la lista de ids recibida. */
+export async function reorderMenuItems(category: CategoryKey, ids: string[]) {
+  await getRequiredSession();
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("Datos inválidos: ids duplicados.");
+  }
+  const items = await prisma.menuItem.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, category: true },
+  });
+  if (
+    items.length !== ids.length ||
+    items.some((item) => item.category !== category)
+  ) {
+    throw new Error("Datos inválidos: los platos no pertenecen a la categoría.");
+  }
+  await prisma.$transaction(
+    ids.map((id, index) =>
+      prisma.menuItem.update({
+        where: { id },
+        data: { sortOrder: index + 1 },
+      }),
+    ),
+  );
   revalidatePath("/menu");
 }
 

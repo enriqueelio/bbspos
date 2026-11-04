@@ -2,7 +2,33 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ImageIcon, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  GripVertical,
+  ImageIcon,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -29,6 +55,7 @@ import {
   formatPrice,
   Role,
   type BobaType,
+  type CategoryKey,
   type DrinkPrice,
   type Flavor,
   type FlavorCategory as FlavorCategoryType,
@@ -48,6 +75,7 @@ import {
   deleteMenuItem,
   deleteSize,
   deleteTopping,
+  reorderMenuItems,
   saveDrinkPrices,
   setMenuItemMenuDelDia,
   updateAlitaSauce,
@@ -209,6 +237,7 @@ const MENU_TABS = [
   { key: "almuerzos", label: "Almuerzos" },
   { key: "carta", label: "Platos a la carta" },
   { key: "bebidas", label: "Bebidas" },
+  { key: "gaseosas", label: "Gaseosas" },
   { key: "cafeteria", label: "Cafetería" },
   { key: "bubas", label: "Bubas" },
   { key: "salsas", label: "Salsas Alitas" },
@@ -439,6 +468,34 @@ function MenuItemOptionsEditor({
             }}
           />
           <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Subir variante"
+            disabled={i === 0}
+            onClick={() => {
+              const next = [...options];
+              [next[i - 1], next[i]] = [next[i], next[i - 1]];
+              onChange(next);
+            }}
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            aria-label="Bajar variante"
+            disabled={i === options.length - 1}
+            onClick={() => {
+              const next = [...options];
+              [next[i + 1], next[i]] = [next[i], next[i + 1]];
+              onChange(next);
+            }}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button
             variant="destructive"
             size="icon"
             className="h-8 w-8"
@@ -513,6 +570,117 @@ function ProductThumb({ imageUrl }: { imageUrl: string | null }) {
   );
 }
 
+function SortableMenuRow({
+  item,
+  index,
+  showCategory,
+  categoryName,
+  onToggle,
+  onEdit,
+  onDelete,
+  isSuperAdmin,
+  draggable,
+  showPrice,
+}: {
+  item: MenuItemAdminView;
+  index: number;
+  showCategory: boolean;
+  categoryName: (key: string) => string;
+  onToggle: (item: MenuItemAdminView) => void;
+  onEdit: (item: MenuItemAdminView) => void;
+  onDelete: (item: MenuItemAdminView) => void;
+  isSuperAdmin: boolean;
+  draggable: boolean;
+  showPrice: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: !draggable });
+  const zebra = index % 2 === 1 ? "bg-slate-900/40" : undefined;
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      className={cn(
+        "border-b border-slate-800/60",
+        zebra,
+        isDragging && "relative z-10 bg-slate-800/80",
+      )}
+    >
+      <td className="px-4 py-2.5 font-medium">
+        <span className="flex items-center gap-2">
+          {draggable && (
+            <button
+              type="button"
+              aria-label="Reordenar plato"
+              className="cursor-grab touch-none text-slate-500 hover:text-slate-300"
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
+          <ProductThumb imageUrl={item.imageUrl} />
+          {item.name}
+        </span>
+      </td>
+      {showCategory && (
+        <td className="px-4 py-2.5 text-muted-foreground">
+          {categoryName(item.category)}
+        </td>
+      )}
+      {showPrice && (
+        <td className="px-4 py-2.5 text-right tabular-nums">
+          {item.options.length === 0 ? formatPrice(item.price) : ""}
+        </td>
+      )}
+      <td className="px-4 py-2.5">
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onToggle(item)}
+            className={
+              item.available
+                ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                : undefined
+            }
+          >
+            {item.available ? "Desactivar" : "Activar"}
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Editar"
+            onClick={() => onEdit(item)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          {isSuperAdmin && (
+            <Button
+              variant="destructive"
+              size="icon"
+              aria-label="Eliminar"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function MenuSection({
   title,
   items,
@@ -530,6 +698,7 @@ function MenuSection({
   onToggle,
   onEdit,
   onDelete,
+  onReorder,
   isSuperAdmin,
 }: {
   title: string;
@@ -548,8 +717,26 @@ function MenuSection({
   onToggle: (item: MenuItemAdminView) => void;
   onEdit: (item: MenuItemAdminView) => void;
   onDelete: (item: MenuItemAdminView) => void;
+  onReorder?: (ids: string[]) => void;
   isSuperAdmin: boolean;
 }) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const canReorder = Boolean(onReorder) && filtro === "TODOS" && !query.trim();
+  const showPrice = items.some((item) => item.options.length === 0);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !onReorder) return;
+    const oldIndex = filteredItems.findIndex((item) => item.id === active.id);
+    const newIndex = filteredItems.findIndex((item) => item.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(filteredItems, oldIndex, newIndex);
+    onReorder(next.map((item) => item.id));
+  }
+
   // Sin acordeón: la pestaña activa ya nombra la sección, así que el título
   // repetido solo ocupaba espacio y obligaba a un clic extra para ver el contenido.
   return (
@@ -609,8 +796,17 @@ function MenuSection({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-800 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <table className="w-full text-sm">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredItems.map((item) => item.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-800 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+              <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-800 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="sticky top-0 z-20 rounded-tl-lg bg-slate-900 px-4 py-3 font-medium">
@@ -621,91 +817,53 @@ function MenuSection({
                     Categoría
                   </th>
                 )}
-                <th className="sticky top-0 z-20 bg-slate-900 px-4 py-3 text-right font-medium">
-                  Precio
-                </th>
+                {showPrice && (
+                  <th className="sticky top-0 z-20 bg-slate-900 px-4 py-3 text-right font-medium">
+                    Precio
+                  </th>
+                )}
                 <th className="sticky top-0 z-20 rounded-tr-lg bg-slate-900 px-4 py-3 text-right font-medium">
                   Acciones
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {filteredItems.map((item, i) => {
-                const isAvailable = item.available;
-                const zebra = i % 2 === 1 ? "bg-slate-900/40" : undefined;
-                return (
-                  <tr
+              <tbody>
+                {filteredItems.map((item, i) => (
+                  <SortableMenuRow
                     key={item.id}
-                    className={cn("border-b border-slate-800/60", zebra)}
-                  >
-                    <td className="px-4 py-2.5 font-medium">
-                      <span className="flex items-center gap-2">
-                        <ProductThumb imageUrl={item.imageUrl} />
-                        {item.name}
-                      </span>
-                    </td>
-                    {showCategory && (
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {categoryName(item.category)}
-                      </td>
-                    )}
-                    <td className="px-4 py-2.5 text-right tabular-nums">
-                      {formatPrice(item.price)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onToggle(item)}
-                          className={
-                            isAvailable
-                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
-                              : undefined
-                          }
-                        >
-                          {isAvailable ? "Desactivar" : "Activar"}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          aria-label="Editar"
-                          onClick={() => onEdit(item)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {isSuperAdmin && (
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            aria-label="Eliminar"
-                            onClick={() => onDelete(item)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                    item={item}
+                    index={i}
+                    showCategory={showCategory}
+                    categoryName={categoryName}
+                    onToggle={onToggle}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    isSuperAdmin={isSuperAdmin}
+                    draggable={canReorder}
+                    showPrice={showPrice}
+                  />
+                ))}
+                {filteredItems.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={
+                        2 + (showCategory ? 1 : 0) + (showPrice ? 1 : 0)
+                      }
+                      className="px-4 py-6 text-center text-sm text-muted-foreground"
+                    >
+                      {items.length === 0
+                        ? emptyText
+                        : query.trim()
+                          ? "No se encontraron platos con ese nombre"
+                          : "Ningún plato coincide con el filtro de disponibilidad"}
                     </td>
                   </tr>
-                );
-              })}
-              {filteredItems.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={showCategory ? 4 : 3}
-                    className="px-4 py-6 text-center text-sm text-muted-foreground"
-                  >
-                    {items.length === 0
-                      ? emptyText
-                      : query.trim()
-                        ? "No se encontraron platos con ese nombre"
-                        : "Ningún plato coincide con el filtro de disponibilidad"}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+          </SortableContext>
+        </DndContext>
       </div>
   );
 }
@@ -732,6 +890,7 @@ export function MenuManager({
   /** Categorías de la tabla Category (activas o no), con el orden de la barra. */
   categories: CategoryAdminView[];
 }) {
+  const router = useRouter();
   const isSuperAdmin = currentUserRole === Role.SUPER_ADMIN;
   const [sizeForm, setSizeForm] = useState({ name: "", oz: "" });
   const [flavorForm, setFlavorForm] = useState<{
@@ -762,12 +921,15 @@ export function MenuManager({
   });
   const [cartaQuery, setCartaQuery] = useState("");
   const [bebidasQuery, setBebidasQuery] = useState("");
+  const [gaseosasQuery, setGaseosasQuery] = useState("");
   const [cafeteriaQuery, setCafeteriaQuery] = useState("");
   const [almuerzosFiltro, setAlmuerzosFiltro] =
     useState<DisponibilidadFiltro>("TODOS");
   const [cartaFiltro, setCartaFiltro] =
     useState<DisponibilidadFiltro>("TODOS");
   const [bebidasFiltro, setBebidasFiltro] =
+    useState<DisponibilidadFiltro>("TODOS");
+  const [gaseosasFiltro, setGaseosasFiltro] =
     useState<DisponibilidadFiltro>("TODOS");
   const [cafeteriaFiltro, setCafeteriaFiltro] =
     useState<DisponibilidadFiltro>("TODOS");
@@ -816,14 +978,17 @@ export function MenuManager({
     "EXTRAS",
   ]);
   const BEBIDA_KEY = "BEBIDA";
+  const GASEOSA_KEY = "GASEOSAS";
   const almuerzos = menuItems.filter((i) => i.category === "ALMUERZO");
   const cartaItems = menuItems.filter(
     (i) =>
       i.category !== "ALMUERZO" &&
       i.category !== BEBIDA_KEY &&
+      i.category !== GASEOSA_KEY &&
       !CAFETERIA_CATEGORY_KEYS.has(i.category),
   );
   const bebidasItems = menuItems.filter((i) => i.category === BEBIDA_KEY);
+  const gaseosasItems = menuItems.filter((i) => i.category === GASEOSA_KEY);
   const cafeteriaItems = menuItems.filter((i) =>
     CAFETERIA_CATEGORY_KEYS.has(i.category),
   );
@@ -865,6 +1030,14 @@ export function MenuManager({
     .filter((i) =>
       bebidasQuery
         ? normalize(i.name).includes(normalize(bebidasQuery))
+        : true,
+    );
+  const gaseosasDisponibles = gaseosasItems.filter((i) => i.available).length;
+  const filteredGaseosasItems = gaseosasItems
+    .filter((i) => matchesDisponibilidad(i, gaseosasFiltro))
+    .filter((i) =>
+      gaseosasQuery
+        ? normalize(i.name).includes(normalize(gaseosasQuery))
         : true,
     );
   const cafeteriaDisponibles = cafeteriaItems.filter((i) => i.available).length;
@@ -977,12 +1150,18 @@ export function MenuManager({
 
   function saveCarta() {
     const name = cartaDraft.name.trim();
-    const price = Number(cartaDraft.price);
+    const options = cartaDraft.options
+      .filter((o) => o.name.trim() && Number(o.price) > 0)
+      .map((o) => ({ name: o.name.trim(), price: Math.trunc(Number(o.price)) }));
+    const price = options.length > 0 ? options[0].price : Number(cartaDraft.price);
     if (!name || !price || price <= 0) {
       toast({
         variant: "destructive",
         title: "Datos incompletos",
-        description: "Nombre y precio son obligatorios.",
+        description:
+          options.length > 0
+            ? "Nombre y al menos una variante con precio son obligatorios."
+            : "Nombre y precio son obligatorios.",
       });
       return;
     }
@@ -992,9 +1171,7 @@ export function MenuManager({
       category: cartaDraft.category,
       price: Math.trunc(price),
       description: cartaDraft.description.trim() || null,
-      options: cartaDraft.options
-        .filter((o) => o.name.trim() && Number(o.price) > 0)
-        .map((o) => ({ name: o.name.trim(), price: Math.trunc(Number(o.price)) })),
+      options,
     };
     if (editing) {
       run(() =>
@@ -1026,6 +1203,10 @@ export function MenuManager({
         })),
       }),
     );
+  }
+
+  function reorderItems(category: CategoryKey, ids: string[]) {
+    run(() => reorderMenuItems(category, ids).then(() => router.refresh()));
   }
 
   function openSizeEdit(size: Size) {
@@ -1275,6 +1456,30 @@ export function MenuManager({
           onToggle={toggleAvailable}
           onEdit={openEditCarta}
           onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          onReorder={(ids) => reorderItems(BEBIDA_KEY, ids)}
+          isSuperAdmin={isSuperAdmin}
+          />
+      )}
+
+      {activeTab === "gaseosas" && (
+        <MenuSection
+          title="Gaseosas"
+          items={gaseosasItems}
+          filteredItems={filteredGaseosasItems}
+          disponibles={gaseosasDisponibles}
+          query={gaseosasQuery}
+          onQueryChange={setGaseosasQuery}
+          filtro={gaseosasFiltro}
+          onFiltroChange={setGaseosasFiltro}
+          openNew={() => openNewCarta(GASEOSA_KEY)}
+          newButtonLabel="Nueva Gaseosa"
+          emptyText="No hay gaseosas registradas."
+          showCategory={false}
+          categoryName={(key) => categoryNameByIdx.get(key) ?? key}
+          onToggle={toggleAvailable}
+          onEdit={openEditCarta}
+          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          onReorder={(ids) => reorderItems(GASEOSA_KEY, ids)}
           isSuperAdmin={isSuperAdmin}
           />
       )}
@@ -2218,20 +2423,22 @@ export function MenuManager({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                Precio (Bs)
-              </label>
-              <Input
-                type="number"
-                min="1"
-                placeholder="Precio"
-                value={cartaDraft.price}
-                onChange={(e) =>
-                  setCartaDraft({ ...cartaDraft, price: e.target.value })
-                }
-              />
-            </div>
+            {cartaDraft.options.length === 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Precio (Bs)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="Precio"
+                  value={cartaDraft.price}
+                  onChange={(e) =>
+                    setCartaDraft({ ...cartaDraft, price: e.target.value })
+                  }
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
                 Descripción (opcional)

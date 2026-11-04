@@ -34,8 +34,8 @@ export default async function MenuPage() {
     prisma.topping.findMany({ orderBy: { name: "asc" } }),
     prisma.drinkPrice.findMany({ orderBy: { category: "asc" } }),
     prisma.menuItem.findMany({
-      include: { options: { orderBy: { name: "asc" } } },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+      include: { options: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
+      orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { name: "asc" }],
     }),
     prisma.alitaSauce.findMany({ orderBy: { name: "asc" } }),
     prisma.category.findMany({ orderBy: { order: "asc" } }),

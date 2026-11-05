@@ -9,6 +9,7 @@ import {
   CardContent,
   Input,
   Label,
+  PasswordInput,
   UserIcon,
   cn,
 } from "@bbspos/ui";
@@ -64,8 +65,11 @@ export function UsersClient({
 
   /** El actor puede gestionar a este usuario (editar o dar de baja). */
   function canManage(user: StaffUser): boolean {
-    if (user.role === "SUPER_ADMIN") return false;
+    // Cada usuario puede editar su propia cuenta (incluido el Super Admin,
+    // que necesita poder cambiar su contraseña). Los demás Super Admin
+    // siguen siendo cuentas protegidas.
     if (user.id === currentUserId) return true;
+    if (user.role === "SUPER_ADMIN") return false;
     if (user.role === "ADMIN" && !isSuper) return false;
     return true;
   }
@@ -317,13 +321,21 @@ function UserDialog({
   );
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setError(null);
+
+    const passwordToCheck = isEdit ? newPassword : password;
+    if (passwordToCheck && passwordToCheck !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    setSaving(true);
     runAction(async () => {
       if (isEdit && target) {
         await updateUser({
@@ -500,26 +512,60 @@ function UserDialog({
             {isEdit ? (
               <div className="space-y-1">
                 <Label htmlFor="u-newpass">Nueva contraseña (opcional)</Label>
-                <Input
+                <PasswordInput
                   id="u-newpass"
-                  type="password"
-                  autoComplete="new-password"
+                  minLength={6}
                   placeholder="Dejar vacío para no cambiarla"
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (!e.target.value) setConfirmPassword("");
+                    setError(null);
+                  }}
                 />
+                {newPassword && (
+                  <>
+                    <Label htmlFor="u-newpass-confirm" className="pt-2">
+                      Confirmar nueva contraseña
+                    </Label>
+                    <PasswordInput
+                      id="u-newpass-confirm"
+                      minLength={6}
+                      placeholder="Repetí la nueva contraseña"
+                      value={confirmPassword}
+                      onChange={(e) => {
+                        setConfirmPassword(e.target.value);
+                        setError(null);
+                      }}
+                    />
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-1">
                 <Label htmlFor="u-pass">Contraseña</Label>
-                <Input
+                <PasswordInput
                   id="u-pass"
-                  type="password"
-                  autoComplete="new-password"
                   required
                   minLength={6}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setError(null);
+                  }}
+                />
+                <Label htmlFor="u-pass-confirm" className="pt-2">
+                  Confirmar contraseña
+                </Label>
+                <PasswordInput
+                  id="u-pass-confirm"
+                  required
+                  minLength={6}
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setError(null);
+                  }}
                 />
               </div>
             )}

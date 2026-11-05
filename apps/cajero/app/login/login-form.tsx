@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
-import { Button, Input, Label } from "@bbspos/ui";
+import { Button, Input, Label, PasswordInput } from "@bbspos/ui";
 import { ensureCashierRole, isAccountInactive } from "@/app/actions/auth";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
@@ -68,10 +68,9 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       <div className="space-y-2">
         <Label htmlFor="password">Contraseña</Label>
         <div className="relative">
-          <Input
+          <PasswordInput
             id="password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="current-password"
+            reveal={showPassword}
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}

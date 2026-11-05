@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, signOut } from "next-auth/react";
-import { Button, Input, Label } from "@bbspos/ui";
+import { Button, Input, Label, PasswordInput } from "@bbspos/ui";
 import { ensureOrderAccess, isAccountInactive } from "@/app/actions/auth";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
@@ -65,10 +65,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Contraseña</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
-          autoComplete="current-password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}

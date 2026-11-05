@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { isAccountInactive } from "@/app/actions/auth";
-import { Button, Input, Label } from "@bbspos/ui";
+import { Button, Input, Label, PasswordInput } from "@bbspos/ui";
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
   const router = useRouter();
@@ -55,10 +55,8 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Contraseña</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
-          autoComplete="current-password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}

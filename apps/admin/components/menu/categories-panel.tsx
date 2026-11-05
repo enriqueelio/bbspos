@@ -517,7 +517,7 @@ export function CategoriesPanel({
             </div>
             <div className="space-y-2">
               <Label>Ícono de la barra</Label>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid max-h-44 grid-cols-6 gap-2 overflow-y-auto pr-1">
                 {CATEGORY_ICON_NAMES.map((name) => {
                   const Icon = CATEGORY_ICONS[name];
                   return (

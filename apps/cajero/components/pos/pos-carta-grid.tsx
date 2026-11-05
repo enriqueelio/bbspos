@@ -4,6 +4,14 @@ import { formatPrice, type MenuItemView } from "@bbspos/types";
 import { FOCUS_RING, POS_GRID } from "./pos-styles";
 import { PosVariantSelector, sortVariantOptions } from "./pos-variant-selector";
 
+/** En ALITAS el título de la categoría ya dice "ALITAS", así que se quita ese
+ *  prefijo del nombre para no repetirlo en cada tarjeta (Mixtas, Barbacoa...). */
+function cardLabel(item: MenuItemView): string {
+  return item.category === "ALITA"
+    ? item.name.replace(/^alitas\s+/i, "")
+    : item.name;
+}
+
 export function PosCartaGrid({
   paneTitle,
   items,
@@ -45,7 +53,7 @@ export function PosCartaGrid({
               key={item.id}
               type="button"
               aria-pressed={selected}
-              title={item.description ?? `Agregar ${item.name}`}
+              title={item.description ?? `Agregar ${cardLabel(item)}`}
               onClick={() => onTapItem(item)}
               className={`flex min-h-[80px] flex-col justify-between rounded-xl border p-2.5 text-left transition-transform active:scale-95 ${FOCUS_RING} ${
                 selected
@@ -54,7 +62,7 @@ export function PosCartaGrid({
               }`}
             >
               <span className="line-clamp-2 text-xs font-semibold leading-tight text-white">
-                {item.name}
+                {cardLabel(item)}
               </span>
               {item.options.length > 0 ? (
                 <span className="flex flex-col items-end gap-0.5 text-[10px] leading-tight">

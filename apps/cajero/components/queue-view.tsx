@@ -1376,7 +1376,7 @@ function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className={`relative w-full max-w-lg space-y-6 rounded-xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl transition-transform duration-200 ${
+        className={`relative max-h-[calc(100dvh-3rem)] w-full max-w-lg space-y-6 overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl transition-transform duration-200 ${
           closing ? "scale-95" : "scale-100 animate-in fade-in"
         }`}
       >
@@ -1704,7 +1704,7 @@ export function QueueView({
           aria-labelledby="queue-error-title"
           aria-describedby="queue-error-detail"
         >
-          <div className="w-full max-w-lg space-y-6 rounded-xl bg-red-700 p-6 text-center text-xl font-bold text-white shadow-2xl">
+          <div className="max-h-[calc(100dvh-3rem)] w-full max-w-lg space-y-6 overflow-y-auto overscroll-contain rounded-xl bg-red-700 p-6 text-center text-xl font-bold text-white shadow-2xl">
             <h2 id="queue-error-title" className="sr-only">
               No se pudo completar la acción
             </h2>

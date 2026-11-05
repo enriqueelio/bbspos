@@ -626,11 +626,10 @@ export function PosTerminal({
     activePane !== null && activePane !== "ALMUERZO" && !isBubas
       ? activePane
       : null;
-  // Productos ordenados por precio de mayor a menor (en toda la carta).
+  // Productos en el orden configurado en admin (sortOrder de cada categoría,
+  // y nombre como desempate); el catálogo ya llega ordenado desde la BD.
   const cartaItems = cartaPane
-    ? catalog.cartaItems
-        .filter((i) => i.category === cartaPane)
-        .sort((a, b) => b.price - a.price)
+    ? catalog.cartaItems.filter((i) => i.category === cartaPane)
     : [];
   // Menú del Día también por precio de mayor a menor.
   const menuDayItems = [...catalog.menuItems].sort(
@@ -671,10 +670,11 @@ export function PosTerminal({
   // para que ambas grillas queden alineadas.
   const menuDayGridClass = POS_GRID;
 
-  // Botones del bloque superior: las categorías de la carta con productos y
-  // Bubble Drinks como categoría fija. El orden, nombre, ícono, color e imagen
-  // vienen de la tabla Category (orden de lectura del admin); solo aparecen las
-  // categorías que en este momento tienen platos en la carta, junto a BUBAS.
+  // Botones del bloque superior: todas las categorías activas y visibles en la
+  // barra (las controla el admin con isActive/visibleInBar), más Bubble Drinks
+  // como categoría fija. El orden, nombre, ícono, color e imagen vienen de la
+  // tabla Category. No se filtran por tener platos: una categoría recién creada
+  // debe aparecer aunque todavía esté vacía.
   const catalogPanes = useMemo(() => {
     const panes: {
       key: CatalogPane;
@@ -696,15 +696,13 @@ export function PosTerminal({
         });
         continue;
       }
-      if (catalog.cartaItems.some((i) => i.category === c.key)) {
-        panes.push({
-          key: c.key,
-          label: c.name,
-          imageUrl: c.imageUrl,
-          iconName: c.iconName,
-          color: c.color,
-        });
-      }
+      panes.push({
+        key: c.key,
+        label: c.name,
+        imageUrl: c.imageUrl,
+        iconName: c.iconName,
+        color: c.color,
+      });
     }
     if (!sawBubas) {
       panes.push({

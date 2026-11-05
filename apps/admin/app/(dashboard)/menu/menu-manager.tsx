@@ -232,20 +232,12 @@ export interface AlitaSauceAdminView {
   available: boolean;
 }
 
-/** Tabs de la página de gestión del menú: una sección visible a la vez. */
-const MENU_TABS = [
-  { key: "almuerzos", label: "Almuerzos" },
-  { key: "carta", label: "Platos a la carta" },
-  { key: "bebidas", label: "Bebidas" },
-  { key: "gaseosas", label: "Gaseosas" },
-  { key: "cafeteria", label: "Cafetería" },
-  { key: "bubas", label: "Bubas" },
-  { key: "salsas", label: "Salsas Alitas" },
-  { key: "estaciones", label: "Estaciones" },
-  { key: "categorias", label: "Categorías" },
-] as const;
+/** Clave de la pestaña activa: una sección fija ("almuerzos", "bubas", …) o
+ *  una categoría de la tabla Category con el prefijo "cat:". */
+type MenuTabKey = string;
 
-type MenuTabKey = (typeof MENU_TABS)[number]["key"];
+/** Prefijo de las pestañas que se generan una por categoría. */
+const CATEGORY_TAB_PREFIX = "cat:";
 
 function SubSection({
   title,
@@ -919,20 +911,17 @@ export function MenuManager({
     description: "",
     options: [],
   });
-  const [cartaQuery, setCartaQuery] = useState("");
-  const [bebidasQuery, setBebidasQuery] = useState("");
-  const [gaseosasQuery, setGaseosasQuery] = useState("");
-  const [cafeteriaQuery, setCafeteriaQuery] = useState("");
+  // Búsqueda y filtro por categoría: cada pestaña conserva su estado al volver.
+  const [itemQueries, setItemQueries] = useState<Record<string, string>>({});
+  const [itemFiltros, setItemFiltros] = useState<
+    Record<string, DisponibilidadFiltro>
+  >({});
   const [almuerzosFiltro, setAlmuerzosFiltro] =
     useState<DisponibilidadFiltro>("TODOS");
-  const [cartaFiltro, setCartaFiltro] =
-    useState<DisponibilidadFiltro>("TODOS");
-  const [bebidasFiltro, setBebidasFiltro] =
-    useState<DisponibilidadFiltro>("TODOS");
-  const [gaseosasFiltro, setGaseosasFiltro] =
-    useState<DisponibilidadFiltro>("TODOS");
-  const [cafeteriaFiltro, setCafeteriaFiltro] =
-    useState<DisponibilidadFiltro>("TODOS");
+  const [almuerzosSort, setAlmuerzosSort] = useState<"name" | "price">("name");
+  const [almuerzosSortDir, setAlmuerzosSortDir] = useState<"asc" | "desc">(
+    "asc",
+  );
   const { toast } = useToast();
 
   const [editingSize, setEditingSize] = useState<Size | null>(null);
@@ -964,47 +953,49 @@ export function MenuManager({
   const [salsaEdit, setSalsaEdit] = useState({ name: "" });
 
   // Orden estable: la lista conserva el `orderBy` del servidor
-  // (`category asc, name asc`). Ordenar por `available` movía la fila recién
-  // activada al principio de la tabla y obligaba a volver a bajar a buscarla.
-  // Para revisar solo un grupo se usa el filtro de disponibilidad de la tabla.
-  // Las pestañas existen antes que la tabla Category; para no forzar una
-  // migración de UI nueva se preserva el agrupamiento por clave histórica
-  // (carta por defecto para claves nuevas que crea el admin).
+  // (`category asc, sortOrder asc, name asc`). Ordenar por `available` movía
+  // la fila recién activada al principio de la tabla y obligaba a bajar a
+  // buscarla. Para revisar solo un grupo se usa el filtro de disponibilidad.
   const categoryNameByIdx = new Map(categories.map((c) => [c.key, c.name]));
-  const CAFETERIA_CATEGORY_KEYS = new Set([
-    "PANCAKE",
-    "POSTRE",
-    "WAFFLE",
-    "EXTRAS",
-  ]);
-  const BEBIDA_KEY = "BEBIDA";
-  const GASEOSA_KEY = "GASEOSAS";
   const almuerzos = menuItems.filter((i) => i.category === "ALMUERZO");
-  const cartaItems = menuItems.filter(
-    (i) =>
-      i.category !== "ALMUERZO" &&
-      i.category !== BEBIDA_KEY &&
-      i.category !== GASEOSA_KEY &&
-      !CAFETERIA_CATEGORY_KEYS.has(i.category),
-  );
-  const bebidasItems = menuItems.filter((i) => i.category === BEBIDA_KEY);
-  const gaseosasItems = menuItems.filter((i) => i.category === GASEOSA_KEY);
-  const cafeteriaItems = menuItems.filter((i) =>
-    CAFETERIA_CATEGORY_KEYS.has(i.category),
-  );
+
+  // Una pestaña por categoría de la tabla Category, salvo ALMUERZO (tiene la
+  // suya) y BUBAS (se administra en su pestaña específica). Así cada categoría
+  // nueva aparece sola y sus productos no se mezclan con los de otras.
+  const menuTabs: { key: MenuTabKey; label: string }[] = [
+    { key: "almuerzos", label: "Almuerzos" },
+    ...categories
+      .filter((c) => c.key !== "ALMUERZO" && c.key !== "BUBAS")
+      .map((c) => ({ key: `${CATEGORY_TAB_PREFIX}${c.key}`, label: c.name })),
+    { key: "bubas", label: "Bubas" },
+    { key: "salsas", label: "Salsas Alitas" },
+    { key: "estaciones", label: "Estaciones" },
+    { key: "categorias", label: "Categorías" },
+  ];
+  const activeCategory = activeTab.startsWith(CATEGORY_TAB_PREFIX)
+    ? activeTab.slice(CATEGORY_TAB_PREFIX.length)
+    : null;
+  const categoryItems = activeCategory
+    ? menuItems.filter((i) => i.category === activeCategory)
+    : [];
+  const categoryDisponibles = categoryItems.filter((i) => i.available).length;
+  const activeCategoryQuery = activeCategory
+    ? (itemQueries[activeCategory] ?? "")
+    : "";
+  const activeCategoryFiltro: DisponibilidadFiltro = activeCategory
+    ? (itemFiltros[activeCategory] ?? "TODOS")
+    : "TODOS";
+  const filteredCategoryItems = categoryItems
+    .filter((i) => matchesDisponibilidad(i, activeCategoryFiltro))
+    .filter((i) =>
+      activeCategoryQuery
+        ? normalize(i.name).includes(normalize(activeCategoryQuery))
+        : true,
+    );
+
   const activeOptions = categories.filter(
     (c) => c.isActive && c.key !== "ALMUERZO",
   );
-  const firstCartaKey =
-    categories.find((c) => c.key === "MILANESA" && c.isActive)?.key ??
-    categories.find((c) => c.key === "SANDWICHES" && c.isActive)?.key ??
-    cartaItems[0]?.category ??
-    activeOptions[0]?.key ??
-    "";
-  const firstCafeteriaKey =
-    categories.find((c) => c.key === "PANCAKE" && c.isActive)?.key ??
-    cafeteriaItems[0]?.category ??
-    "";
   const almuerzosDisponibles = almuerzos.filter((i) => i.available).length;
   const filteredAlmuerzos = almuerzos
     .filter((i) => matchesDisponibilidad(i, almuerzosFiltro))
@@ -1012,45 +1003,15 @@ export function MenuManager({
       almuerzosQuery
         ? normalize(i.name).includes(normalize(almuerzosQuery))
         : true,
-    );
-  const cartaDisponibles = cartaItems.filter((i) => i.available).length;
-  const filteredCartaItems = cartaItems
-    .filter((i) => matchesDisponibilidad(i, cartaFiltro))
-    .filter((i) =>
-      cartaQuery
-        ? normalize(i.name).includes(normalize(cartaQuery)) ||
-          normalize(categoryNameByIdx.get(i.category) ?? i.category).includes(
-            normalize(cartaQuery),
-          )
-        : true,
-    );
-  const bebidasDisponibles = bebidasItems.filter((i) => i.available).length;
-  const filteredBebidasItems = bebidasItems
-    .filter((i) => matchesDisponibilidad(i, bebidasFiltro))
-    .filter((i) =>
-      bebidasQuery
-        ? normalize(i.name).includes(normalize(bebidasQuery))
-        : true,
-    );
-  const gaseosasDisponibles = gaseosasItems.filter((i) => i.available).length;
-  const filteredGaseosasItems = gaseosasItems
-    .filter((i) => matchesDisponibilidad(i, gaseosasFiltro))
-    .filter((i) =>
-      gaseosasQuery
-        ? normalize(i.name).includes(normalize(gaseosasQuery))
-        : true,
-    );
-  const cafeteriaDisponibles = cafeteriaItems.filter((i) => i.available).length;
-  const filteredCafeteriaItems = cafeteriaItems
-    .filter((i) => matchesDisponibilidad(i, cafeteriaFiltro))
-    .filter((i) =>
-      cafeteriaQuery
-        ? normalize(i.name).includes(normalize(cafeteriaQuery)) ||
-          normalize(categoryNameByIdx.get(i.category) ?? i.category).includes(
-            normalize(cafeteriaQuery),
-          )
-        : true,
-    );
+    )
+    .sort((a, b) => {
+      const cmp =
+        almuerzosSort === "price"
+          ? a.price - b.price
+          : a.name.localeCompare(b.name, "es");
+      const signed = almuerzosSortDir === "asc" ? cmp : -cmp;
+      return signed !== 0 ? signed : a.name.localeCompare(b.name, "es");
+    });
 
   function run(action: () => Promise<void>) {
     action().catch((e) => {
@@ -1123,7 +1084,7 @@ export function MenuManager({
     }
   }
 
-  function openNewCarta(category: string = firstCartaKey) {
+  function openNewCarta(category: string) {
     setCartaDraft({
       name: "",
       category,
@@ -1238,7 +1199,7 @@ export function MenuManager({
     <div className="flex h-full min-h-0 flex-col">
       {/* Barra de tabs: muestra una sección a la vez */}
       <div className="flex shrink-0 flex-wrap gap-1 border-b border-slate-800">
-        {MENU_TABS.map((tab) => {
+        {menuTabs.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <button
@@ -1295,28 +1256,84 @@ export function MenuManager({
             <Badge variant="secondary">
               {almuerzos.length} totales
             </Badge>
-            <div
-              className="ml-auto flex overflow-hidden rounded-lg border border-slate-800"
-              role="group"
-              aria-label="Filtrar almuerzos por disponibilidad"
-            >
-              {DISPONIBILIDAD_FILTERS.map((f, i) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  onClick={() => setAlmuerzosFiltro(f.value)}
-                  aria-pressed={almuerzosFiltro === f.value}
-                  className={cn(
-                    "px-3 py-1 text-xs font-medium transition-colors",
-                    i > 0 && "border-l border-slate-800",
-                    almuerzosFiltro === f.value
-                      ? "bg-slate-700 text-white"
-                      : "text-muted-foreground hover:bg-slate-900",
-                  )}
+            <div className="ml-auto flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">Ordenar:</span>
+                <div
+                  className="flex overflow-hidden rounded-lg border border-slate-800"
+                  role="group"
+                  aria-label="Ordenar almuerzos"
                 >
-                  {f.label}
-                </button>
-              ))}
+                  {(
+                    [
+                      { key: "name", label: "Nombre" },
+                      { key: "price", label: "Precio" },
+                    ] as const
+                  ).map((s, i) => {
+                    const active = almuerzosSort === s.key;
+                    return (
+                      <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => {
+                          if (active) {
+                            setAlmuerzosSortDir((d) =>
+                              d === "asc" ? "desc" : "asc",
+                            );
+                          } else {
+                            setAlmuerzosSort(s.key);
+                            setAlmuerzosSortDir("asc");
+                          }
+                        }}
+                        aria-pressed={active}
+                        title={
+                          active && almuerzosSortDir === "desc"
+                            ? `${s.label} (descendente)`
+                            : `${s.label} (ascendente)`
+                        }
+                        className={cn(
+                          "flex items-center gap-1 px-3 py-1 text-xs font-medium transition-colors",
+                          i > 0 && "border-l border-slate-800",
+                          active
+                            ? "bg-slate-700 text-white"
+                            : "text-muted-foreground hover:bg-slate-900",
+                        )}
+                      >
+                        {s.label}
+                        {active &&
+                          (almuerzosSortDir === "asc" ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          ))}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div
+                className="flex overflow-hidden rounded-lg border border-slate-800"
+                role="group"
+                aria-label="Filtrar almuerzos por disponibilidad"
+              >
+                {DISPONIBILIDAD_FILTERS.map((f, i) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => setAlmuerzosFiltro(f.value)}
+                    aria-pressed={almuerzosFiltro === f.value}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium transition-colors",
+                      i > 0 && "border-l border-slate-800",
+                      almuerzosFiltro === f.value
+                        ? "bg-slate-700 text-white"
+                        : "text-muted-foreground hover:bg-slate-900",
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1416,94 +1433,31 @@ export function MenuManager({
         </div>
       )}
 
-      {activeTab === "carta" && (
+      {activeCategory && (
         <MenuSection
-          title="Platos a la carta"
-          items={cartaItems}
-          filteredItems={filteredCartaItems}
-          disponibles={cartaDisponibles}
-          query={cartaQuery}
-          onQueryChange={setCartaQuery}
-          filtro={cartaFiltro}
-          onFiltroChange={setCartaFiltro}
-          openNew={() => openNewCarta()}
-          newButtonLabel="Nuevo Plato"
-          emptyText="No hay platos a la carta registrados."
-          showCategory
-          categoryName={(key) => categoryNameByIdx.get(key) ?? key}
-          onToggle={toggleAvailable}
-          onEdit={openEditCarta}
-          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-          isSuperAdmin={isSuperAdmin}
-          />
-      )}
-
-      {activeTab === "bebidas" && (
-        <MenuSection
-          title="Bebidas"
-          items={bebidasItems}
-          filteredItems={filteredBebidasItems}
-          disponibles={bebidasDisponibles}
-          query={bebidasQuery}
-          onQueryChange={setBebidasQuery}
-          filtro={bebidasFiltro}
-          onFiltroChange={setBebidasFiltro}
-          openNew={() => openNewCarta(BEBIDA_KEY)}
-          newButtonLabel="Nueva Bebida"
-          emptyText="No hay bebidas registradas."
-          showCategory={false}
-          categoryName={(key) => categoryNameByIdx.get(key) ?? key}
-          onToggle={toggleAvailable}
-          onEdit={openEditCarta}
-          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-          onReorder={(ids) => reorderItems(BEBIDA_KEY, ids)}
-          isSuperAdmin={isSuperAdmin}
-          />
-      )}
-
-      {activeTab === "gaseosas" && (
-        <MenuSection
-          title="Gaseosas"
-          items={gaseosasItems}
-          filteredItems={filteredGaseosasItems}
-          disponibles={gaseosasDisponibles}
-          query={gaseosasQuery}
-          onQueryChange={setGaseosasQuery}
-          filtro={gaseosasFiltro}
-          onFiltroChange={setGaseosasFiltro}
-          openNew={() => openNewCarta(GASEOSA_KEY)}
-          newButtonLabel="Nueva Gaseosa"
-          emptyText="No hay gaseosas registradas."
-          showCategory={false}
-          categoryName={(key) => categoryNameByIdx.get(key) ?? key}
-          onToggle={toggleAvailable}
-          onEdit={openEditCarta}
-          onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
-          onReorder={(ids) => reorderItems(GASEOSA_KEY, ids)}
-          isSuperAdmin={isSuperAdmin}
-          />
-      )}
-
-      {activeTab === "cafeteria" && (
-        <MenuSection
-          title="Cafetería"
-          items={cafeteriaItems}
-          filteredItems={filteredCafeteriaItems}
-          disponibles={cafeteriaDisponibles}
-          query={cafeteriaQuery}
-          onQueryChange={setCafeteriaQuery}
-          filtro={cafeteriaFiltro}
-          onFiltroChange={setCafeteriaFiltro}
-          openNew={() => openNewCarta(firstCafeteriaKey)}
+          title={categoryNameByIdx.get(activeCategory) ?? activeCategory}
+          items={categoryItems}
+          filteredItems={filteredCategoryItems}
+          disponibles={categoryDisponibles}
+          query={activeCategoryQuery}
+          onQueryChange={(q) =>
+            setItemQueries((prev) => ({ ...prev, [activeCategory]: q }))
+          }
+          filtro={activeCategoryFiltro}
+          onFiltroChange={(f) =>
+            setItemFiltros((prev) => ({ ...prev, [activeCategory]: f }))
+          }
+          openNew={() => openNewCarta(activeCategory)}
           newButtonLabel="Nuevo Producto"
-          emptyText="No hay productos de cafetería registrados."
-          showCategory
+          emptyText="No hay productos en esta categoría."
+          showCategory={false}
           categoryName={(key) => categoryNameByIdx.get(key) ?? key}
           onToggle={toggleAvailable}
           onEdit={openEditCarta}
           onDelete={(item) => confirmDelete(() => deleteMenuItem(item.id))}
+          onReorder={(ids) => reorderItems(activeCategory, ids)}
           isSuperAdmin={isSuperAdmin}
-          />
+        />
       )}
 
       {activeTab === "bubas" && (

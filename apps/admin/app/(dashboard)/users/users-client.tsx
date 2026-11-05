@@ -358,8 +358,8 @@ function UserDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <Card className="w-full max-w-md">
-        <CardContent className="space-y-4 p-6">
+      <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain">
+        <CardContent className="space-y-4 p-4 sm:p-6">
           <h2 className="text-lg font-bold">
             {isEdit ? `Editar ${target?.name}` : "Nuevo usuario"}
           </h2>

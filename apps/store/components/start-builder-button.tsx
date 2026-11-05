@@ -57,8 +57,8 @@ export function StartBuilderButton({ className }: { className?: string }) {
             if (e.target === e.currentTarget) handleClose();
           }}
         >
-          <Card className="w-full max-w-sm">
-            <CardContent className="space-y-4 p-6">
+          <Card className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto overscroll-contain">
+            <CardContent className="space-y-4 p-4 sm:p-6">
               <div className="space-y-1 text-center">
                 <h2 className="text-xl font-bold">¿Cuál es tu nombre?</h2>
                 <p className="text-sm text-muted-foreground">

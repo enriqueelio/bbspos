@@ -631,7 +631,7 @@ function CustomerDetailModal({
   }
 
   return (
-    <Modal className="max-w-3xl max-h-[90vh] flex flex-col">
+    <Modal className="max-w-3xl flex flex-col overflow-y-hidden">
       <div className="flex items-center justify-between border-b pb-4 mb-4">
         <div>
           <h2 className="text-xl font-bold">{customer.name}</h2>

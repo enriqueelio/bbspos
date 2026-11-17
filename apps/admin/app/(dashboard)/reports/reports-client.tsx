@@ -22,8 +22,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
 } from "@bbspos/ui";
@@ -80,7 +78,7 @@ const REPORT_GROUPS: ReportCategory[] = [
     label: "Operativo",
     tabs: [
       { key: "peak-hours", label: "Horas pico", needsRange: true },
-      { key: "top-products", label: "Top productos", needsRange: true },
+      { key: "top-products", label: "Productos", needsRange: true },
       { key: "category-sales", label: "Por categoría", needsRange: true },
       { key: "day-total", label: "Ventas totales", needsRange: true },
     ],
@@ -177,14 +175,18 @@ function KpiCard({
 }) {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="font-mono text-4xl font-bold tracking-tight">{value}</p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <CardContent className="flex items-center justify-between gap-3 px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-muted-foreground">
+            {label}
+          </p>
+          {hint && (
+            <p className="truncate text-[11px] text-muted-foreground">{hint}</p>
+          )}
+        </div>
+        <p className="shrink-0 font-mono text-2xl font-bold tracking-tight">
+          {value}
+        </p>
       </CardContent>
     </Card>
   );
@@ -215,7 +217,6 @@ export function ReportsClient({
   const [granularity, setGranularity] = useState<Granularity>("day");
   const [hourFrom, setHourFrom] = useState(11);
   const [hourTo, setHourTo] = useState(23);
-  const [topOnly, setTopOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
@@ -244,11 +245,8 @@ export function ReportsClient({
       params.set("hourFrom", String(hourFrom));
       params.set("hourTo", String(hourTo));
     }
-    if (report === "top-products" && topOnly) {
-      params.set("limit", "10");
-    }
     return params.toString();
-  }, [from, to, granularity, report, hourFrom, hourTo, topOnly]);
+  }, [from, to, granularity, report, hourFrom, hourTo]);
 
   const fetchData = useCallback(
     async <T,>(endpoint: string): Promise<T | null> => {
@@ -422,18 +420,19 @@ export function ReportsClient({
   const exporting = isExportingPdf || isExportingExcel;
 
   return (
-    <div className="space-y-6">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-4">
-        <div>
-          <h1 className="text-xl font-bold text-white">Reportes</h1>
-          <p className="text-muted-foreground">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="text-lg font-bold text-white">Reportes</h1>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
             Métricas del negocio: ventas, producto y personal.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
             variant="outline"
             size="sm"
+            className="h-7 px-2 text-xs"
             disabled={isSendingCierre || !canSendCierre}
             onClick={handleSendCierre}
             title={
@@ -442,60 +441,60 @@ export function ReportsClient({
                 : `Disponible a partir de las ${MANUAL_REPORT_CUTOFF}`
             }
           >
-            <Send className="mr-1 h-4 w-4" />
+            <Send className="mr-1 h-3.5 w-3.5" />
             {isSendingCierre ? "Enviando…" : "Cierre diario"}
           </Button>
           {canPrint && (
             <Button
               variant="outline"
               size="sm"
+              className="h-7 px-2 text-xs"
               disabled={isPrinting}
               onClick={handlePrint}
             >
-              <Printer className="mr-1 h-4 w-4" />
+              <Printer className="mr-1 h-3.5 w-3.5" />
               {isPrinting ? "Imprimiendo…" : "Imprimir"}
             </Button>
           )}
           <Button
             variant="outline"
             size="sm"
+            className="h-7 px-2 text-xs"
             disabled={!fetched || fetched.key !== report || exporting}
             onClick={exportPdf}
           >
-            <FileDown className="mr-1 h-4 w-4" />
+            <FileDown className="mr-1 h-3.5 w-3.5" />
             {isExportingPdf ? "Generando…" : "Exportar PDF"}
           </Button>
           <Button
             variant="outline"
             size="sm"
+            className="h-7 px-2 text-xs"
             disabled={!fetched || fetched.key !== report || exporting}
             onClick={exportExcel}
           >
-            <FileSpreadsheet className="mr-1 h-4 w-4" />
+            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
             {isExportingExcel ? "Exportando…" : "Exportar Excel"}
           </Button>
         </div>
-        {cierreMsg && (
-          <p className="basis-full text-sm text-primary">{cierreMsg}</p>
-        )}
-        {!canSendCierre && (
-          <p className="basis-full text-sm text-muted-foreground">
-            El cierre diario se habilita a partir de las {MANUAL_REPORT_CUTOFF}.
-          </p>
-        )}
       </div>
 
+      {cierreMsg && (
+        <p className="text-sm text-primary">{cierreMsg}</p>
+      )}
+
       {/* Filtro de fechas global (persistente en todas las pestañas). */}
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className="sticky top-0 z-30 rounded-lg border bg-card/95 p-1.5 shadow-sm backdrop-blur">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Rango
             </span>
             {RANGE_PRESETS.map((p) => (
               <Button
                 key={p.value}
                 size="sm"
+                className="h-7 px-2 text-xs"
                 variant={rangePreset === p.value ? "default" : "secondary"}
                 onClick={() => {
                   setRangePreset(p.value);
@@ -509,149 +508,118 @@ export function ReportsClient({
             ))}
           </div>
 
-          {rangePreset === "custom" && (
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="reports-from" className="text-sm font-medium">
-                  Desde
-                </Label>
-                <Input
-                  id="reports-from"
-                  type="date"
-                  value={from}
-                  onChange={(e) => {
-                    setFrom(e.target.value);
-                    if (e.target.value > to) setTo(e.target.value);
-                  }}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="reports-to" className="text-sm font-medium">
-                  Hasta
-                </Label>
-                <Input
-                  id="reports-to"
-                  type="date"
-                  value={to}
-                  onChange={(e) => {
-                    setTo(e.target.value);
-                    if (e.target.value < from) setFrom(e.target.value);
-                  }}
-                />
-              </div>
+          {rangePreset === "custom" ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Input
+                id="reports-from"
+                type="date"
+                aria-label="Desde"
+                className="h-7 w-[8.5rem] text-xs"
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  if (e.target.value > to) setTo(e.target.value);
+                }}
+              />
+              <span className="text-xs text-muted-foreground">a</span>
+              <Input
+                id="reports-to"
+                type="date"
+                aria-label="Hasta"
+                className="h-7 w-[8.5rem] text-xs"
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  if (e.target.value < from) setFrom(e.target.value);
+                }}
+              />
             </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            <span>
-              Desde{" "}
+          ) : (
+            <span className="text-xs text-muted-foreground">
               <span className="font-semibold text-white">
                 {new Date(`${from}T12:00:00`).toLocaleDateString("es-MX", {
                   dateStyle: "medium",
                 })}
-              </span>{" "}
-              hasta{" "}
+              </span>
+              {" a "}
               <span className="font-semibold text-white">
                 {new Date(`${to}T12:00:00`).toLocaleDateString("es-MX", {
                   dateStyle: "medium",
                 })}
               </span>
-            </span>
-            <span className="hidden sm:inline text-slate-500">·</span>
-            <span>
+              {" · "}
               {from === to
-                ? "Un día específico"
+                ? "un día"
                 : `${Math.round(
                     (new Date(`${to}T12:00:00`).getTime() -
                       new Date(`${from}T12:00:00`).getTime()) /
                       86_400_000,
                   ) + 1} días`}
             </span>
+          )}
+
+          <div className="ml-auto flex flex-wrap items-center gap-1.5">
+            {/* Controles contextuales por pestaña. */}
+            {report === "sales-range" && (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="reports-gran" className="text-[11px] font-medium text-muted-foreground">
+                  Agrupar
+                </Label>
+                <select
+                  id="reports-gran"
+                  className="h-7 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm"
+                  value={granularity}
+                  onChange={(e) => setGranularity(e.target.value as Granularity)}
+                >
+                  <option value="day">Día</option>
+                  <option value="week">Semana</option>
+                  <option value="month">Mes</option>
+                </select>
+              </div>
+            )}
+
+            {report === "peak-hours" && (
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label="Desde hora"
+                  className="h-7 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm"
+                  value={hourFrom}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setHourFrom(v);
+                    if (v > hourTo) setHourTo(v);
+                  }}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {String(i).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted-foreground">a</span>
+                <select
+                  aria-label="Hasta hora"
+                  className="h-7 rounded-md border border-input bg-transparent px-2 text-xs shadow-sm"
+                  value={hourTo}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setHourTo(v);
+                    if (v < hourFrom) setHourFrom(v);
+                  }}
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {String(i).padStart(2, "0")}:00
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <ReportMenu group={REPORT_GROUPS} report={report} onSelect={setReport} />
           </div>
-
-          {/* Controles contextuales por pestaña. */}
-          {report === "sales-range" && (
-            <div className="border-t pt-3">
-              <Label htmlFor="reports-gran" className="text-sm font-medium">
-                Agrupar por
-              </Label>
-              <select
-                id="reports-gran"
-                className="ml-3 h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-                value={granularity}
-                onChange={(e) => setGranularity(e.target.value as Granularity)}
-              >
-                <option value="day">Día</option>
-                <option value="week">Semana</option>
-                <option value="month">Mes</option>
-              </select>
-            </div>
-          )}
-
-          {report === "peak-hours" && (
-            <div className="flex flex-wrap items-center gap-3 border-t pt-3">
-              <Label htmlFor="reports-hour-from" className="text-sm font-medium">
-                Desde hora
-              </Label>
-              <select
-                id="reports-hour-from"
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-                value={hourFrom}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setHourFrom(v);
-                  if (v > hourTo) setHourTo(v);
-                }}
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>
-                    {String(i).padStart(2, "0")}:00
-                  </option>
-                ))}
-              </select>
-              <Label htmlFor="reports-hour-to" className="text-sm font-medium">
-                Hasta hora
-              </Label>
-              <select
-                id="reports-hour-to"
-                className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-                value={hourTo}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setHourTo(v);
-                  if (v < hourFrom) setHourFrom(v);
-                }}
-              >
-                {Array.from({ length: 24 }, (_, i) => (
-                  <option key={i} value={i}>
-                    {String(i).padStart(2, "0")}:00
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {report === "top-products" && (
-            <div className="flex items-center gap-2 border-t pt-3">
-              <Button
-                size="sm"
-                variant={topOnly ? "default" : "outline"}
-                onClick={() => setTopOnly(!topOnly)}
-              >
-                {topOnly ? "Top 10" : "Todos los productos"}
-              </Button>
-              <span className="text-xs text-muted-foreground">
-                {topOnly
-                  ? "Mostrando los 10 más vendidos"
-                  : "Mostrando todos los productos"}
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Menú desplegable por categorías. */}
-      <ReportMenu group={REPORT_GROUPS} report={report} onSelect={setReport} />
+        </div>
+      </div>
 
       {loading && (
         <p className="text-sm text-muted-foreground">Cargando reporte…</p>
@@ -716,6 +684,7 @@ function ReportMenu({
   onSelect: (key: ReportKey) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [openUp, setOpenUp] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const active = REPORT_TABS.find((t) => t.key === report);
 
@@ -736,28 +705,39 @@ function ReportMenu({
         type="button"
         variant="outline"
         size="sm"
-        className="gap-2"
-        onClick={() => setOpen((v) => !v)}
+        className="h-7 gap-1.5 px-2 text-xs"
+        onClick={() => {
+          if (!open) {
+            const rect = rootRef.current?.getBoundingClientRect();
+            const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
+            setOpenUp(spaceBelow < 460);
+          }
+          setOpen((v) => !v);
+        }}
         aria-expanded={open}
       >
         <span className="text-muted-foreground">Reportes:</span>
         <span className="font-medium">{active?.label}</span>
         <ChevronDown
-          className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          className={`size-3.5 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
         />
       </Button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border bg-popover p-2 shadow-md">
+        <div
+          className={`absolute right-0 z-50 max-h-[min(70vh,26rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border bg-popover p-2 shadow-md ${
+            openUp ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
+        >
           {group.map((g, gi) => (
-            <div key={g.key} className={gi > 0 ? "mt-2 border-t border-border pt-2" : ""}>
-              <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <div key={g.key} className={gi > 0 ? "mt-1.5 border-t border-border pt-1.5" : ""}>
+              <p className="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {g.label}
               </p>
               {g.tabs.map((t) => (
                 <button
                   key={t.key}
                   type="button"
-                  className={`flex w-full items-center rounded-md py-1.5 pl-5 pr-2 text-left text-sm transition-colors ${
+                  className={`flex w-full items-center rounded-md py-1 pl-4 pr-2 text-left text-sm leading-snug transition-colors ${
                     report === t.key
                       ? "bg-primary text-primary-foreground"
                       : "text-slate-200 hover:bg-accent hover:text-accent-foreground"
@@ -1160,7 +1140,7 @@ function CategorySalesView({ data }: { data: CategorySalesData }) {
   return (
     <DataTable
       columns={[
-        { header: "Categoría", cell: (r) => FlavorCategoryLabel[r.category], sortValue: (r) => FlavorCategoryLabel[r.category] },
+        { header: "Categoría", cell: (r) => r.label, sortValue: (r) => r.label },
         { header: "Unidades", cell: (r) => r.unitsSold, numeric: true, sortValue: (r) => r.unitsSold },
         { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
         { header: "Participación", cell: (r) => `${r.sharePct}%`, sortValue: (r) => r.sharePct },
@@ -1179,8 +1159,13 @@ function TopProductsView({ rows }: { rows: TopProductRow[] }) {
         { header: "#", cell: (r) => r.rank, sortValue: (r) => r.rank },
         { header: "Producto", cell: (r) => r.key, sortValue: (r) => r.key },
         { header: "Unidades", cell: (r) => r.unitsSold, numeric: true, sortValue: (r) => r.unitsSold },
-        { header: "Ingresos", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
-        { header: "Precio promedio", cell: (r) => formatPrice(r.unitPriceAvg), numeric: true, sortValue: (r) => r.unitPriceAvg },
+        {
+          header: "Precio unitario",
+          cell: (r) => formatPrice(r.unitPrice ?? r.unitPriceAvg),
+          numeric: true,
+          sortValue: (r) => r.unitPrice ?? r.unitPriceAvg,
+        },
+        { header: "SubTotal", cell: (r) => formatPrice(r.revenue), numeric: true, sortValue: (r) => r.revenue },
       ]}
       rows={rows}
       emptyText="Sin ventas en el rango."

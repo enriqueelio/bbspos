@@ -652,6 +652,7 @@ export function formatPrice(bs: number): string {
 export type Granularity = "day" | "week" | "month";
 export type ReportFormat = "json" | "csv";
 export type TopProductsGroupBy =
+  | "product"
   | "drink"
   | "flavor"
   | "size"
@@ -811,6 +812,8 @@ export interface TopProductRow {
   key: string;
   unitsSold: number;
   revenue: number;
+  /** Precio unitario real cuando se agrupa por producto concreto. */
+  unitPrice?: number;
   unitPriceAvg: number;
 }
 
@@ -823,13 +826,14 @@ export interface SlowMoverRow {
 
 export interface CategorySalesData {
   categories: {
-    category: FlavorCategory;
+    category: string;
+    label: string;
     unitsSold: number;
     revenue: number;
     sharePct: number;
     avgTicketItem: number;
   }[];
-  bestCategory: FlavorCategory | null;
+  bestCategory: string | null;
 }
 
 export interface DashboardEmployeeRow {

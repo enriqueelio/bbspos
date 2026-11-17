@@ -1,6 +1,5 @@
 import * as XLSX from "xlsx";
 import {
-  FlavorCategoryLabel,
   PaymentMethodLabel,
   type AdjustmentsData,
   type CategorySalesData,
@@ -154,7 +153,7 @@ function handleCategorySales(data: CategorySalesData, from: string, to: string) 
 
   if (data.categories.length > 0) {
     const rows = data.categories.map((r) => ({
-      Categoría: FlavorCategoryLabel[r.category],
+      Categoría: r.label,
       Unidades: r.unitsSold,
       Ingresos: r.revenue,
       "Participación %": r.sharePct,
@@ -174,13 +173,13 @@ function handleTopProducts(rows: TopProductRow[], from: string, to: string) {
       "#": r.rank,
       Producto: r.key,
       Unidades: r.unitsSold,
-      Ingresos: r.revenue,
-      "Precio promedio": r.unitPriceAvg,
+      "Precio unitario": r.unitPrice ?? r.unitPriceAvg,
+      SubTotal: r.revenue,
     }));
-    XLSX.utils.book_append_sheet(wb, sheetFromRows("Top productos", data).ws, "Top productos");
+    XLSX.utils.book_append_sheet(wb, sheetFromRows("Productos", data).ws, "Productos");
   }
 
-  download(wb, `top-productos-${from}_${to}`);
+  download(wb, `productos-${from}_${to}`);
 }
 
 function handleSlowMovers(rows: SlowMoverRow[], from: string, to: string) {

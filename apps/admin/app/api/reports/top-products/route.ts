@@ -12,13 +12,33 @@ import { dayKeyOf, rangeBounds, zonedToUtc } from "@/lib/reports/range";
 
 interface AccRow {
   key: string;
+  unitPrice?: number | bigint | null;
   unitsSold: number | bigint;
   revenue: number | bigint;
 }
 
-// Bebidas: agrupa por combinación / sabor / tamaño / tipo de boba según
+// Productos vendidos: una fila por producto concreto (bebida = sabor + tamaño +
+// boba; platillo = nombre + opción) con su precio unitario real y subtotal.
+const PRODUCT_SQL = `
+  SELECT
+    CASE
+      WHEN oi."menuItemName" IS NOT NULL
+        THEN oi."menuItemName" || COALESCE(' - ' || oi."menuItemOptionName", '')
+      ELSE oi."flavorName" || ' - ' || oi."sizeName" || ' - ' || oi."bobaTypeName"
+    END AS key,
+    oi."unitPrice" AS unitPrice,
+    COALESCE(SUM(oi."quantity"), 0) AS unitsSold,
+    COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
+  FROM "OrderItem" oi
+  JOIN "Order" o ON o.id = oi."orderId"
+  WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
+    AND (oi."flavorName" IS NOT NULL OR oi."menuItemName" IS NOT NULL)
+  GROUP BY key, oi."unitPrice"
+`;
+
+// Bebidas: agrupa por combinacion / sabor / tamano / tipo de boba segun
 // `groupBy`, con unidades e ingresos (SUM de unitPrice*quantity) en SQLite.
-function drinkGroupSql(groupBy: Exclude<TopProductsGroupBy, "topping">): string {
+function drinkGroupSql(groupBy: Exclude<TopProductsGroupBy, "topping" | "product">): string {
   const keyExpr =
     groupBy === "drink"
       ? `oi."flavorName" || ' · ' || oi."sizeName" || ' · ' || oi."bobaTypeName"`
@@ -64,7 +84,12 @@ export async function GET(request: Request) {
     const bounds = rangeBounds(query.from, query.to);
     const groupBy: TopProductsGroupBy = query.groupBy;
 
-    const sql = groupBy === "topping" ? TOPPING_SQL : drinkGroupSql(groupBy);
+    const sql =
+      groupBy === "topping"
+        ? TOPPING_SQL
+        : groupBy === "product"
+          ? PRODUCT_SQL
+          : drinkGroupSql(groupBy);
     const rows = await prisma.$queryRawUnsafe<AccRow[]>(
       sql,
       bounds.gte,
@@ -75,25 +100,25 @@ export async function GET(request: Request) {
 
     if (query.format === "csv") {
       const headers = [
-        "Puesto",
+        "#",
         "Producto",
         "Unidades",
-        "Ingresos",
-        "Precio promedio",
+        "Precio unitario",
+        "SubTotal",
       ];
       const csvRows = data.map((r) => [
         r.rank,
         r.key,
         r.unitsSold,
+        r.unitPrice ?? r.unitPriceAvg,
         r.revenue,
-        r.unitPriceAvg,
       ]);
       const fromKey = dayKeyOf(zonedToUtc(query.from));
       const toKey = dayKeyOf(zonedToUtc(query.to));
       const filename =
         groupBy === "topping"
           ? `top-toppings-${fromKey}_${toKey}.csv`
-          : `top-productos-${fromKey}_${toKey}.csv`;
+          : `productos-${fromKey}_${toKey}.csv`;
       return csvResponse(filename, buildCsv(headers, csvRows));
     }
 
@@ -108,6 +133,7 @@ function rank(
   const sorted = rows
     .map((r) => ({
       key: r.key,
+      unitPrice: r.unitPrice != null ? Number(r.unitPrice) : null,
       unitsSold: Number(r.unitsSold),
       revenue: Number(r.revenue),
     }))
@@ -121,12 +147,16 @@ function rank(
 
   const sliced = query.limit ? sorted.slice(0, query.limit) : sorted;
 
-  return sliced.map((r, index) => ({
-    rank: index + 1,
-    key: r.key,
-    unitsSold: r.unitsSold,
-    revenue: r.revenue,
-    unitPriceAvg:
-      r.unitsSold > 0 ? Math.round(r.revenue / r.unitsSold) : 0,
-  }));
+  return sliced.map((r, index) => {
+    const unitPrice =
+      r.unitPrice ?? (r.unitsSold > 0 ? Math.round(r.revenue / r.unitsSold) : 0);
+    return {
+      rank: index + 1,
+      key: r.key,
+      unitsSold: r.unitsSold,
+      revenue: r.revenue,
+      unitPrice,
+      unitPriceAvg: unitPrice,
+    };
+  });
 }

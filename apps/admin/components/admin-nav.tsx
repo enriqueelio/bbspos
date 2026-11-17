@@ -16,7 +16,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "inline-flex min-h-11 items-center rounded-md px-3 py-1.5 text-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "inline-flex min-h-8 items-center rounded-md px-2.5 py-1 text-base font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         active
           ? "bg-primary text-primary-foreground shadow-md"
           : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -84,11 +84,11 @@ function SettingsMenu() {
         aria-controls={open ? "admin-settings-menu" : undefined}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "h-11 w-11 text-muted-foreground hover:bg-accent hover:text-foreground",
+          "h-8 w-8 text-muted-foreground hover:bg-accent hover:text-foreground",
           active && "text-foreground",
         )}
       >
-        <Settings className="h-5 w-5" />
+        <Settings className="h-4 w-4" />
       </Button>
       {open && (
         <div
@@ -122,9 +122,9 @@ function SettingsMenu() {
 
 export function AdminNav({ userName }: { userName: string }) {
   return (
-    <header className="mb-6 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b pb-4">
+    <header className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-b pb-2">
       <div className="flex items-center gap-2 font-bold">
-        <span className="inline-block h-6 w-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-700" />
+        <span className="inline-block h-5 w-5 rounded-full bg-gradient-to-br from-amber-400 to-amber-700" />
         <span>BBSPOS Admin</span>
       </div>
       <nav className="flex items-center gap-1">
@@ -138,7 +138,7 @@ export function AdminNav({ userName }: { userName: string }) {
         <Button
           variant="outline"
           size="sm"
-          className="min-h-11"
+          className="h-8 px-2.5 text-xs"
           onClick={() => signOut({ callbackUrl: "/login" })}
         >
           Salir

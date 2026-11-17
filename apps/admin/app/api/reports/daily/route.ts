@@ -1,7 +1,5 @@
 import { prisma } from "@bbspos/db";
 import {
-  FlavorCategoryLabel,
-  FlavorCategoryList,
   normalizeCategoryKey,
   type DailyReportData,
   type CategoryBreakdownRow,
@@ -16,8 +14,7 @@ import { dayBounds, localDateKey } from "@/lib/reports/range";
 // Filas devueltas por las consultas SQL nativas (SQLite devuelve agregaciones
 // como números enteros grandes; se normalizan con Number()).
 type CategoryRow = {
-  flavorCategory: string | null;
-  menuItemCategory: string | null;
+  category: string;
   orders: number | bigint;
   units: number | bigint;
   revenue: number | bigint;
@@ -28,23 +25,24 @@ type ToppingsRow = {
 };
 
 // Desglose por categoría (COUNT DISTINCT de órdenes, unidades e ingresos por
-// producto) delegado por completo a SQLite. Las bebidas se agrupan por
-// flavorCategory; los platillos (carta y Menú del Día) por menuItemCategory.
-// Las claves históricas consolidadas (SANDWICH/PANINI → SANDWICHES) se
-// normalizan aquí para que la agrupación y el COUNT(DISTINCT) sean correctos.
-const NORMALIZED_MENU_CATEGORY = `CASE WHEN oi."menuItemCategory" IN ('SANDWICH', 'PANINI')
-              THEN 'SANDWICHES' ELSE oi."menuItemCategory" END`;
-
+// producto) delegado por completo a SQLite. Una fila por categoría real de la
+// carta: las bebidas Bubble Tea (que guardan `flavorCategory`) se consolidan en
+// Bubbas, y las claves históricas (SANDWICH/PANINI → SANDWICHES) se normalizan
+// aquí para que la agrupación y el COUNT(DISTINCT) sean correctos.
 const CATEGORY_SQL = `
-  SELECT oi."flavorCategory" AS flavorCategory,
-         ${NORMALIZED_MENU_CATEGORY} AS menuItemCategory,
-         COUNT(DISTINCT oi."orderId") AS orders,
-         COALESCE(SUM(oi."quantity"), 0) AS units,
-         COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
+  SELECT
+    CASE
+      WHEN oi."flavorCategory" IS NOT NULL THEN 'BUBAS'
+      WHEN oi."menuItemCategory" IN ('SANDWICH', 'PANINI') THEN 'SANDWICHES'
+      ELSE COALESCE(oi."menuItemCategory", 'OTROS')
+    END AS category,
+    COUNT(DISTINCT oi."orderId") AS orders,
+    COALESCE(SUM(oi."quantity"), 0) AS units,
+    COALESCE(SUM(oi."unitPrice" * oi."quantity"), 0) AS revenue
   FROM "OrderItem" oi
   JOIN "Order" o ON o.id = oi."orderId"
   WHERE o."createdAt" >= ? AND o."createdAt" < ? AND o."status" != 'ANULADO'
-  GROUP BY oi."flavorCategory", ${NORMALIZED_MENU_CATEGORY}
+  GROUP BY category
 `;
 
 // Ingreso por toppings (cada topping multiplicado por la cantidad del ítem).
@@ -109,17 +107,20 @@ export async function GET(request: Request) {
         prisma.category.findMany({ orderBy: { order: "asc" } }),
       ]);
 
-    // Orden del desglose: categorías de bebidas y luego las secciones de la
-    // carta tal como las administra el admin (tabla Category). Las líneas de
-    // platillos llegan sin flavorCategory, se agrupan por menuItemCategory.
-    const categoryOrder: string[] = [
-      ...FlavorCategoryList,
-      ...categories.map((c) => c.key),
-    ];
-    const categoryLabels = new Map<string, string>([
-      ...Object.entries(FlavorCategoryLabel),
-      ...categories.map((c) => [c.key, c.name] as const),
-    ]);
+    // Orden del desglose: las secciones de la carta tal como las administra el
+    // admin (tabla Category). Las bebidas Bubble Tea caen en Bubbas.
+    const categoryOrder: string[] = [];
+    const categoryLabels = new Map<string, string>();
+    for (const category of categories) {
+      const key = normalizeCategoryKey(category.key);
+      if (categoryLabels.has(key)) continue;
+      categoryLabels.set(key, category.name);
+      categoryOrder.push(key);
+    }
+    if (!categoryLabels.has("BUBAS")) {
+      categoryLabels.set("BUBAS", "Bubbas");
+      categoryOrder.push("BUBAS");
+    }
 
     const revenueTotal = Number(orderAgg._sum.total ?? 0);
     const ordersTotal = orderAgg._count._all;
@@ -139,19 +140,16 @@ export async function GET(request: Request) {
     }
     let itemsSold = 0;
     for (const row of catRows) {
-      // Bebidas agrupan por flavorCategory; platillos (carta y Menú del Día)
-      // por menuItemCategory. Las claves históricas (SANDWICH/PANINI) se
-      // consolidan en la categoría vigente.
-      const key = normalizeCategoryKey(
-        row.flavorCategory ?? row.menuItemCategory ?? "ALMUERZO",
-      );
+      // La categoría ya viene consolidada desde SQL (Bubbas, claves históricas
+      // normalizadas); solo se agrega a su fila correspondiente.
+      const key = normalizeCategoryKey(row.category);
       const units = Number(row.units);
       itemsSold += units;
       const entry = byCategoryMap.get(key);
       if (!entry) continue;
-      entry.orders = Number(row.orders);
-      entry.units = units;
-      entry.revenue = Number(row.revenue);
+      entry.orders += Number(row.orders);
+      entry.units += units;
+      entry.revenue += Number(row.revenue);
     }
 
     const toppingsRevenue = Number(toppingsRows[0]?.value ?? 0);

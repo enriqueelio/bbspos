@@ -1,5 +1,5 @@
 import { prisma } from "@bbspos/db";
-import { FlavorCategoryList, type CategorySalesData } from "@bbspos/types";
+import { normalizeCategoryKey, type CategorySalesData } from "@bbspos/types";
 import {
   assertRange,
   categorySalesQuerySchema,
@@ -10,12 +10,6 @@ import { requireSession } from "@/lib/reports/guard";
 import { notCancelled } from "@/lib/reports/sales";
 import { buildCsv, csvResponse } from "@/lib/reports/csv";
 import { dayKeyOf, rangeBounds, zonedToUtc } from "@/lib/reports/range";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  MILK: "Con leche",
-  WATER: "Con agua",
-  SPECIAL: "Especiales",
-};
 
 export async function GET(request: Request) {
   return handleReportRoute(async () => {
@@ -29,31 +23,62 @@ export async function GET(request: Request) {
 
     const bounds = rangeBounds(query.from, query.to);
 
-    const items = await prisma.orderItem.findMany({
-      where: {
-        order: {
-          createdAt: { gte: bounds.gte, lt: bounds.lt },
-          ...notCancelled,
+    const [items, catalogCategories] = await Promise.all([
+      prisma.orderItem.findMany({
+        where: {
+          order: {
+            createdAt: { gte: bounds.gte, lt: bounds.lt },
+            ...notCancelled,
+          },
         },
-      },
-      select: {
-        flavorCategory: true,
-        unitPrice: true,
-        quantity: true,
-      },
-    });
+        select: {
+          flavorCategory: true,
+          menuItemCategory: true,
+          unitPrice: true,
+          quantity: true,
+        },
+      }),
+      prisma.category.findMany({
+        orderBy: { order: "asc" },
+        select: { key: true, name: true },
+      }),
+    ]);
+
+    const labels = new Map<string, string>();
+    const categoryOrder: string[] = [];
+
+    // Una fila por categoría real de la carta (tabla `Category`). Las bebidas
+    // Bubble Tea se venden con la matriz sabor/tamaño/boba y guardan
+    // `flavorCategory` en vez de `menuItemCategory`: todas se consolidan en la
+    // categoría Bubbas, igual que cualquier otra categoría con variantes.
+    for (const cat of catalogCategories) {
+      const key = normalizeCategoryKey(cat.key);
+      if (!labels.has(key)) {
+        labels.set(key, cat.name);
+        categoryOrder.push(key);
+      }
+    }
+    if (!labels.has("BUBAS")) {
+      labels.set("BUBAS", "Bubbas");
+      categoryOrder.push("BUBAS");
+    }
 
     const totals = new Map<string, { unitsSold: number; revenue: number }>();
-    for (const category of FlavorCategoryList) {
-      totals.set(category, { unitsSold: 0, revenue: 0 });
+    for (const key of categoryOrder) {
+      totals.set(key, { unitsSold: 0, revenue: 0 });
     }
 
     for (const item of items) {
-      // Las líneas de platillos del Menú del Día no tienen flavorCategory:
-      // este reporte desglosa solo bebidas.
-      if (!item.flavorCategory) continue;
-      const entry = totals.get(item.flavorCategory);
-      if (!entry) continue;
+      const key = item.flavorCategory
+        ? "BUBAS"
+        : normalizeCategoryKey(item.menuItemCategory ?? "OTROS");
+      let entry = totals.get(key);
+      if (!entry) {
+        entry = { unitsSold: 0, revenue: 0 };
+        totals.set(key, entry);
+        labels.set(key, key);
+        categoryOrder.push(key);
+      }
       entry.unitsSold += item.quantity;
       entry.revenue += item.unitPrice * item.quantity;
     }
@@ -63,23 +88,23 @@ export async function GET(request: Request) {
       0,
     );
 
-    let bestCategory: CategorySalesData["bestCategory"] = null;
-    for (const category of FlavorCategoryList) {
-      if (
-        !bestCategory ||
-        (totals.get(category)?.revenue ?? 0) >
-          (totals.get(bestCategory)?.revenue ?? 0)
-      ) {
-        bestCategory = category;
+    let bestCategory: string | null = null;
+    let bestRevenue = 0;
+    for (const key of categoryOrder) {
+      const revenue = totals.get(key)?.revenue ?? 0;
+      if (revenue > bestRevenue) {
+        bestRevenue = revenue;
+        bestCategory = key;
       }
     }
-    bestCategory = revenueAll > 0 ? bestCategory : null;
+    if (bestRevenue <= 0) bestCategory = null;
 
-    const categories: CategorySalesData["categories"] =
-      FlavorCategoryList.map((category) => {
-        const entry = totals.get(category)!;
+    const categories: CategorySalesData["categories"] = categoryOrder.map(
+      (key) => {
+        const entry = totals.get(key)!;
         return {
-          category,
+          category: key,
+          label: labels.get(key) ?? key,
           unitsSold: entry.unitsSold,
           revenue: entry.revenue,
           sharePct:
@@ -91,7 +116,8 @@ export async function GET(request: Request) {
               ? Math.round(entry.revenue / entry.unitsSold)
               : 0,
         };
-      });
+      },
+    );
 
     const data: CategorySalesData = { categories, bestCategory };
 
@@ -104,7 +130,7 @@ export async function GET(request: Request) {
         "Precio promedio por ítem",
       ];
       const rows = categories.map((c) => [
-        CATEGORY_LABELS[c.category] ?? c.category,
+        c.label,
         c.unitsSold,
         c.revenue,
         c.sharePct,

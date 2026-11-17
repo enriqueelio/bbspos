@@ -87,8 +87,8 @@ export const paymentsQuerySchema = rangeObject({ format: formatSchema });
 
 export const topProductsQuerySchema = rangeObject({
   groupBy: z
-    .enum(["drink", "flavor", "size", "bobaType", "topping"])
-    .default("flavor"),
+    .enum(["product", "drink", "flavor", "size", "bobaType", "topping"])
+    .default("product"),
   metric: z.enum(["quantity", "revenue"]).default("quantity"),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   format: formatSchema,

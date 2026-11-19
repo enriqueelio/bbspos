@@ -41,14 +41,17 @@ function toMovementRecord(row: {
   };
 }
 
-/** Contraste del día según el sistema, con el mismo criterio del reporte
- *  diario: solo pedidos ENTREGADOS cuentan para la caja, y un pago dividido
- *  queda prorrateado entre sus dos métodos (el primero recibe total − amount2,
- *  el segundo amount2). Ver @bbspos/db daily-report:collectReportStats.
- *  Los ingresos/egresos manuales y el excedente automático también ajustan la
- *  gaveta. */
+/** Contraste del día del cajero: solo se consideran los pedidos ENTREGADOS
+ *  cobrados por ese usuario (`Order.paidById`), de modo que cada cierre cubre
+ *  exclusivamente lo que cobró, aunque el pedido lo haya tomado un mesero. Un
+ *  pago dividido queda prorrateado entre sus dos métodos (el primero recibe
+ *  total − amount2, el segundo amount2).
+ *  Los movimientos manuales del mismo cajero y su excedente también ajustan la
+ *  gaveta. Las recargas de pensionados se registran desde el admin y no tienen
+ *  dueño en caja, así que no entran en el cierre de un cajero. */
 export async function getCashCloseStats(
   dateKey: string,
+  userId: string,
   db: CashCloseDb = prisma,
 ): Promise<CashCloseStats> {
   const bounds = dayBounds(dateKey);
@@ -58,6 +61,7 @@ export async function getCashCloseStats(
       where: {
         status: OrderStatus.ENTREGADO,
         deliveredAt: { gte: bounds.gte, lt: bounds.lt },
+        paidById: userId,
       },
       select: {
         total: true,
@@ -66,14 +70,21 @@ export async function getCashCloseStats(
         paymentAmount2: true,
       },
     }),
-    // Cuentas de pensionados: la recarga/pago de deuda es ingreso real de caja
-    // del día; el consumo se cobra contra la cuenta y NO entra a la caja.
+    // Consumos de pensionados del propio cajero: se cobran contra la cuenta y
+    // NO entran a la caja; solo se informan en el cierre.
     db.customerLedger.findMany({
-      where: { createdAt: { gte: bounds.gte, lt: bounds.lt } },
-      select: { type: true, amount: true, paymentMethod: true },
+      where: {
+        type: "CONSUMO",
+        order: {
+          paidById: userId,
+          status: OrderStatus.ENTREGADO,
+          deliveredAt: { gte: bounds.gte, lt: bounds.lt },
+        },
+      },
+      select: { amount: true },
     }),
     db.cashMovement.findMany({
-      where: { date: dateKey, voidedAt: null },
+      where: { date: dateKey, voidedAt: null, userId },
       select: { type: true, amount: true },
     }),
   ]);
@@ -97,21 +108,13 @@ export async function getCashCloseStats(
     }
   }
 
-  // Recargas/pagos de deuda de pensionados: ingresos reales de caja del día.
-  const moneyIn = ledger.filter(
-    (l) => l.type === "RECARGA" || l.type === "PAGO_DEUDA",
-  );
   // Consumos cobrados contra la cuenta: NO entran a la caja.
-  const pensionSales = ledger
-    .filter((l) => l.type === "CONSUMO")
-    .reduce((sum, l) => sum + l.amount, 0);
+  const pensionSales = ledger.reduce((sum, l) => sum + l.amount, 0);
 
-  const rechargeCash = moneyIn
-    .filter((l) => (l.paymentMethod ?? "EFECTIVO") === "EFECTIVO")
-    .reduce((sum, l) => sum + l.amount, 0);
-  const rechargeQr = moneyIn
-    .filter((l) => (l.paymentMethod ?? "EFECTIVO") === "QR")
-    .reduce((sum, l) => sum + l.amount, 0);
+  // Las recargas/pagos de deuda se registran desde el admin y no pertenecen a
+  // ningún cajero; quedan fuera del cierre individual.
+  const rechargeCash = 0;
+  const rechargeQr = 0;
 
   const cashIncome = movements
     .filter((m) => m.type === "INGRESO")
@@ -137,25 +140,27 @@ export async function getCashCloseStats(
   };
 }
 
-/** Movimientos de efectivo activos del día (más reciente primero). */
+/** Movimientos de efectivo activos del día del cajero (más reciente primero). */
 export async function getCashMovements(
   dateKey: string,
+  userId: string,
 ): Promise<CashMovementRecord[]> {
   const rows = await prisma.cashMovement.findMany({
-    where: { date: dateKey, voidedAt: null },
+    where: { date: dateKey, voidedAt: null, userId },
     orderBy: { createdAt: "desc" },
     include: { user: { select: { name: true } } },
   });
   return rows.map(toMovementRecord);
 }
 
-/** Historial de cierres del día (más reciente primero) para auditoría y
- *  reimpresión del ticket resumen. */
+/** Cierres del día del cajero (más reciente primero) para consulta y
+ *  reimpresión de su propio ticket resumen. */
 export async function getCashCloses(
   dateKey: string,
+  userId: string,
 ): Promise<CashCloseRecord[]> {
   const rows = await prisma.cashClose.findMany({
-    where: { date: dateKey },
+    where: { date: dateKey, userId },
     orderBy: { closedAt: "desc" },
     include: { user: { select: { name: true } } },
   });

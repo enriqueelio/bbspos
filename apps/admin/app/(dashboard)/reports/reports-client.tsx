@@ -9,14 +9,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { ChevronDown, FileSpreadsheet, FileDown, Printer, Send } from "lucide-react";
-import { jsPDF } from "jspdf";
-import html2canvas from "html2canvas";
+import { ChevronDown, FileSpreadsheet, FileDown, Printer } from "lucide-react";
 import {
   printSummaryReport,
   printDailyReport,
 } from "@/app/actions/print-report";
-import { sendDailyReportToBot } from "@/app/actions/daily-report";
 import {
   Badge,
   Button,
@@ -44,11 +41,9 @@ import {
   FlavorCategoryLabel,
   formatPrice,
   PaymentMethodLabel,
-  MANUAL_REPORT_CUTOFF,
-  MANUAL_REPORT_CUTOFF_MINUTES,
-  zonedClockMinutes,
 } from "@bbspos/types";
 import { exportReportToExcel, type ReportKey } from "@/lib/reports/excel";
+import { exportReportToPdf } from "@/lib/reports/pdf";
 
 interface ReportTab {
   key: ReportKey;
@@ -221,20 +216,8 @@ export function ReportsClient({
   const [error, setError] = useState<string | null>(null);
   const [printMsg, setPrintMsg] = useState<string | null>(null);
   const [isPrinting, startPrintTransition] = useTransition();
-  const [cierreMsg, setCierreMsg] = useState<string | null>(null);
-  const [isSendingCierre, startCierreTransition] = useTransition();
-  const [clockNow, setClockNow] = useState(() => Date.now());
-
-  // Habilita "Cierre diario" solo a partir de las 23:10 (reloj del negocio).
-  useEffect(() => {
-    const timer = setInterval(() => setClockNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
-  const canSendCierre =
-    zonedClockMinutes(new Date(clockNow)) >= MANUAL_REPORT_CUTOFF_MINUTES;
   const [isExportingPdf, setExportingPdf] = useState(false);
   const [isExportingExcel, setExportingExcel] = useState(false);
-  const pdfAreaRef = useRef<HTMLDivElement>(null);
 
   const rangeQuery = useMemo(() => {
     const params = new URLSearchParams({ from, to });
@@ -355,45 +338,12 @@ export function ReportsClient({
     });
   };
 
-  const handleSendCierre = () => {
-    setCierreMsg(null);
-    startCierreTransition(async () => {
-      try {
-        const msg = await sendDailyReportToBot();
-        setCierreMsg(msg);
-      } catch (e) {
-        setCierreMsg(
-          e instanceof Error ? e.message : "No se pudo enviar el reporte.",
-        );
-      }
-    });
-  };
-
-  const exportPdf = async () => {
-    const area = pdfAreaRef.current;
-    if (!area) return;
+  const exportPdf = () => {
+    if (!fetched || fetched.key !== report) return;
+    setPrintMsg(null);
     setExportingPdf(true);
     try {
-      const canvas = await html2canvas(area, { scale: 2, backgroundColor: "#ffffff" });
-      const img = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const imgW = pageW;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      let heightLeft = imgH;
-      let position = 0;
-      pdf.addImage(img, "PNG", 0, position, imgW, imgH);
-      heightLeft -= pageH;
-      while (heightLeft > 0) {
-        position -= pageH;
-        pdf.addPage();
-        pdf.addImage(img, "PNG", 0, position, imgW, imgH);
-        heightLeft -= pageH;
-      }
-      pdf.save(
-        report === "daily" ? `reporte-cierre-${to}.pdf` : `reporte-${report}.pdf`,
-      );
+      exportReportToPdf(report, fetched.payload, from, to);
     } catch {
       setPrintMsg("No se pudo generar el PDF.");
     } finally {
@@ -429,21 +379,6 @@ export function ReportsClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            disabled={isSendingCierre || !canSendCierre}
-            onClick={handleSendCierre}
-            title={
-              canSendCierre
-                ? undefined
-                : `Disponible a partir de las ${MANUAL_REPORT_CUTOFF}`
-            }
-          >
-            <Send className="mr-1 h-3.5 w-3.5" />
-            {isSendingCierre ? "Enviando…" : "Cierre diario"}
-          </Button>
           {canPrint && (
             <Button
               variant="outline"
@@ -478,10 +413,6 @@ export function ReportsClient({
           </Button>
         </div>
       </div>
-
-      {cierreMsg && (
-        <p className="text-sm text-primary">{cierreMsg}</p>
-      )}
 
       {/* Filtro de fechas global (persistente en todas las pestañas). */}
       <div className="sticky top-0 z-30 rounded-lg border bg-card/95 p-1.5 shadow-sm backdrop-blur">
@@ -631,7 +562,7 @@ export function ReportsClient({
       )}
 
       {!loading && !error && fetched !== null && fetched.key === report ? (
-        <div ref={pdfAreaRef}>
+        <div>
           <ReportBody report={report} data={fetched.payload} />
         </div>
       ) : null}

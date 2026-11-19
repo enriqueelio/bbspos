@@ -223,17 +223,16 @@ export async function acceptOrder(
     paymentAmount2 = Math.trunc(amount2);
   }
 
-  // El pedido ya cobrado o el usuario de la sesión pueden no existir en la DB
-  // (p. ej. usuario eliminado tras el login). Verificamos antes de asignar la
-  // llave foránea para no violar la restricción (P2003).
-  let userId = order.userId;
-  if (!userId) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { id: true },
-    });
-    userId = dbUser ? dbUser.id : null;
-  }
+  // El usuario de la sesión puede no existir en la DB (p. ej. eliminado tras
+  // el login). Verificamos antes de asignar las llaves foráneas para no violar
+  // la restricción (P2003). `paidById` atribuye el cobro al cajero actual; el
+  // `userId` solo se rellena si el pedido no tenía tomador (caso web/store).
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  const paidById = dbUser ? dbUser.id : null;
+  const userId = order.userId ?? paidById;
 
   // Transacción: registra el pago y, si el pedido está ligado a un cliente,
   // acumula lealtad (+1 visita, +gasto, +puntos) con la misma marca de tiempo.
@@ -264,6 +263,7 @@ export async function acceptOrder(
         paymentAmount2,
         paidAt,
         userId,
+        paidById,
       },
     });
 
@@ -366,16 +366,16 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
     }
   }
 
-  // El pedido ya cobrado o el usuario de la sesión pueden no existir en la DB;
-  // verificamos antes de asignar la llave foránea para no violar P2003.
-  let userId = order.userId;
-  if (!userId) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { id: true },
-    });
-    userId = dbUser ? dbUser.id : null;
-  }
+  // El usuario de la sesión puede no existir en la DB (p. ej. eliminado tras
+  // el login); verificamos antes de asignar las llaves foráneas para no violar
+  // P2003. `paidById` atribuye el consumo al cajero que lo cobró; el `userId`
+  // solo se rellena si el pedido no tenía tomador (caso web/store).
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  const paidById = dbUser ? dbUser.id : null;
+  const userId = order.userId ?? paidById;
 
   // Transacción: descuenta el saldo, registra el consumo, cobra la orden y
   // acumula lealtad del cliente (+1 visita, +gasto, +puntos) con la misma
@@ -415,6 +415,7 @@ export async function acceptPensionOrder(orderId: string, customerId: string) {
         paymentMethod: PaymentMethod.PENSION,
         paidAt,
         userId,
+        paidById,
         customerId,
         accountId: account.id,
       },

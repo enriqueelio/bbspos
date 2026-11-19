@@ -127,6 +127,9 @@ export function CashCloseView({
     0,
   );
   const diffCash = countedCash - stats.expectedCash;
+  const myClose = closes[0] ?? null;
+  const alreadyClosed = myClose !== null;
+  const canConfirm = canClose && !alreadyClosed;
 
   function onKeyDown(
     e: React.KeyboardEvent<HTMLInputElement>,
@@ -244,11 +247,28 @@ export function CashCloseView({
 
   return (
     <div className="space-y-4">
+      {alreadyClosed && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardContent className="flex items-start gap-2 px-4 py-3 text-sm text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Ya registraste tu cierre de hoy a las{" "}
+              {new Date(myClose.closedAt).toLocaleTimeString("es-BO", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              . Este cierre cubre únicamente tus ventas y movimientos; solo tú
+              puedes consultarlo o reimprimirlo.
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Banknote className="h-5 w-5 text-emerald-400" />
-            Arqueo de billetes y monedas (gaveta)
+            Mi arqueo de billetes y monedas (gaveta)
           </CardTitle>
           <p className="text-sm text-white">
             Ingresa cuántos de cada denominación hay físicamente en la caja.
@@ -350,11 +370,11 @@ export function CashCloseView({
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Wallet className="h-5 w-5 text-primary" />
-            Movimientos de caja
+            Mis movimientos de caja
           </CardTitle>
           <p className="text-sm text-white">
             Registra ingresos y egresos de efectivo: compras, fondo de caja o
-            dinero que entra o sale de la gaveta.
+            dinero que entra o sale de tu gaveta.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -369,6 +389,7 @@ export function CashCloseView({
               <div className="grid grid-cols-2 gap-1 rounded-lg border border-slate-700 p-1">
                 <button
                   type="button"
+                  disabled={alreadyClosed}
                   onClick={() => setMovementType("INGRESO")}
                   className={cn(
                     "flex h-9 items-center justify-center gap-1 rounded-md text-sm font-semibold transition-colors",
@@ -381,6 +402,7 @@ export function CashCloseView({
                 </button>
                 <button
                   type="button"
+                  disabled={alreadyClosed}
                   onClick={() => setMovementType("EGRESO")}
                   className={cn(
                     "flex h-9 items-center justify-center gap-1 rounded-md text-sm font-semibold transition-colors",
@@ -399,6 +421,7 @@ export function CashCloseView({
               </span>
               <Input
                 value={movementConcept}
+                disabled={alreadyClosed}
                 onChange={(e) => {
                   setMovementConcept(e.target.value);
                   setMovementResult(null);
@@ -417,6 +440,7 @@ export function CashCloseView({
                 inputMode="decimal"
                 min="0.01"
                 step="0.01"
+                disabled={alreadyClosed}
                 value={movementAmount}
                 onChange={(e) => {
                   setMovementAmount(e.target.value);
@@ -429,7 +453,7 @@ export function CashCloseView({
             <Button
               type="submit"
               size="lg"
-              disabled={movementPending}
+              disabled={movementPending || alreadyClosed}
               className="bg-emerald-700 text-white hover:bg-emerald-600"
             >
               {movementPending ? "Registrando…" : "Registrar"}
@@ -452,7 +476,7 @@ export function CashCloseView({
           <div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-bold text-white">
-                Movimientos del día ({movements.length})
+                Mis movimientos del día ({movements.length})
               </p>
               <p className="text-xs text-slate-400">
                 Ingresos {formatPrice(stats.cashIncome)} · Egresos{" "}
@@ -685,7 +709,7 @@ export function CashCloseView({
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Confirmar cierre de caja</CardTitle>
+          <CardTitle className="text-base">Confirmar mi cierre de caja</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <label className="block">
@@ -714,16 +738,28 @@ export function CashCloseView({
           <div className="flex flex-wrap items-center gap-3">
             <Button
               size="lg"
-              disabled={pending || !canClose}
+              disabled={pending || !canConfirm}
               onClick={onConfirm}
-              title={canClose ? undefined : "Solo el cajero o el administrador"}
+              title={
+                alreadyClosed
+                  ? "Ya registraste tu cierre de hoy"
+                  : canClose
+                    ? undefined
+                    : "Solo un cajero o administrador puede confirmar el cierre"
+              }
               className="bg-emerald-700 text-white hover:bg-emerald-600"
             >
-              {pending ? "Guardando…" : "Confirmar Cierre de Caja"}
+              {pending ? "Guardando…" : "Confirmar Mi Cierre de Caja"}
             </Button>
             {!canClose && (
               <span className="text-sm text-slate-400">
                 Solo un cajero o administrador puede confirmar el cierre.
+              </span>
+            )}
+            {alreadyClosed && (
+              <span className="text-sm text-amber-300">
+                Tu cierre de hoy ya fue registrado. Cada cajero puede cerrar una
+                sola vez al día.
               </span>
             )}
           </div>
@@ -747,9 +783,7 @@ export function CashCloseView({
       {closes.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              Cierres de hoy ({closes.length})
-            </CardTitle>
+            <CardTitle className="text-base">Mi cierre de hoy</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {closes.map((c) => (

@@ -48,6 +48,7 @@ async function createOrder(cfg: {
         createdAt: cfg.createdAt, paidAt: cfg.paidAt, deliveredAt: cfg.deliveredAt,
         paymentMethod: cfg.paymentMethod,
         user: cfg.userId ? { connect: { id: cfg.userId } } : undefined,
+        paidBy: cfg.paidAt && cfg.userId ? { connect: { id: cfg.userId } } : undefined,
         cancelledAt: cfg.cancelledAt, cancelReason: cfg.cancelReason,
         discountAmount: cfg.discountAmount ?? 0, discountReason: cfg.discountReason,
         discountedAt: cfg.discountedAt,

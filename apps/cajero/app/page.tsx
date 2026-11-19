@@ -271,9 +271,9 @@ export default async function CashierPage({
   if (tab === "cierre") {
     const key = todayKey();
     const [stats, closes, movements, printableOrders] = await Promise.all([
-      getCashCloseStats(key),
-      getCashCloses(key),
-      getCashMovements(key),
+      getCashCloseStats(key, session.user.id),
+      getCashCloses(key, session.user.id),
+      getCashMovements(key, session.user.id),
       getPrintableOrders(),
     ]);
 

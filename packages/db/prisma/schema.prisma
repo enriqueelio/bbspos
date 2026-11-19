@@ -18,6 +18,7 @@ model User {
   iconKey          String?
   createdAt        DateTime         @default(now())
   orders           Order[]
+  paidOrders       Order[]          @relation("OrderPaidBy")
   cancelledOrders  Order[]          @relation("OrderCanceledBy")
   discountedOrders Order[]          @relation("OrderDiscountedBy")
   redeemedRewards  CustomerReward[] @relation("CustomerRewardRedeemedBy")
@@ -261,6 +262,11 @@ model Order {
   items                OrderItem[]
   userId               String?
   user                 User?            @relation(fields: [userId], references: [id])
+  // Usuario que cobró el pedido (cajero). A diferencia de `userId` (quien tomó
+  // el pedido, p. ej. un mesero), este campo atribuye la venta a quien la cobró
+  // y es la base del cierre de caja individual.
+  paidById             String?
+  paidBy               User?            @relation("OrderPaidBy", fields: [paidById], references: [id])
   paymentMethod        PaymentMethod?
   paymentMethod2       PaymentMethod?
   paymentAmount2       Int?
@@ -289,6 +295,7 @@ model Order {
   @@index([deliveredAt])
   @@index([userId])
   @@index([userId, status])
+  @@index([paidById])
   @@index([customerId])
   @@index([accountId])
 }
@@ -441,10 +448,10 @@ model DailyReportLog {
   sentAt DateTime @default(now())
 }
 
-// Cierre de caja: arqueo físico de efectivo por denominación y contraste con
-// lo registrado en el sistema (ventas + recargas de pensionados). Puede haber
-// varios cierres al día (ej. un turno de mañana y otro de tarde): cada uno
-// guarda su histórico con fecha, hora y cajero para auditoría y reimpresión.
+// Cierre de caja individual del cajero: arqueo físico de efectivo por
+// denominación y contraste con las ventas y movimientos registrados por ese
+// mismo usuario (`userId`), no con el total del día. Cada cajero registra un
+// solo cierre por día y solo él puede consultarlo o reimprimirlo.
 model CashClose {
   id            String   @id @default(cuid())
   // Día local (YYYY-MM-DD) que se está cerrando.

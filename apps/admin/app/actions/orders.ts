@@ -80,6 +80,8 @@ export async function acceptOrder(
     paymentAmount2 = Math.trunc(amount2);
   }
 
+  const paidById = await resolveSessionUserId(session.user.id);
+
   await prisma.order.update({
     where: { id: orderId },
     data: {
@@ -88,7 +90,8 @@ export async function acceptOrder(
       paymentMethod2,
       paymentAmount2,
       paidAt: new Date(),
-      userId: order.userId ?? (await resolveSessionUserId(session.user.id)),
+      userId: order.userId ?? paidById,
+      paidById,
     },
   });
 

@@ -69,6 +69,19 @@ export async function registerCashMovement(input: {
     where: { id: session.user.id },
     select: { id: true },
   });
+  if (!dbUser) {
+    throw new Error("Tu usuario no existe en la base de datos.");
+  }
+
+  const myClose = await prisma.cashClose.findFirst({
+    where: { date: todayKey(), userId: dbUser.id },
+    select: { id: true },
+  });
+  if (myClose) {
+    throw new Error(
+      "Ya registraste tu cierre de caja de hoy. No se pueden agregar más movimientos.",
+    );
+  }
 
   const movement = await prisma.cashMovement.create({
     data: {
@@ -77,7 +90,7 @@ export async function registerCashMovement(input: {
       source: "MANUAL",
       concept,
       amount,
-      userId: dbUser?.id ?? null,
+      userId: dbUser.id,
     },
   });
 
@@ -107,6 +120,9 @@ export async function voidCashMovement(
   });
   if (!movement) {
     throw new Error("Movimiento no encontrado.");
+  }
+  if (movement.userId && movement.userId !== session.user.id) {
+    throw new Error("Solo el cajero que registró el movimiento puede anularlo.");
   }
   if (movement.voidedAt) {
     throw new Error("El movimiento ya fue anulado.");
@@ -181,18 +197,34 @@ export async function confirmCashClose(input: {
 
   const dateKey = todayKey();
 
-  // El usuario de la sesión puede no existir en la DB; verificamos antes de
-  // asignar la llave foránea para no violar la restricción (P2003).
+  // El usuario de la sesión debe existir en la DB: el cierre se guarda a su
+  // nombre y solo cubre sus propias ventas y movimientos.
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: { id: true },
   });
+  if (!dbUser) {
+    throw new Error("Tu usuario no existe en la base de datos.");
+  }
 
   // El cierre y el movimiento automático se guardan juntos: si el efectivo
   // contado supera lo esperado, el excedente queda registrado como ingreso y
   // nunca se muestra como "sobrante" sin contabilizar.
   const result = await prisma.$transaction(async (tx) => {
-    const stats = await getCashCloseStats(dateKey, tx);
+    const existing = await tx.cashClose.findFirst({
+      where: { date: dateKey, userId: dbUser.id },
+      select: { id: true, closedAt: true },
+    });
+    if (existing) {
+      const hora = existing.closedAt.toLocaleTimeString("es-BO", {
+        timeZone: "America/La_Paz",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      throw new Error(`Ya registraste tu cierre de hoy a las ${hora}.`);
+    }
+
+    const stats = await getCashCloseStats(dateKey, dbUser.id, tx);
     const rawDiff =
       Math.round((countedCash - stats.expectedCash + Number.EPSILON) * 100) /
       100;
@@ -206,7 +238,7 @@ export async function confirmCashClose(input: {
     const record = await tx.cashClose.create({
       data: {
         date: dateKey,
-        userId: dbUser ? dbUser.id : null,
+        userId: dbUser.id,
         denominations: stringifyDenominations(input.denominations),
         countedCash,
         systemCash: expectedCash,
@@ -223,10 +255,10 @@ export async function confirmCashClose(input: {
       },
     });
 
-    // Los movimientos manuales activos que aún no pertenecen a otro cierre
-    // quedan vinculados a este para que la reimpresión sea reproducible.
+    // Solo los movimientos del propio cajero que aún no pertenecen a otro
+    // cierre quedan vinculados a este para que la reimpresión sea reproducible.
     await tx.cashMovement.updateMany({
-      where: { date: dateKey, voidedAt: null, cashCloseId: null },
+      where: { date: dateKey, voidedAt: null, cashCloseId: null, userId: dbUser.id },
       data: { cashCloseId: record.id },
     });
 
@@ -238,7 +270,7 @@ export async function confirmCashClose(input: {
           source: "AUTO_CLOSE",
           concept: "Excedente de arqueo",
           amount: autoSurplus,
-          userId: dbUser?.id ?? null,
+          userId: dbUser.id,
           cashCloseId: record.id,
         },
       });
@@ -284,10 +316,16 @@ export async function printCashClose(closeId: string): Promise<string> {
     throw new Error("Cierre de caja no encontrado.");
   }
 
+  // Cada cajero solo consulta/imprime su propio cierre.
+  if (row.userId && row.userId !== session.user.id) {
+    throw new Error("Solo el cajero que realizó este cierre puede imprimirlo.");
+  }
+
   const movementRows = await prisma.cashMovement.findMany({
     where: {
       date: row.date,
       voidedAt: null,
+      ...(row.userId ? { userId: row.userId } : {}),
       OR: [{ cashCloseId: row.id }, { createdAt: { lte: row.closedAt } }],
     },
     orderBy: { createdAt: "asc" },
